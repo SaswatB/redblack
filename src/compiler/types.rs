@@ -202,7 +202,6 @@ pub enum SignatureFlags {}
 #[derive(Debug)]
 pub enum MemberOverrideStatus {}
 
-
 pub trait TypeChecker {
     fn get_type_of_symbol_at_location(&self, symbol: Symbol, node: Node) -> Type;
     fn get_type_of_symbol(&self, symbol: Symbol) -> Type;
@@ -465,15 +464,7 @@ pub trait TypeChecker {
     fn create_anonymous_type(&self, symbol: Option<Symbol>, members: SymbolTable, call_signatures: Vec<Signature>, construct_signatures: Vec<Signature>, index_infos: Vec<IndexInfo>) -> Type;
     /// @internal
     fn create_signature(
-        &self,
-        declaration: Option<SignatureDeclaration>,
-        type_parameters: Option<Vec<TypeParameter>>,
-        this_parameter: Option<Symbol>,
-        parameters: Vec<Symbol>,
-        resolved_return_type: Type,
-        type_predicate: Option<TypePredicate>,
-        min_argument_count: usize,
-        flags: SignatureFlags,
+        &self, declaration: Option<SignatureDeclaration>, type_parameters: Option<Vec<TypeParameter>>, this_parameter: Option<Symbol>, parameters: Vec<Symbol>, resolved_return_type: Type, type_predicate: Option<TypePredicate>, min_argument_count: usize, flags: SignatureFlags,
     ) -> Signature;
     /// @internal
     fn create_symbol(&self, flags: SymbolFlags, name: __String) -> TransientSymbol;
@@ -598,109 +589,129 @@ pub trait TypeChecker {
     fn get_symbol_flags(&self, symbol: Symbol) -> SymbolFlags;
 }
 
-#[derive(Debug)]
-pub enum TypeFlags {
-    Any             = 1 << 0,
-    Unknown         = 1 << 1,
-    String          = 1 << 2,
-    Number          = 1 << 3,
-    Boolean         = 1 << 4,
-    Enum            = 1 << 5,   // Numeric computed enum member value
-    BigInt          = 1 << 6,
-    StringLiteral   = 1 << 7,
-    NumberLiteral   = 1 << 8,
-    BooleanLiteral  = 1 << 9,
-    EnumLiteral     = 1 << 10,  // Always combined with StringLiteral, NumberLiteral, or Union
-    BigIntLiteral   = 1 << 11,
-    ESSymbol        = 1 << 12,  // Type of symbol primitive introduced in ES6
-    UniqueESSymbol  = 1 << 13,  // unique symbol
-    Void            = 1 << 14,
-    Undefined       = 1 << 15,
-    Null            = 1 << 16,
-    Never           = 1 << 17,  // Never type
-    TypeParameter   = 1 << 18,  // Type parameter
-    Object          = 1 << 19,  // Object type
-    Union           = 1 << 20,  // Union (T | U)
-    Intersection    = 1 << 21,  // Intersection (T & U)
-    Index           = 1 << 22,  // keyof T
-    IndexedAccess   = 1 << 23,  // T[K]
-    Conditional     = 1 << 24,  // T extends U ? X : Y
-    Substitution    = 1 << 25,  // Type parameter substitution
-    NonPrimitive    = 1 << 26,  // intrinsic object type
-    TemplateLiteral = 1 << 27,  // Template literal type
-    StringMapping   = 1 << 28,  // Uppercase/Lowercase type
+#[derive(Debug, Clone, Copy)]
+pub struct TypeFlags(pub isize);
+
+impl TypeFlags {
+    pub const ANY: TypeFlags = TypeFlags(1 << 0);
+    pub const UNKNOWN: TypeFlags = TypeFlags(1 << 1);
+    pub const STRING: TypeFlags = TypeFlags(1 << 2);
+    pub const NUMBER: TypeFlags = TypeFlags(1 << 3);
+    pub const BOOLEAN: TypeFlags = TypeFlags(1 << 4);
+    pub const ENUM: TypeFlags = TypeFlags(1 << 5); // Numeric computed enum member value
+    pub const BIG_INT: TypeFlags = TypeFlags(1 << 6);
+    pub const STRING_LITERAL: TypeFlags = TypeFlags(1 << 7);
+    pub const NUMBER_LITERAL: TypeFlags = TypeFlags(1 << 8);
+    pub const BOOLEAN_LITERAL: TypeFlags = TypeFlags(1 << 9);
+    pub const ENUM_LITERAL: TypeFlags = TypeFlags(1 << 10); // Always combined with StringLiteral, NumberLiteral, or Union
+    pub const BIG_INT_LITERAL: TypeFlags = TypeFlags(1 << 11);
+    pub const ES_SYMBOL: TypeFlags = TypeFlags(1 << 12); // Type of symbol primitive introduced in ES6
+    pub const UNIQUE_ES_SYMBOL: TypeFlags = TypeFlags(1 << 13); // unique symbol
+    pub const VOID: TypeFlags = TypeFlags(1 << 14);
+    pub const UNDEFINED: TypeFlags = TypeFlags(1 << 15);
+    pub const NULL: TypeFlags = TypeFlags(1 << 16);
+    pub const NEVER: TypeFlags = TypeFlags(1 << 17); // Never type
+    pub const TYPE_PARAMETER: TypeFlags = TypeFlags(1 << 18); // Type parameter
+    pub const OBJECT: TypeFlags = TypeFlags(1 << 19); // Object type
+    pub const UNION: TypeFlags = TypeFlags(1 << 20); // Union (T | U)
+    pub const INTERSECTION: TypeFlags = TypeFlags(1 << 21); // Intersection (T & U)
+    pub const INDEX: TypeFlags = TypeFlags(1 << 22); // keyof T
+    pub const INDEXED_ACCESS: TypeFlags = TypeFlags(1 << 23); // T[K]
+    pub const CONDITIONAL: TypeFlags = TypeFlags(1 << 24); // T extends U ? X : Y
+    pub const SUBSTITUTION: TypeFlags = TypeFlags(1 << 25); // Type parameter substitution
+    pub const NON_PRIMITIVE: TypeFlags = TypeFlags(1 << 26); // intrinsic object type
+    pub const TEMPLATE_LITERAL: TypeFlags = TypeFlags(1 << 27); // Template literal type
+    pub const STRING_MAPPING: TypeFlags = TypeFlags(1 << 28); // Uppercase/Lowercase type
     /** @internal */
-    Reserved1       = 1 << 29,  // Used by union/intersection type construction
+    pub const RESERVED1: TypeFlags = TypeFlags(1 << 29); // Used by union/intersection type construction
     /** @internal */
-    Reserved2       = 1 << 30,  // Used by union/intersection type construction
+    pub const RESERVED2: TypeFlags = TypeFlags(1 << 30); // Used by union/intersection type construction
 
     /** @internal */
-    AnyOrUnknown = Self::Any as isize | Self::Unknown as isize,
+    pub const ANY_OR_UNKNOWN: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0);
     /** @internal */
-    Nullable = Self::Undefined as isize | Self::Null as isize,
-    Literal = Self::StringLiteral as isize | Self::NumberLiteral as isize | Self::BigIntLiteral as isize | Self::BooleanLiteral as isize,
-    Unit = Self::Enum as isize | Self::Literal as isize | Self::UniqueESSymbol as isize | Self::Nullable as isize,
-    Freshable = Self::Enum as isize | Self::Literal as isize,
-    StringOrNumberLiteral = Self::StringLiteral as isize | Self::NumberLiteral as isize,
+    pub const NULLABLE: TypeFlags = TypeFlags(Self::UNDEFINED.0 | Self::NULL.0);
+    pub const LITERAL: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0 | Self::BIG_INT_LITERAL.0 | Self::BOOLEAN_LITERAL.0);
+    pub const UNIT: TypeFlags = TypeFlags(Self::ENUM.0 | Self::LITERAL.0 | Self::UNIQUE_ES_SYMBOL.0 | Self::NULLABLE.0);
+    pub const FRESHABLE: TypeFlags = TypeFlags(Self::ENUM.0 | Self::LITERAL.0);
+    pub const STRING_OR_NUMBER_LITERAL: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0);
     /** @internal */
-    StringOrNumberLiteralOrUnique = Self::StringLiteral as isize | Self::NumberLiteral as isize | Self::UniqueESSymbol as isize,
+    pub const STRING_OR_NUMBER_LITERAL_OR_UNIQUE: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0 | Self::UNIQUE_ES_SYMBOL.0);
     /** @internal */
-    DefinitelyFalsy = Self::StringLiteral as isize | Self::NumberLiteral as isize | Self::BigIntLiteral as isize | Self::BooleanLiteral as isize | Self::Void as isize | Self::Undefined as isize | Self::Null as isize,
-    PossiblyFalsy = Self::DefinitelyFalsy as isize | Self::String as isize | Self::Number as isize | Self::BigInt as isize | Self::Boolean as isize,
+    pub const DEFINITELY_FALSY: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0 | Self::BIG_INT_LITERAL.0 | Self::BOOLEAN_LITERAL.0 | Self::VOID.0 | Self::UNDEFINED.0 | Self::NULL.0);
+    pub const POSSIBLY_FALSY: TypeFlags = TypeFlags(Self::DEFINITELY_FALSY.0 | Self::STRING.0 | Self::NUMBER.0 | Self::BIG_INT.0 | Self::BOOLEAN.0);
     /** @internal */
-    Intrinsic = Self::Any as isize | Self::Unknown as isize | Self::String as isize | Self::Number as isize | Self::BigInt as isize | Self::Boolean as isize | Self::BooleanLiteral as isize | Self::ESSymbol as isize | Self::Void as isize | Self::Undefined as isize | Self::Null as isize | Self::Never as isize | Self::NonPrimitive as isize,
-    StringLike = Self::String as isize | Self::StringLiteral as isize | Self::TemplateLiteral as isize | Self::StringMapping as isize,
-    NumberLike = Self::Number as isize | Self::NumberLiteral as isize | Self::Enum as isize,
-    BigIntLike = Self::BigInt as isize | Self::BigIntLiteral as isize,
-    BooleanLike = Self::Boolean as isize | Self::BooleanLiteral as isize,
-    EnumLike = Self::Enum as isize | Self::EnumLiteral as isize,
-    ESSymbolLike = Self::ESSymbol as isize | Self::UniqueESSymbol as isize,
-    VoidLike = Self::Void as isize | Self::Undefined as isize,
+    pub const INTRINSIC: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::STRING.0 | Self::NUMBER.0 | Self::BIG_INT.0 | Self::BOOLEAN.0 | Self::BOOLEAN_LITERAL.0 | Self::ES_SYMBOL.0 | Self::VOID.0 | Self::UNDEFINED.0 | Self::NULL.0 | Self::NEVER.0 | Self::NON_PRIMITIVE.0);
+    pub const STRING_LIKE: TypeFlags = TypeFlags(Self::STRING.0 | Self::STRING_LITERAL.0 | Self::TEMPLATE_LITERAL.0 | Self::STRING_MAPPING.0);
+    pub const NUMBER_LIKE: TypeFlags = TypeFlags(Self::NUMBER.0 | Self::NUMBER_LITERAL.0 | Self::ENUM.0);
+    pub const BIG_INT_LIKE: TypeFlags = TypeFlags(Self::BIG_INT.0 | Self::BIG_INT_LITERAL.0);
+    pub const BOOLEAN_LIKE: TypeFlags = TypeFlags(Self::BOOLEAN.0 | Self::BOOLEAN_LITERAL.0);
+    pub const ENUM_LIKE: TypeFlags = TypeFlags(Self::ENUM.0 | Self::ENUM_LITERAL.0);
+    pub const ES_SYMBOL_LIKE: TypeFlags = TypeFlags(Self::ES_SYMBOL.0 | Self::UNIQUE_ES_SYMBOL.0);
+    pub const VOID_LIKE: TypeFlags = TypeFlags(Self::VOID.0 | Self::UNDEFINED.0);
     /** @internal */
-    Primitive = Self::StringLike as isize | Self::NumberLike as isize | Self::BigIntLike as isize | Self::BooleanLike as isize | Self::EnumLike as isize | Self::ESSymbolLike as isize | Self::VoidLike as isize | Self::Null as isize,
+    pub const PRIMITIVE: TypeFlags = TypeFlags(Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ENUM_LIKE.0 | Self::ES_SYMBOL_LIKE.0 | Self::VOID_LIKE.0 | Self::NULL.0);
     /** @internal */
-    DefinitelyNonNullable = Self::StringLike as isize | Self::NumberLike as isize | Self::BigIntLike as isize | Self::BooleanLike as isize | Self::EnumLike as isize | Self::ESSymbolLike as isize | Self::Object as isize | Self::NonPrimitive as isize,
+    pub const DEFINITELY_NON_NULLABLE: TypeFlags = TypeFlags(Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ENUM_LIKE.0 | Self::ES_SYMBOL_LIKE.0 | Self::OBJECT.0 | Self::NON_PRIMITIVE.0);
     /** @internal */
-    DisjointDomains = Self::NonPrimitive as isize | Self::StringLike as isize | Self::NumberLike as isize | Self::BigIntLike as isize | Self::BooleanLike as isize | Self::ESSymbolLike as isize | Self::VoidLike as isize | Self::Null as isize,
-    UnionOrIntersection = Self::Union as isize | Self::Intersection as isize,
-    StructuredType = Self::Object as isize | Self::Union as isize | Self::Intersection as isize,
-    TypeVariable = Self::TypeParameter as isize | Self::IndexedAccess as isize,
-    InstantiableNonPrimitive = Self::TypeVariable as isize | Self::Conditional as isize | Self::Substitution as isize,
-    InstantiablePrimitive = Self::Index as isize | Self::TemplateLiteral as isize | Self::StringMapping as isize,
-    Instantiable = Self::InstantiableNonPrimitive as isize | Self::InstantiablePrimitive as isize,
-    StructuredOrInstantiable = Self::StructuredType as isize | Self::Instantiable as isize,
+    pub const DISJOINT_DOMAINS: TypeFlags = TypeFlags(Self::NON_PRIMITIVE.0 | Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ES_SYMBOL_LIKE.0 | Self::VOID_LIKE.0 | Self::NULL.0);
+    pub const UNION_OR_INTERSECTION: TypeFlags = TypeFlags(Self::UNION.0 | Self::INTERSECTION.0);
+    pub const STRUCTURED_TYPE: TypeFlags = TypeFlags(Self::OBJECT.0 | Self::UNION.0 | Self::INTERSECTION.0);
+    pub const TYPE_VARIABLE: TypeFlags = TypeFlags(Self::TYPE_PARAMETER.0 | Self::INDEXED_ACCESS.0);
+    pub const INSTANTIABLE_NON_PRIMITIVE: TypeFlags = TypeFlags(Self::TYPE_VARIABLE.0 | Self::CONDITIONAL.0 | Self::SUBSTITUTION.0);
+    pub const INSTANTIABLE_PRIMITIVE: TypeFlags = TypeFlags(Self::INDEX.0 | Self::TEMPLATE_LITERAL.0 | Self::STRING_MAPPING.0);
+    pub const INSTANTIABLE: TypeFlags = TypeFlags(Self::INSTANTIABLE_NON_PRIMITIVE.0 | Self::INSTANTIABLE_PRIMITIVE.0);
+    pub const STRUCTURED_OR_INSTANTIABLE: TypeFlags = TypeFlags(Self::STRUCTURED_TYPE.0 | Self::INSTANTIABLE.0);
     /** @internal */
-    ObjectFlagsType = Self::Any as isize | Self::Nullable as isize | Self::Never as isize | Self::Object as isize | Self::Union as isize | Self::Intersection as isize,
+    pub const OBJECT_FLAGS_TYPE: TypeFlags = TypeFlags(Self::ANY.0 | Self::NULLABLE.0 | Self::NEVER.0 | Self::OBJECT.0 | Self::UNION.0 | Self::INTERSECTION.0);
     /** @internal */
-    Simplifiable = Self::IndexedAccess as isize | Self::Conditional as isize,
+    pub const SIMPLIFIABLE: TypeFlags = TypeFlags(Self::INDEXED_ACCESS.0 | Self::CONDITIONAL.0);
     /** @internal */
-    Singleton = Self::Any as isize | Self::Unknown as isize | Self::String as isize | Self::Number as isize | Self::Boolean as isize | Self::BigInt as isize | Self::ESSymbol as isize | Self::Void as isize | Self::Undefined as isize | Self::Null as isize | Self::Never as isize | Self::NonPrimitive as isize,
+    pub const SINGLETON: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::STRING.0 | Self::NUMBER.0 | Self::BOOLEAN.0 | Self::BIG_INT.0 | Self::ES_SYMBOL.0 | Self::VOID.0 | Self::UNDEFINED.0 | Self::NULL.0 | Self::NEVER.0 | Self::NON_PRIMITIVE.0);
     // 'Narrowable' types are types where narrowing actually narrows.
     // This *should* be every type other than null, undefined, void, and never
-    Narrowable = Self::Any as isize | Self::Unknown as isize | Self::StructuredOrInstantiable as isize | Self::StringLike as isize | Self::NumberLike as isize | Self::BigIntLike as isize | Self::BooleanLike as isize | Self::ESSymbol as isize | Self::UniqueESSymbol as isize | Self::NonPrimitive as isize,
+    pub const NARROWABLE: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::STRUCTURED_OR_INSTANTIABLE.0 | Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ES_SYMBOL.0 | Self::UNIQUE_ES_SYMBOL.0 | Self::NON_PRIMITIVE.0);
     // The following flags are aggregated during union and intersection type construction
     /** @internal */
-    IncludesMask = Self::Any as isize | Self::Unknown as isize | Self::Primitive as isize | Self::Never as isize | Self::Object as isize | Self::Union as isize | Self::Intersection as isize | Self::NonPrimitive as isize | Self::TemplateLiteral as isize | Self::StringMapping as isize,
+    pub const INCLUDES_MASK: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::PRIMITIVE.0 | Self::NEVER.0 | Self::OBJECT.0 | Self::UNION.0 | Self::INTERSECTION.0 | Self::NON_PRIMITIVE.0 | Self::TEMPLATE_LITERAL.0 | Self::STRING_MAPPING.0);
     // The following flags are used for different purposes during union and intersection type construction
     /** @internal */
-    IncludesMissingType = Self::TypeParameter as isize,
+    pub const INCLUDES_MISSING_TYPE: TypeFlags = TypeFlags(Self::TYPE_PARAMETER.0);
     /** @internal */
-    IncludesNonWideningType = Self::Index as isize,
+    pub const INCLUDES_NON_WIDENING_TYPE: TypeFlags = TypeFlags(Self::INDEX.0);
     /** @internal */
-    IncludesWildcard = Self::IndexedAccess as isize,
+    pub const INCLUDES_WILDCARD: TypeFlags = TypeFlags(Self::INDEXED_ACCESS.0);
     /** @internal */
-    IncludesEmptyObject = Self::Conditional as isize,
+    pub const INCLUDES_EMPTY_OBJECT: TypeFlags = TypeFlags(Self::CONDITIONAL.0);
     /** @internal */
-    IncludesInstantiable = Self::Substitution as isize,
+    pub const INCLUDES_INSTANTIABLE: TypeFlags = TypeFlags(Self::SUBSTITUTION.0);
     /** @internal */
-    IncludesConstrainedTypeVariable = Self::Reserved1 as isize,
+    pub const INCLUDES_CONSTRAINED_TYPE_VARIABLE: TypeFlags = TypeFlags(Self::RESERVED1.0);
     /** @internal */
-    IncludesError = Self::Reserved2 as isize,
+    pub const INCLUDES_ERROR: TypeFlags = TypeFlags(Self::RESERVED2.0);
     /** @internal */
-    NotPrimitiveUnion = Self::Any as isize | Self::Unknown as isize | Self::Void as isize | Self::Never as isize | Self::Object as isize | Self::Intersection as isize | Self::IncludesInstantiable as isize,
+    pub const NOT_PRIMITIVE_UNION: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::VOID.0 | Self::NEVER.0 | Self::OBJECT.0 | Self::INTERSECTION.0 | Self::INCLUDES_INSTANTIABLE.0);
+
+    pub fn contains(&self, flags: TypeFlags) -> bool {
+        (self.0 & flags.0) == flags.0
+    }
 }
 
+impl std::ops::BitOr for TypeFlags {
+    type Output = Self;
 
+    fn bitor(self, rhs: Self) -> Self {
+        TypeFlags(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitAnd for TypeFlags {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self {
+        TypeFlags(self.0 & rhs.0)
+    }
+}
 
 #[derive(Debug)]
 pub enum DiagnosticCategory {
@@ -719,4 +730,4 @@ pub struct DiagnosticMessage {
     pub reports_unnecessary: Option<bool>,
     pub elided_in_compatibility_pyramid: Option<bool>,
     pub reports_deprecated: Option<bool>,
-} 
+}
