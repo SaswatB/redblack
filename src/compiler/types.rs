@@ -1,5 +1,4 @@
-#[derive(Debug)]
-pub struct Symbol;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Node;
@@ -164,10 +163,16 @@ pub struct Diagnostic;
 pub struct DiagnosticWithLocation;
 
 #[derive(Debug)]
-pub enum SignatureKind {}
+pub enum SignatureKind {
+    Call,
+    Construct,
+}
 
 #[derive(Debug)]
-pub enum IndexKind {}
+pub enum IndexKind {
+    String,
+    Number,
+}
 
 #[derive(Debug)]
 pub enum NodeBuilderFlags {}
@@ -177,9 +182,6 @@ pub enum InternalNodeBuilderFlags {}
 
 #[derive(Debug)]
 pub enum SyntaxKind {}
-
-#[derive(Debug)]
-pub enum SymbolFlags {}
 
 #[derive(Debug)]
 pub enum TypeFormatFlags {}
@@ -590,6 +592,152 @@ pub trait TypeChecker {
     fn type_has_call_or_construct_signatures(&self, type_: Type) -> bool;
     /// @internal
     fn get_symbol_flags(&self, symbol: Symbol) -> SymbolFlags;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SymbolFlags(pub isize);
+
+impl SymbolFlags {
+    pub const NONE: SymbolFlags = SymbolFlags(0);
+    pub const FUNCTION_SCOPED_VARIABLE: SymbolFlags = SymbolFlags(1 << 0); // Variable (var) or parameter
+    pub const BLOCK_SCOPED_VARIABLE: SymbolFlags = SymbolFlags(1 << 1); // A block-scoped variable (let or const)
+    pub const PROPERTY: SymbolFlags = SymbolFlags(1 << 2); // Property or enum member
+    pub const ENUM_MEMBER: SymbolFlags = SymbolFlags(1 << 3); // Enum member
+    pub const FUNCTION: SymbolFlags = SymbolFlags(1 << 4); // Function
+    pub const CLASS: SymbolFlags = SymbolFlags(1 << 5); // Class
+    pub const INTERFACE: SymbolFlags = SymbolFlags(1 << 6); // Interface
+    pub const CONST_ENUM: SymbolFlags = SymbolFlags(1 << 7); // Const enum
+    pub const REGULAR_ENUM: SymbolFlags = SymbolFlags(1 << 8); // Enum
+    pub const VALUE_MODULE: SymbolFlags = SymbolFlags(1 << 9); // Instantiated module
+    pub const NAMESPACE_MODULE: SymbolFlags = SymbolFlags(1 << 10); // Uninstantiated module
+    pub const TYPE_LITERAL: SymbolFlags = SymbolFlags(1 << 11); // Type Literal or mapped type
+    pub const OBJECT_LITERAL: SymbolFlags = SymbolFlags(1 << 12); // Object Literal
+    pub const METHOD: SymbolFlags = SymbolFlags(1 << 13); // Method
+    pub const CONSTRUCTOR: SymbolFlags = SymbolFlags(1 << 14); // Constructor
+    pub const GET_ACCESSOR: SymbolFlags = SymbolFlags(1 << 15); // Get accessor
+    pub const SET_ACCESSOR: SymbolFlags = SymbolFlags(1 << 16); // Set accessor
+    pub const SIGNATURE: SymbolFlags = SymbolFlags(1 << 17); // Call, construct, or index signature
+    pub const TYPE_PARAMETER: SymbolFlags = SymbolFlags(1 << 18); // Type parameter
+    pub const TYPE_ALIAS: SymbolFlags = SymbolFlags(1 << 19); // Type alias
+    pub const EXPORT_VALUE: SymbolFlags = SymbolFlags(1 << 20); // Exported value marker (see comment in declareModuleMember in binder)
+    pub const ALIAS: SymbolFlags = SymbolFlags(1 << 21); // An alias for another symbol (see comment in isAliasSymbolDeclaration in checker)
+    pub const PROTOTYPE: SymbolFlags = SymbolFlags(1 << 22); // Prototype property (no source representation)
+    pub const EXPORT_STAR: SymbolFlags = SymbolFlags(1 << 23); // Export * declaration
+    pub const OPTIONAL: SymbolFlags = SymbolFlags(1 << 24); // Optional property
+    pub const TRANSIENT: SymbolFlags = SymbolFlags(1 << 25); // Transient symbol (created during type check)
+    pub const ASSIGNMENT: SymbolFlags = SymbolFlags(1 << 26); // Assignment treated as declaration (eg `this.prop = 1`)
+    pub const MODULE_EXPORTS: SymbolFlags = SymbolFlags(1 << 27); // Symbol for CommonJS `module` of `module.exports`
+    pub const ALL: SymbolFlags = SymbolFlags(-1);
+
+    pub const ENUM: SymbolFlags = SymbolFlags(Self::REGULAR_ENUM.0 | Self::CONST_ENUM.0);
+    pub const VARIABLE: SymbolFlags = SymbolFlags(Self::FUNCTION_SCOPED_VARIABLE.0 | Self::BLOCK_SCOPED_VARIABLE.0);
+    pub const VALUE: SymbolFlags = SymbolFlags(Self::VARIABLE.0 | Self::PROPERTY.0 | Self::ENUM_MEMBER.0 | Self::OBJECT_LITERAL.0 | Self::FUNCTION.0 | Self::CLASS.0 | Self::ENUM.0 | Self::VALUE_MODULE.0 | Self::METHOD.0 | Self::GET_ACCESSOR.0 | Self::SET_ACCESSOR.0);
+    pub const TYPE: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::INTERFACE.0 | Self::ENUM.0 | Self::ENUM_MEMBER.0 | Self::TYPE_LITERAL.0 | Self::TYPE_PARAMETER.0 | Self::TYPE_ALIAS.0);
+    pub const NAMESPACE: SymbolFlags = SymbolFlags(Self::VALUE_MODULE.0 | Self::NAMESPACE_MODULE.0 | Self::ENUM.0);
+    pub const MODULE: SymbolFlags = SymbolFlags(Self::VALUE_MODULE.0 | Self::NAMESPACE_MODULE.0);
+    pub const ACCESSOR: SymbolFlags = SymbolFlags(Self::GET_ACCESSOR.0 | Self::SET_ACCESSOR.0);
+
+    // Variables can be redeclared, but can not redeclare a block-scoped declaration with the
+    // same name, or any other value that is not a variable, e.g. ValueModule or Class
+    pub const FUNCTION_SCOPED_VARIABLE_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::FUNCTION_SCOPED_VARIABLE.0);
+
+    // Block-scoped declarations are not allowed to be re-declared
+    // they can not merge with anything in the value space
+    pub const BLOCK_SCOPED_VARIABLE_EXCLUDES: SymbolFlags = Self::VALUE;
+
+    pub const PARAMETER_EXCLUDES: SymbolFlags = Self::VALUE;
+    pub const PROPERTY_EXCLUDES: SymbolFlags = Self::NONE;
+    pub const ENUM_MEMBER_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 | Self::TYPE.0);
+    pub const FUNCTION_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !(Self::FUNCTION.0 | Self::VALUE_MODULE.0 | Self::CLASS.0));
+    pub const CLASS_EXCLUDES: SymbolFlags = SymbolFlags((Self::VALUE.0 | Self::TYPE.0) & !(Self::VALUE_MODULE.0 | Self::INTERFACE.0 | Self::FUNCTION.0)); // class-interface mergability done in checker.ts
+    pub const INTERFACE_EXCLUDES: SymbolFlags = SymbolFlags(Self::TYPE.0 & !(Self::INTERFACE.0 | Self::CLASS.0));
+    pub const REGULAR_ENUM_EXCLUDES: SymbolFlags = SymbolFlags((Self::VALUE.0 | Self::TYPE.0) & !(Self::REGULAR_ENUM.0 | Self::VALUE_MODULE.0)); // regular enums merge only with regular enums and modules
+    pub const CONST_ENUM_EXCLUDES: SymbolFlags = SymbolFlags((Self::VALUE.0 | Self::TYPE.0) & !Self::CONST_ENUM.0); // const enums merge only with const enums
+    pub const VALUE_MODULE_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !(Self::FUNCTION.0 | Self::CLASS.0 | Self::REGULAR_ENUM.0 | Self::VALUE_MODULE.0));
+    pub const NAMESPACE_MODULE_EXCLUDES: SymbolFlags = Self::NONE;
+    pub const METHOD_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::METHOD.0);
+    pub const GET_ACCESSOR_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::SET_ACCESSOR.0);
+    pub const SET_ACCESSOR_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::GET_ACCESSOR.0);
+    pub const ACCESSOR_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::ACCESSOR.0);
+    pub const TYPE_PARAMETER_EXCLUDES: SymbolFlags = SymbolFlags(Self::TYPE.0 & !Self::TYPE_PARAMETER.0);
+    pub const TYPE_ALIAS_EXCLUDES: SymbolFlags = Self::TYPE;
+    pub const ALIAS_EXCLUDES: SymbolFlags = Self::ALIAS;
+
+    pub const MODULE_MEMBER: SymbolFlags = SymbolFlags(Self::VARIABLE.0 | Self::FUNCTION.0 | Self::CLASS.0 | Self::INTERFACE.0 | Self::ENUM.0 | Self::MODULE.0 | Self::TYPE_ALIAS.0 | Self::ALIAS.0);
+
+    pub const EXPORT_HAS_LOCAL: SymbolFlags = SymbolFlags(Self::FUNCTION.0 | Self::CLASS.0 | Self::ENUM.0 | Self::VALUE_MODULE.0);
+
+    pub const BLOCK_SCOPED: SymbolFlags = SymbolFlags(Self::BLOCK_SCOPED_VARIABLE.0 | Self::CLASS.0 | Self::ENUM.0);
+
+    pub const PROPERTY_OR_ACCESSOR: SymbolFlags = SymbolFlags(Self::PROPERTY.0 | Self::ACCESSOR.0);
+
+    pub const CLASS_MEMBER: SymbolFlags = SymbolFlags(Self::METHOD.0 | Self::ACCESSOR.0 | Self::PROPERTY.0);
+
+    /** @internal */
+    pub const EXPORT_SUPPORTS_DEFAULT_MODIFIER: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::FUNCTION.0 | Self::INTERFACE.0);
+
+    /** @internal */
+    pub const EXPORT_DOES_NOT_SUPPORT_DEFAULT_MODIFIER: SymbolFlags = SymbolFlags(!Self::EXPORT_SUPPORTS_DEFAULT_MODIFIER.0);
+
+    /** @internal */
+    // The set of things we consider semantically classifiable.  Used to speed up the LS during
+    // classification.
+    pub const CLASSIFIABLE: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::ENUM.0 | Self::TYPE_ALIAS.0 | Self::INTERFACE.0 | Self::TYPE_PARAMETER.0 | Self::MODULE.0 | Self::ALIAS.0);
+
+    /** @internal */
+    pub const LATE_BINDING_CONTAINER: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::INTERFACE.0 | Self::TYPE_LITERAL.0 | Self::OBJECT_LITERAL.0 | Self::FUNCTION.0);
+
+    pub fn contains(&self, flags: SymbolFlags) -> bool {
+        (self.0 & flags.0) == flags.0
+    }
+}
+
+impl std::ops::BitOr for SymbolFlags {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        SymbolFlags(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitAnd for SymbolFlags {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self {
+        SymbolFlags(self.0 & rhs.0)
+    }
+}
+
+/** @internal */
+pub type SymbolId = usize;
+
+#[derive(Debug)]
+pub struct Symbol {
+    pub flags: SymbolFlags,                     // Symbol flags
+    pub escaped_name: String,                   // Name of symbol
+    pub declarations: Option<Vec<Declaration>>, // Declarations associated with this symbol
+    pub value_declaration: Option<Declaration>, // First value declaration of the symbol
+    pub members: Option<SymbolTable>,           // Class, interface or object literal instance members
+    pub exports: Option<SymbolTable>,           // Module exports
+    pub global_exports: Option<SymbolTable>,    // Conditional global UMD exports
+    /** @internal */
+    pub id: SymbolId,      // Unique id (used to look up SymbolLinks)
+    /** @internal */
+    pub merge_id: usize,   // Merge id (used to look up merged symbol)
+    /** @internal */
+    pub parent: Option<Box<Symbol>>, // Parent symbol
+    /** @internal */
+    pub export_symbol: Option<Box<Symbol>>, // Exported symbol associated with this symbol
+    /** @internal */
+    pub const_enum_only_module: Option<bool>, // True if module contains only const enums or other modules with only const enums
+    /** @internal */
+    pub is_referenced: Option<SymbolFlags>, // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
+    /** @internal */
+    pub last_assignment_pos: Option<usize>, // Source position of last node that assigns value to symbol
+    /** @internal */
+    pub is_replaceable_by_method: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
+    /** @internal */
+    pub assignment_declaration_members: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
 }
 
 #[derive(Debug, Clone, Copy)]
