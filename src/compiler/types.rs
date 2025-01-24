@@ -28,9 +28,6 @@ pub struct TypePredicateNode;
 pub struct SignatureDeclaration;
 
 #[derive(Debug)]
-pub struct IndexSignatureDeclaration;
-
-#[derive(Debug)]
 pub struct EntityName;
 
 #[derive(Debug)]
@@ -172,9 +169,6 @@ pub enum NodeBuilderFlags {}
 pub enum InternalNodeBuilderFlags {}
 
 #[derive(Debug)]
-pub enum SyntaxKind {}
-
-#[derive(Debug)]
 pub enum TypeFormatFlags {}
 
 #[derive(Debug)]
@@ -263,19 +257,19 @@ pub trait TypeChecker: std::fmt::Debug {
 
     // TODO: GH#18217 `xToDeclaration` calls are frequently asserted as defined.
     /// Note that the resulting nodes cannot be checked.
-    fn type_to_type_node(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeNode>;
+    // fn type_to_type_node(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeNode>;
     /// @internal
-    fn type_to_type_node_with_internal_flags(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypeNode>;
+    // fn type_to_type_node_with_internal_flags(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypeNode>;
     /// @internal
-    fn type_predicate_to_type_predicate_node(&self, type_predicate: TypePredicate, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypePredicateNode>;
+    // fn type_predicate_to_type_predicate_node(&self, type_predicate: TypePredicate, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypePredicateNode>;
     /// Note that the resulting nodes cannot be checked.
-    fn signature_to_signature_declaration(&self, signature: Signature, kind: SyntaxKind, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<SignatureDeclaration>;
+    // fn signature_to_signature_declaration(&self, signature: Signature, kind: SyntaxKind, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<SignatureDeclaration>;
     /// @internal
-    fn signature_to_signature_declaration_with_internal_flags(&self, signature: Signature, kind: SyntaxKind, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<SignatureDeclaration>;
+    // fn signature_to_signature_declaration_with_internal_flags(&self, signature: Signature, kind: SyntaxKind, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<SignatureDeclaration>;
     /// Note that the resulting nodes cannot be checked.
-    fn index_info_to_index_signature_declaration(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<IndexSignatureDeclaration>;
+    // fn index_info_to_index_signature_declaration(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<IndexSignatureDeclaration>;
     /// @internal
-    fn index_info_to_index_signature_declaration_with_internal_flags(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<IndexSignatureDeclaration>;
+    // fn index_info_to_index_signature_declaration_with_internal_flags(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<IndexSignatureDeclaration>;
     /// Note that the resulting nodes cannot be checked.
     fn symbol_to_entity_name(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<EntityName>;
     /// Note that the resulting nodes cannot be checked.
