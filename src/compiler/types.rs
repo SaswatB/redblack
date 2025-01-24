@@ -32,9 +32,6 @@ pub struct TypePredicateNode;
 pub struct SignatureDeclaration;
 
 #[derive(Debug)]
-pub struct NodeArray<T>;
-
-#[derive(Debug)]
 pub struct IndexSignatureDeclaration;
 
 #[derive(Debug)]
@@ -202,6 +199,12 @@ pub enum SignatureFlags {}
 #[derive(Debug)]
 pub enum MemberOverrideStatus {}
 
+#[derive(Debug)]
+pub struct TypeReference;
+
+#[derive(Debug)]
+pub struct SymbolTracker;
+
 pub trait TypeChecker {
     fn get_type_of_symbol_at_location(&self, symbol: Symbol, node: Node) -> Type;
     fn get_type_of_symbol(&self, symbol: Symbol) -> Type;
@@ -345,7 +348,7 @@ pub trait TypeChecker {
     /// @internal
     fn is_context_sensitive(&self, node: Expression) -> bool;
     /// @internal
-    fn get_type_of_property_of_contextual_type(&self, type_: Type, name: __String) -> Option<Type>;
+    fn get_type_of_property_of_contextual_type(&self, type_: Type, name: &str) -> Option<Type>;
 
     /// returns unknownSignature in the case of an error.
     /// returns undefined if the node is not valid.
@@ -387,7 +390,7 @@ pub trait TypeChecker {
     /// @internal
     fn get_exports_and_properties_of_module(&self, module_symbol: Symbol) -> Vec<Symbol>;
     /// @internal
-    fn for_each_export_and_property_of_module(&self, module_symbol: Symbol, cb: impl Fn(Symbol, __String));
+    fn for_each_export_and_property_of_module(&self, module_symbol: Symbol, cb: impl Fn(Symbol, &str));
     fn get_jsx_intrinsic_tag_names_at(&self, location: Node) -> Vec<Symbol>;
     fn is_optional_parameter(&self, node: ParameterDeclaration) -> bool;
     fn get_ambient_modules(&self) -> Vec<Symbol>;
@@ -467,7 +470,7 @@ pub trait TypeChecker {
         &self, declaration: Option<SignatureDeclaration>, type_parameters: Option<Vec<TypeParameter>>, this_parameter: Option<Symbol>, parameters: Vec<Symbol>, resolved_return_type: Type, type_predicate: Option<TypePredicate>, min_argument_count: usize, flags: SignatureFlags,
     ) -> Signature;
     /// @internal
-    fn create_symbol(&self, flags: SymbolFlags, name: __String) -> TransientSymbol;
+    fn create_symbol(&self, flags: SymbolFlags, name: &str) -> TransientSymbol;
     /// @internal
     fn create_index_info(&self, key_type: Type, type_: Type, is_readonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
     /// @internal
@@ -501,7 +504,7 @@ pub trait TypeChecker {
     /// @internal
     fn get_relation_cache_sizes(&self) -> (usize, usize, usize, usize);
     /// @internal
-    fn get_recursion_identity(&self, type_: Type) -> Option<Object>;
+    fn get_recursion_identity(&self, type_: Type) -> Option<Type>;
     /// @internal
     fn get_unmatched_properties(&self, source: Type, target: Type, require_optional_properties: bool, match_discriminant_properties: bool) -> Box<dyn Iterator<Item = Symbol>>;
 
@@ -568,8 +571,8 @@ pub trait TypeChecker {
     /// Depending on the operation performed, it may be appropriate to throw away the checker
     /// if the cancellation token is triggered. Typically, if it is used for error checking
     /// and the operation is cancelled, then it should be discarded, otherwise it is safe to keep.
-    /// @internal token = None
-    fn run_with_cancellationToken<T>(&self, token: Option<CancellationToken>, cb: impl Fn(&TypeChecker) -> T) -> T;
+    /// @internal `token = None`
+    fn run_with_cancellationToken<T>(&self, token: Option<CancellationToken>, cb: impl Fn() -> T) -> T;
 
     /// @internal
     fn get_local_type_parameters_of_class_or_interface_or_type_alias(&self, symbol: Symbol) -> Option<Vec<TypeParameter>>;
