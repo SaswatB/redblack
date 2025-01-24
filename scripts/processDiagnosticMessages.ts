@@ -48,7 +48,7 @@ async function main(): Promise<void> {
 
     const infoFileOutput = buildInfoFileOutput(diagnosticMessages, inputFilePath);
     checkForUniqueCodes(diagnosticMessages);
-    await writeFile("diagnosticInformationMap.generated.rs", infoFileOutput);
+    await writeFile("diagnostic_information_map_generated.rs", infoFileOutput);
 
     const messageOutput = buildDiagnosticMessageOutput(diagnosticMessages);
     await writeFile("diagnosticMessages.generated.json", messageOutput);
@@ -86,7 +86,7 @@ function buildInfoFileOutput(messageTable: InputDiagnosticMessageTable, inputFil
             const propName = convertPropertyName(name);
             const rustCategory = `DiagnosticCategory::${category.charAt(0).toUpperCase() + category.slice(1)}`;
             result.push(
-                `    pub fn ${propName.toLowerCase()}() -> DiagnosticMessage { diag(${code}, ${rustCategory}, String::from("${createKey(
+                `    pub fn ${propName}() -> DiagnosticMessage { diag(${code}, ${rustCategory}, String::from("${createKey(
                     propName,
                     code
                 )}"), String::from(${JSON.stringify(name)}), ${reportsUnnecessary ? "Some(true)" : "None"}, ${
