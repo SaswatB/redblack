@@ -1,3 +1,4 @@
+use oxc::ast::ast::{BinaryExpression, CallExpression, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, TaggedTemplateExpression};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -28,12 +29,6 @@ pub struct TypePredicateNode;
 pub struct SignatureDeclaration;
 
 #[derive(Debug)]
-pub struct EntityName;
-
-#[derive(Debug)]
-pub struct Expression;
-
-#[derive(Debug)]
 pub struct TypeParameterDeclaration;
 
 #[derive(Debug)]
@@ -54,8 +49,25 @@ pub struct AssignmentPattern;
 #[derive(Debug)]
 pub struct EmitTextWriter;
 
+/// Represents an expression that can be called or constructed, including function calls,
+/// constructor calls, template literals, decorators, JSX elements, and instanceof checks.
 #[derive(Debug)]
-pub struct CallLikeExpression;
+pub enum CallLikeExpression<'a> {
+    /// Function call expression like `foo()`
+    CallExpression(Box<CallExpression<'a>>),
+    /// Constructor call with new like `new Foo()`
+    NewExpression(Box<NewExpression<'a>>),
+    /// Tagged template literal like `foo`bar``
+    TaggedTemplateExpression(Box<TaggedTemplateExpression<'a>>),
+    /// Class or method decorator like `@decorator`
+    Decorator(Box<Decorator<'a>>),
+    /// JSX opening element like `<div>`
+    ///! oxc doesn't have a separate JSXSelfClosingElement, so we can't explicitly model JSXOpeningElement | JSXSelfClosingElement
+    JsxElement(Box<JSXElement<'a>>),
+    /// instanceof check like `foo instanceof Bar`
+    ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
+    BinaryExpression(Box<BinaryExpression<'a>>),
+}
 
 #[derive(Debug)]
 pub struct MethodDeclaration;
@@ -89,9 +101,6 @@ pub struct ImportTypeNode;
 
 #[derive(Debug)]
 pub struct MemberName;
-
-#[derive(Debug)]
-pub struct ObjectLiteralExpression;
 
 #[derive(Debug)]
 pub struct JsxAttributes;
@@ -271,19 +280,19 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     // fn index_info_to_index_signature_declaration_with_internal_flags(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<IndexSignatureDeclaration>;
     /// Note that the resulting nodes cannot be checked.
-    fn symbol_to_entity_name(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<EntityName>;
+    // fn symbol_to_entity_name(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<EntityName>;
     /// Note that the resulting nodes cannot be checked.
-    fn symbol_to_expression(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Expression>;
+    // fn symbol_to_expression(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Expression>;
     /// Note that the resulting nodes cannot be checked.
     ///
     /// @internal
-    fn symbol_to_node(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>) -> Option<Node>;
+    // fn symbol_to_node(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>) -> Option<Node>;
     /// Note that the resulting nodes cannot be checked.
-    fn symbol_to_type_parameter_declarations(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Vec<TypeParameterDeclaration>>;
+    // fn symbol_to_type_parameter_declarations(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Vec<TypeParameterDeclaration>>;
     /// Note that the resulting nodes cannot be checked.
-    fn symbol_to_parameter_declaration(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<ParameterDeclaration>;
+    // fn symbol_to_parameter_declaration(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<ParameterDeclaration>;
     /// Note that the resulting nodes cannot be checked.
-    fn type_parameter_to_declaration(&self, parameter: TypeParameter, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeParameterDeclaration>;
+    // fn type_parameter_to_declaration(&self, parameter: TypeParameter, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeParameterDeclaration>;
 
     fn get_symbols_in_scope(&self, location: Node, meaning: SymbolFlags) -> Vec<Symbol>;
     fn get_symbol_at_location(&self, node: Node) -> Option<Symbol>;
@@ -512,7 +521,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// e.g. it specifies `kind: "a"` and obj has `kind: "b"`.
     ///
     /// @internal
-    fn is_type_invalid_due_to_union_discriminant(&self, contextual_type: Type, obj: ObjectLiteralExpression) -> bool;
+    fn is_type_invalid_due_to_union_discriminant(&self, contextual_type: Type, obj: ObjectExpression) -> bool;
     /// @internal
     fn get_exact_optional_properties(&self, type_: Type) -> Vec<Symbol>;
     /// For a union, will include a property if it's defined in *any* of the member types.
@@ -626,7 +635,7 @@ pub struct Signature {
     /// @internal
     pub resolved_type_predicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
     /// @internal
-    pub min_argument_count: i32,   // Number of non-optional parameters
+    pub min_argument_count: i32,    // Number of non-optional parameters
     /// @internal
     pub resolved_min_argument_count: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
     /// @internal
@@ -786,9 +795,9 @@ pub struct Symbol {
     pub exports: Option<SymbolTable>,           // Module exports
     pub global_exports: Option<SymbolTable>,    // Conditional global UMD exports
     /** @internal */
-    pub id: SymbolId,      // Unique id (used to look up SymbolLinks)
+    pub id: SymbolId,       // Unique id (used to look up SymbolLinks)
     /** @internal */
-    pub merge_id: usize,   // Merge id (used to look up merged symbol)
+    pub merge_id: usize,    // Merge id (used to look up merged symbol)
     /** @internal */
     pub parent: Option<Box<Symbol>>, // Parent symbol
     /** @internal */
