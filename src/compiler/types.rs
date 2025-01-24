@@ -10,9 +10,6 @@ pub struct Type;
 pub struct IndexInfo;
 
 #[derive(Debug)]
-pub struct Signature;
-
-#[derive(Debug)]
 pub struct InterfaceType;
 
 #[derive(Debug)]
@@ -163,12 +160,6 @@ pub struct Diagnostic;
 pub struct DiagnosticWithLocation;
 
 #[derive(Debug)]
-pub enum SignatureKind {
-    Call,
-    Construct,
-}
-
-#[derive(Debug)]
 pub enum IndexKind {
     String,
     Number,
@@ -196,9 +187,6 @@ pub enum ContextFlags {}
 pub enum UnionReduction {}
 
 #[derive(Debug)]
-pub enum SignatureFlags {}
-
-#[derive(Debug)]
 pub enum MemberOverrideStatus {}
 
 #[derive(Debug)]
@@ -207,7 +195,13 @@ pub struct TypeReference;
 #[derive(Debug)]
 pub struct SymbolTracker;
 
-pub trait TypeChecker {
+#[derive(Debug)]
+pub struct JSDocSignature;
+
+#[derive(Debug)]
+pub struct ObjectType;
+
+pub trait TypeChecker: std::fmt::Debug {
     fn get_type_of_symbol_at_location(&self, symbol: Symbol, node: Node) -> Type;
     fn get_type_of_symbol(&self, symbol: Symbol) -> Type;
     fn get_declared_type_of_symbol(&self, symbol: Symbol) -> Type;
@@ -392,7 +386,7 @@ pub trait TypeChecker {
     /// @internal
     fn get_exports_and_properties_of_module(&self, module_symbol: Symbol) -> Vec<Symbol>;
     /// @internal
-    fn for_each_export_and_property_of_module(&self, module_symbol: Symbol, cb: impl Fn(Symbol, &str));
+    // fn for_each_export_and_property_of_module(&self, module_symbol: Symbol, cb: impl Fn(Symbol, &str));
     fn get_jsx_intrinsic_tag_names_at(&self, location: Node) -> Vec<Symbol>;
     fn is_optional_parameter(&self, node: ParameterDeclaration) -> bool;
     fn get_ambient_modules(&self) -> Vec<Symbol>;
@@ -574,7 +568,7 @@ pub trait TypeChecker {
     /// if the cancellation token is triggered. Typically, if it is used for error checking
     /// and the operation is cancelled, then it should be discarded, otherwise it is safe to keep.
     /// @internal `token = None`
-    fn run_with_cancellationToken<T>(&self, token: Option<CancellationToken>, cb: impl Fn() -> T) -> T;
+    // fn run_with_cancellationToken<T>(&self, token: Option<CancellationToken>, cb: impl Fn() -> T) -> T;
 
     /// @internal
     fn get_local_type_parameters_of_class_or_interface_or_type_alias(&self, symbol: Symbol) -> Option<Vec<TypeParameter>>;
@@ -592,6 +586,83 @@ pub trait TypeChecker {
     fn type_has_call_or_construct_signatures(&self, type_: Type) -> bool;
     /// @internal
     fn get_symbol_flags(&self, symbol: Symbol) -> SymbolFlags;
+}
+
+#[derive(Debug)]
+pub enum SignatureKind {
+    Call,
+    Construct,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SignatureFlags(pub isize);
+
+impl SignatureFlags {
+    pub const NONE: SignatureFlags = SignatureFlags(0);
+
+    // Propagating flags
+    pub const HAS_REST_PARAMETER: SignatureFlags = SignatureFlags(1 << 0); // Indicates last parameter is rest parameter
+    pub const HAS_LITERAL_TYPES: SignatureFlags = SignatureFlags(1 << 1); // Indicates signature is specialized
+    pub const ABSTRACT: SignatureFlags = SignatureFlags(1 << 2); // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
+
+    // Non-propagating flags
+    pub const IS_INNER_CALL_CHAIN: SignatureFlags = SignatureFlags(1 << 3); // Indicates signature comes from a CallChain nested in an outer OptionalChain
+    pub const IS_OUTER_CALL_CHAIN: SignatureFlags = SignatureFlags(1 << 4); // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
+    pub const IS_UNTYPED_SIGNATURE_IN_JS_FILE: SignatureFlags = SignatureFlags(1 << 5); // Indicates signature is from a js file and has no types
+    pub const IS_NON_INFERRABLE: SignatureFlags = SignatureFlags(1 << 6); // Indicates signature comes from a non-inferrable type
+    pub const IS_SIGNATURE_CANDIDATE_FOR_OVERLOAD_FAILURE: SignatureFlags = SignatureFlags(1 << 7);
+
+    pub const PROPAGATING_FLAGS: SignatureFlags = SignatureFlags(Self::HAS_REST_PARAMETER.0 | Self::HAS_LITERAL_TYPES.0 | Self::ABSTRACT.0 | Self::IS_UNTYPED_SIGNATURE_IN_JS_FILE.0 | Self::IS_SIGNATURE_CANDIDATE_FOR_OVERLOAD_FAILURE.0);
+
+    pub const CALL_CHAIN_FLAGS: SignatureFlags = SignatureFlags(Self::IS_INNER_CALL_CHAIN.0 | Self::IS_OUTER_CALL_CHAIN.0);
+}
+
+#[derive(Debug)]
+pub struct Signature {
+    /// @internal
+    pub flags: SignatureFlags,
+    /// @internal
+    pub checker: Option<Box<dyn TypeChecker>>,
+    pub declaration: Option<SignatureDeclaration>,   // Originating declaration
+    pub type_parameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
+    pub parameters: Vec<Symbol>,                     // Parameters
+    pub this_parameter: Option<Symbol>,              // symbol of this-type parameter
+    /// @internal
+    pub resolved_return_type: Option<Type>, // Lazily set by `getReturnTypeOfSignature`
+    /// @internal
+    pub resolved_type_predicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
+    /// @internal
+    pub min_argument_count: i32,   // Number of non-optional parameters
+    /// @internal
+    pub resolved_min_argument_count: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
+    /// @internal
+    pub target: Option<Box<Signature>>, // Instantiation target
+    /// @internal
+    pub mapper: Option<TypeMapper>, // Instantiation mapper
+    /// @internal
+    pub composite_signatures: Option<Vec<Signature>>, // Underlying signatures of a union/intersection signature
+    /// @internal
+    pub composite_kind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
+    /// @internal
+    pub erased_signature_cache: Option<Box<Signature>>, // Erased version of signature (deferred)
+    /// @internal
+    pub canonical_signature_cache: Option<Box<Signature>>, // Canonical version of signature (deferred)
+    /// @internal
+    pub base_signature_cache: Option<Box<Signature>>, // Base version of signature (deferred)
+    /// @internal
+    pub optional_call_signature_cache: Option<OptionalCallSignatureCache>, // Optional chained call version of signature (deferred)
+    /// @internal
+    pub isolated_signature_type: Option<ObjectType>, // A manufactured type that just contains the signature for purposes of signature comparison
+    /// @internal
+    pub instantiations: Option<HashMap<String, Signature>>, // Generic signature instantiation cache
+    /// @internal
+    pub implementation_signature_cache: Option<Box<Signature>>, // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
+}
+
+#[derive(Debug)]
+pub struct OptionalCallSignatureCache {
+    pub inner: Option<Box<Signature>>,
+    pub outer: Option<Box<Signature>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -861,6 +932,38 @@ impl std::ops::BitAnd for TypeFlags {
 
     fn bitand(self, rhs: Self) -> Self {
         TypeFlags(self.0 & rhs.0)
+    }
+}
+
+#[derive(Debug)]
+pub enum TypeMapKind {
+    Simple,
+    Array,
+    Deferred,
+    Function,
+    Composite,
+    Merged,
+}
+
+pub enum TypeMapper {
+    Simple { source: Type, target: Type },
+    Array { sources: Vec<Type>, targets: Option<Vec<Type>> },
+    Deferred { sources: Vec<Type>, targets: Vec<Box<dyn Fn() -> Type>> },
+    Function { func: Box<dyn Fn(Type) -> Type>, debug_info: Option<Box<dyn Fn() -> String>> },
+    Composite { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+    Merged { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+}
+
+impl std::fmt::Debug for TypeMapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Simple { source, target } => f.debug_struct("Simple").field("source", source).field("target", target).finish(),
+            Self::Array { sources, targets } => f.debug_struct("Array").field("sources", sources).field("targets", targets).finish(),
+            Self::Deferred { sources, .. } => f.debug_struct("Deferred").field("sources", sources).finish(),
+            Self::Function { .. } => f.debug_struct("Function").finish(),
+            Self::Composite { mapper1, mapper2 } => f.debug_struct("Composite").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
+            Self::Merged { mapper1, mapper2 } => f.debug_struct("Merged").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
+        }
     }
 }
 
