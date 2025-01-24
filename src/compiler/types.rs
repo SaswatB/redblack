@@ -1,11 +1,8 @@
-use oxc::ast::ast::{BinaryExpression, CallExpression, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, TaggedTemplateExpression};
+use oxc::ast::{
+    ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, TaggedTemplateExpression},
+    AstKind,
+};
 use std::collections::HashMap;
-
-#[derive(Debug)]
-pub struct Node;
-
-#[derive(Debug)]
-pub struct Type;
 
 #[derive(Debug)]
 pub struct IndexInfo;
@@ -27,12 +24,6 @@ pub struct TypePredicateNode;
 
 #[derive(Debug)]
 pub struct SignatureDeclaration;
-
-#[derive(Debug)]
-pub struct TypeParameterDeclaration;
-
-#[derive(Debug)]
-pub struct ParameterDeclaration;
 
 #[derive(Debug)]
 pub struct TypeParameter;
@@ -68,9 +59,6 @@ pub enum CallLikeExpression<'a> {
     ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
     BinaryExpression(Box<BinaryExpression<'a>>),
 }
-
-#[derive(Debug)]
-pub struct MethodDeclaration;
 
 #[derive(Debug)]
 pub struct ObjectLiteralElementLike;
@@ -205,12 +193,12 @@ pub struct JSDocSignature;
 pub struct ObjectType;
 
 pub trait TypeChecker: std::fmt::Debug {
-    fn get_type_of_symbol_at_location(&self, symbol: Symbol, node: Node) -> Type;
+    fn get_type_of_symbol_at_location(&self, symbol: Symbol, node: AstKind) -> Type;
     fn get_type_of_symbol(&self, symbol: Symbol) -> Type;
     fn get_declared_type_of_symbol(&self, symbol: Symbol) -> Type;
     fn get_properties_of_type(&self, type_: Type) -> Vec<Symbol>;
     fn get_property_of_type(&self, type_: Type, property_name: &str) -> Option<Symbol>;
-    fn get_private_identifier_property_of_type(&self, left_type: Type, name: &str, location: Node) -> Option<Symbol>;
+    fn get_private_identifier_property_of_type(&self, left_type: Type, name: &str, location: AstKind) -> Option<Symbol>;
     /// @internal
     fn get_type_of_property_of_type(&self, type_: Type, property_name: &str) -> Option<Type>;
     fn get_index_info_of_type(&self, type_: Type, kind: IndexKind) -> Option<IndexInfo>;
@@ -226,7 +214,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     fn get_widened_literal_type(&self, type_: Type) -> Type;
     /// @internal
-    fn get_promised_type_of_promise(&self, promise: Type, error_node: Option<Node>) -> Option<Type>;
+    fn get_promised_type_of_promise(&self, promise: Type, error_node: Option<AstKind>) -> Option<Type>;
     /// Gets the "awaited type" of a type.
     ///
     /// If an expression has a Promise-like type, the "awaited type" of the expression is
@@ -288,20 +276,20 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     // fn symbol_to_node(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>) -> Option<Node>;
     /// Note that the resulting nodes cannot be checked.
-    // fn symbol_to_type_parameter_declarations(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Vec<TypeParameterDeclaration>>;
+    // fn symbol_to_type_parameter_declarations(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Vec<TSTypeParameterDeclaration>>;
     /// Note that the resulting nodes cannot be checked.
-    // fn symbol_to_parameter_declaration(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<ParameterDeclaration>;
+    // fn symbol_to_parameter_declaration(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Argument>;
     /// Note that the resulting nodes cannot be checked.
-    // fn type_parameter_to_declaration(&self, parameter: TypeParameter, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeParameterDeclaration>;
+    // fn type_parameter_to_declaration(&self, parameter: TypeParameter, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TSTypeParameterDeclaration>;
 
-    fn get_symbols_in_scope(&self, location: Node, meaning: SymbolFlags) -> Vec<Symbol>;
-    fn get_symbol_at_location(&self, node: Node) -> Option<Symbol>;
+    fn get_symbols_in_scope(&self, location: AstKind, meaning: SymbolFlags) -> Vec<Symbol>;
+    fn get_symbol_at_location(&self, node: AstKind) -> Option<Symbol>;
     /// @internal
-    fn get_index_infos_at_location(&self, node: Node) -> Option<Vec<IndexInfo>>;
-    fn get_symbols_of_parameter_property_declaration(&self, parameter: ParameterDeclaration, parameter_name: &str) -> Vec<Symbol>;
+    fn get_index_infos_at_location(&self, node: AstKind) -> Option<Vec<IndexInfo>>;
+    fn get_symbols_of_parameter_property_declaration(&self, parameter: Argument, parameter_name: &str) -> Vec<Symbol>;
     /// The function returns the value (local variable) symbol of an identifier in the short-hand property assignment.
     /// This is necessary as an identifier in short-hand property assignment can contains two meaning: property name and property value.
-    fn get_shorthand_assignment_value_symbol(&self, location: Option<Node>) -> Option<Symbol>;
+    fn get_shorthand_assignment_value_symbol(&self, location: Option<AstKind>) -> Option<Symbol>;
 
     fn get_export_specifier_local_target_symbol(&self, location: ExportSpecifier) -> Option<Symbol>;
     /// If a symbol is a local symbol with an associated exported symbol, returns the exported symbol.
@@ -313,28 +301,28 @@ pub trait TypeChecker: std::fmt::Debug {
     fn get_export_symbol_of_symbol(&self, symbol: Symbol) -> Symbol;
     fn get_property_symbol_of_destructuring_assignment(&self, location: Identifier) -> Option<Symbol>;
     fn get_type_of_assignment_pattern(&self, pattern: AssignmentPattern) -> Type;
-    fn get_type_at_location(&self, node: Node) -> Type;
+    fn get_type_at_location(&self, node: AstKind) -> Type;
     fn get_type_from_type_node(&self, node: TypeNode) -> Type;
 
-    fn signature_to_string(&self, signature: Signature, enclosing_declaration: Option<Node>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String;
-    fn type_to_string(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<TypeFormatFlags>) -> String;
-    fn symbol_to_string(&self, symbol: Symbol, enclosing_declaration: Option<Node>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String;
-    fn type_predicate_to_string(&self, predicate: TypePredicate, enclosing_declaration: Option<Node>, flags: Option<TypeFormatFlags>) -> String;
+    fn signature_to_string(&self, signature: Signature, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String;
+    fn type_to_string(&self, type_: Type, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
+    fn symbol_to_string(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String;
+    fn type_predicate_to_string(&self, predicate: TypePredicate, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
 
     /// @internal
-    fn write_signature(&self, signature: Signature, enclosing_declaration: Option<Node>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>, writer: Option<EmitTextWriter>) -> String;
+    fn write_signature(&self, signature: Signature, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>, writer: Option<EmitTextWriter>) -> String;
     /// @internal
-    fn write_type(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    fn write_type(&self, type_: Type, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
     /// @internal
-    fn write_symbol(&self, symbol: Symbol, enclosing_declaration: Option<Node>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    fn write_symbol(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String;
     /// @internal
-    fn write_type_predicate(&self, predicate: TypePredicate, enclosing_declaration: Option<Node>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    fn write_type_predicate(&self, predicate: TypePredicate, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
 
     fn get_fully_qualified_name(&self, symbol: Symbol) -> String;
     fn get_augmented_properties_of_type(&self, type_: Type) -> Vec<Symbol>;
 
     fn get_root_symbols(&self, symbol: Symbol) -> Vec<Symbol>;
-    fn get_symbol_of_expando(&self, node: Node, allow_declaration: bool) -> Option<Symbol>;
+    fn get_symbol_of_expando(&self, node: AstKind, allow_declaration: bool) -> Option<Symbol>;
     fn get_contextual_type(&self, node: Expression) -> Option<Type>;
     /// @internal
     fn get_contextual_type_with_flags(&self, node: Expression, context_flags: Option<ContextFlags>) -> Option<Type>;
@@ -356,7 +344,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     fn get_resolved_signature_for_signature_help(&self, node: CallLikeExpression, candidates_out_array: Option<Vec<Signature>>, argument_count: Option<usize>) -> Option<Signature>;
     /// @internal
-    fn get_candidate_signatures_for_string_literal_completions(&self, call: CallLikeExpression, editing_argument: Node) -> Vec<Signature>;
+    fn get_candidate_signatures_for_string_literal_completions(&self, call: CallLikeExpression, editing_argument: AstKind) -> Vec<Signature>;
     /// @internal
     fn get_expanded_parameters(&self, sig: Signature) -> Vec<Vec<Symbol>>;
     /// @internal
@@ -390,8 +378,8 @@ pub trait TypeChecker: std::fmt::Debug {
     fn get_exports_and_properties_of_module(&self, module_symbol: Symbol) -> Vec<Symbol>;
     /// @internal
     // fn for_each_export_and_property_of_module(&self, module_symbol: Symbol, cb: impl Fn(Symbol, &str));
-    fn get_jsx_intrinsic_tag_names_at(&self, location: Node) -> Vec<Symbol>;
-    fn is_optional_parameter(&self, node: ParameterDeclaration) -> bool;
+    fn get_jsx_intrinsic_tag_names_at(&self, location: AstKind) -> Vec<Symbol>;
+    fn is_optional_parameter(&self, node: Argument) -> bool;
     fn get_ambient_modules(&self) -> Vec<Symbol>;
 
     fn try_get_member_in_module_exports(&self, member_name: &str, module_symbol: Symbol) -> Option<Symbol>;
@@ -406,7 +394,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     fn get_suggested_symbol_for_nonexistent_jsx_attribute(&self, name: Identifier, containing_type: Type) -> Option<Symbol>;
     /// @internal
-    fn get_suggested_symbol_for_nonexistent_symbol(&self, location: Node, name: &str, meaning: SymbolFlags) -> Option<Symbol>;
+    fn get_suggested_symbol_for_nonexistent_symbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol>;
     /// @internal
     fn get_suggested_symbol_for_nonexistent_module(&self, node: Identifier, target: Symbol) -> Option<Symbol>;
     /// @internal
@@ -473,7 +461,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     fn create_index_info(&self, key_type: Type, type_: Type, is_readonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
     /// @internal
-    fn is_symbol_accessible(&self, symbol: Symbol, enclosing_declaration: Option<Node>, meaning: SymbolFlags, should_compute_alias_to_mark_visible: bool) -> SymbolAccessibilityResult;
+    fn is_symbol_accessible(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: SymbolFlags, should_compute_alias_to_mark_visible: bool) -> SymbolAccessibilityResult;
     /// @internal
     fn try_find_ambient_module(&self, module_name: &str) -> Option<Symbol>;
 
@@ -482,13 +470,13 @@ pub trait TypeChecker: std::fmt::Debug {
 
     // Should not be called directly.  Should only be accessed through the Program instance.
     /// @internal
-    fn get_diagnostics(&self, source_file: Option<SourceFile>, cancellation_token: Option<CancellationToken>, nodes_to_check: Option<Vec<Node>>) -> Vec<Diagnostic>;
+    fn get_diagnostics(&self, source_file: Option<SourceFile>, cancellation_token: Option<CancellationToken>, nodes_to_check: Option<Vec<AstKind>>) -> Vec<Diagnostic>;
     /// @internal
     fn get_global_diagnostics(&self) -> Vec<Diagnostic>;
     /// @internal
     fn get_emit_resolver(&self, source_file: Option<SourceFile>, cancellation_token: Option<CancellationToken>, force_dts: Option<bool>) -> EmitResolver;
     /// @internal
-    fn requires_adding_implicit_undefined(&self, parameter: ParameterDeclaration, enclosing_declaration: Option<Node>) -> bool;
+    fn requires_adding_implicit_undefined(&self, parameter: Argument, enclosing_declaration: Option<AstKind>) -> bool;
 
     /// @internal
     fn get_node_count(&self) -> usize;
@@ -530,11 +518,11 @@ pub trait TypeChecker: std::fmt::Debug {
     ///
     /// @internal
     fn get_all_possible_properties_of_types(&self, types: Vec<Type>) -> Vec<Symbol>;
-    fn resolve_name(&self, name: &str, location: Option<Node>, meaning: SymbolFlags, exclude_globals: bool) -> Option<Symbol>;
+    fn resolve_name(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, exclude_globals: bool) -> Option<Symbol>;
     /// @internal
-    fn get_jsx_namespace(&self, location: Option<Node>) -> String;
+    fn get_jsx_namespace(&self, location: Option<AstKind>) -> String;
     /// @internal
-    fn get_jsx_fragment_factory(&self, location: Node) -> Option<String>;
+    fn get_jsx_fragment_factory(&self, location: AstKind) -> Option<String>;
 
     /// Note that this will return undefined in the following case:
     ///     // a.ts
@@ -545,7 +533,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// This should be called in a loop climbing parents of the symbol, so we'll get `N`.
     ///
     /// @internal
-    fn get_accessible_symbol_chain(&self, symbol: Symbol, enclosing_declaration: Option<Node>, meaning: SymbolFlags, use_only_external_aliasing: bool) -> Option<Vec<Symbol>>;
+    fn get_accessible_symbol_chain(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: SymbolFlags, use_only_external_aliasing: bool) -> Option<Vec<Symbol>>;
     fn get_type_predicate_of_signature(&self, signature: Signature) -> Option<TypePredicate>;
     /// @internal
     fn resolve_external_module_name(&self, module_specifier: Expression) -> Option<Symbol>;
@@ -557,7 +545,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @param node A location where we might consider accessing `this`. Not necessarily a ThisExpression.
     ///
     /// @internal
-    fn try_get_this_type_at(&self, node: Node, include_global_this: Option<bool>, container: Option<ThisContainer>) -> Option<Type>;
+    fn try_get_this_type_at(&self, node: AstKind, include_global_this: Option<bool>, container: Option<ThisContainer>) -> Option<Type>;
     /// @internal
     fn get_type_argument_constraint(&self, node: TypeNode) -> Option<Type>;
 
@@ -578,13 +566,13 @@ pub trait TypeChecker: std::fmt::Debug {
     /// @internal
     fn is_declaration_visible(&self, node: Declaration) -> bool;
     /// @internal
-    fn is_property_accessible(&self, node: Node, is_super: bool, is_write: bool, containing_type: Type, property: Symbol) -> bool;
+    fn is_property_accessible(&self, node: AstKind, is_super: bool, is_write: bool, containing_type: Type, property: Symbol) -> bool;
     /// @internal
     fn get_type_only_alias_declaration(&self, symbol: Symbol) -> Option<TypeOnlyAliasDeclaration>;
     /// @internal
     fn get_member_override_modifier_status(&self, node: ClassLikeDeclaration, member: ClassElement, member_symbol: Symbol) -> MemberOverrideStatus;
     /// @internal
-    fn is_type_parameter_possibly_referenced(&self, tp: TypeParameter, node: Node) -> bool;
+    fn is_type_parameter_possibly_referenced(&self, tp: TypeParameter, node: AstKind) -> bool;
     /// @internal
     fn type_has_call_or_construct_signatures(&self, type_: Type) -> bool;
     /// @internal
@@ -621,7 +609,7 @@ impl SignatureFlags {
 }
 
 #[derive(Debug)]
-pub struct Signature {
+pub struct Signature<'a> {
     /// @internal
     pub flags: SignatureFlags,
     /// @internal
@@ -631,7 +619,7 @@ pub struct Signature {
     pub parameters: Vec<Symbol>,                     // Parameters
     pub this_parameter: Option<Symbol>,              // symbol of this-type parameter
     /// @internal
-    pub resolved_return_type: Option<Type>, // Lazily set by `getReturnTypeOfSignature`
+    pub resolved_return_type: Option<Type<'a>>, // Lazily set by `getReturnTypeOfSignature`
     /// @internal
     pub resolved_type_predicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
     /// @internal
@@ -639,33 +627,33 @@ pub struct Signature {
     /// @internal
     pub resolved_min_argument_count: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
     /// @internal
-    pub target: Option<Box<Signature>>, // Instantiation target
+    pub target: Option<Box<Signature<'a>>>, // Instantiation target
     /// @internal
-    pub mapper: Option<TypeMapper>, // Instantiation mapper
+    pub mapper: Option<TypeMapper<'a>>, // Instantiation mapper
     /// @internal
-    pub composite_signatures: Option<Vec<Signature>>, // Underlying signatures of a union/intersection signature
+    pub composite_signatures: Option<Vec<Signature<'a>>>, // Underlying signatures of a union/intersection signature
     /// @internal
     pub composite_kind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
     /// @internal
-    pub erased_signature_cache: Option<Box<Signature>>, // Erased version of signature (deferred)
+    pub erased_signature_cache: Option<Box<Signature<'a>>>, // Erased version of signature (deferred)
     /// @internal
-    pub canonical_signature_cache: Option<Box<Signature>>, // Canonical version of signature (deferred)
+    pub canonical_signature_cache: Option<Box<Signature<'a>>>, // Canonical version of signature (deferred)
     /// @internal
-    pub base_signature_cache: Option<Box<Signature>>, // Base version of signature (deferred)
+    pub base_signature_cache: Option<Box<Signature<'a>>>, // Base version of signature (deferred)
     /// @internal
-    pub optional_call_signature_cache: Option<OptionalCallSignatureCache>, // Optional chained call version of signature (deferred)
+    pub optional_call_signature_cache: Option<OptionalCallSignatureCache<'a>>, // Optional chained call version of signature (deferred)
     /// @internal
     pub isolated_signature_type: Option<ObjectType>, // A manufactured type that just contains the signature for purposes of signature comparison
     /// @internal
-    pub instantiations: Option<HashMap<String, Signature>>, // Generic signature instantiation cache
+    pub instantiations: Option<HashMap<String, Signature<'a>>>, // Generic signature instantiation cache
     /// @internal
-    pub implementation_signature_cache: Option<Box<Signature>>, // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
+    pub implementation_signature_cache: Option<Box<Signature<'a>>>, // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
 }
 
 #[derive(Debug)]
-pub struct OptionalCallSignatureCache {
-    pub inner: Option<Box<Signature>>,
-    pub outer: Option<Box<Signature>>,
+pub struct OptionalCallSignatureCache<'a> {
+    pub inner: Option<Box<Signature<'a>>>,
+    pub outer: Option<Box<Signature<'a>>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -948,16 +936,16 @@ pub enum TypeMapKind {
     Merged,
 }
 
-pub enum TypeMapper {
-    Simple { source: Type, target: Type },
-    Array { sources: Vec<Type>, targets: Option<Vec<Type>> },
-    Deferred { sources: Vec<Type>, targets: Vec<Box<dyn Fn() -> Type>> },
-    Function { func: Box<dyn Fn(Type) -> Type>, debug_info: Option<Box<dyn Fn() -> String>> },
-    Composite { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
-    Merged { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+pub enum TypeMapper<'a> {
+    Simple { source: Type<'a>, target: Type<'a> },
+    Array { sources: Vec<Type<'a>>, targets: Option<Vec<Type<'a>>> },
+    Deferred { sources: Vec<Type<'a>>, targets: Vec<Box<dyn Fn() -> Type<'a>>> },
+    Function { func: Box<dyn Fn(Type<'a>) -> Type<'a>>, debug_info: Option<Box<dyn Fn() -> String>> },
+    Composite { mapper1: Box<TypeMapper<'a>>, mapper2: Box<TypeMapper<'a>> },
+    Merged { mapper1: Box<TypeMapper<'a>>, mapper2: Box<TypeMapper<'a>> },
 }
 
-impl std::fmt::Debug for TypeMapper {
+impl<'a> std::fmt::Debug for TypeMapper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Simple { source, target } => f.debug_struct("Simple").field("source", source).field("target", target).finish(),
@@ -968,6 +956,37 @@ impl std::fmt::Debug for TypeMapper {
             Self::Merged { mapper1, mapper2 } => f.debug_struct("Merged").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
         }
     }
+}
+
+#[derive(Debug)]
+pub enum DestructuringPattern<'a> {
+    BindingPattern(Box<BindingPattern<'a>>),
+    ObjectExpression(Box<ObjectExpression<'a>>),
+    ArrayExpression(Box<ArrayExpression<'a>>),
+}
+
+/** @internal */
+pub type TypeId = usize;
+
+#[derive(Debug)]
+pub struct Type<'a> {
+    pub flags: TypeFlags, // Flags
+    /** @internal */
+    pub id: TypeId, // Unique ID
+    /** @internal */
+    pub checker: Box<dyn TypeChecker>,
+    pub symbol: Symbol,                              // Symbol associated with type (if any)
+    pub pattern: Option<DestructuringPattern<'a>>,   // Destructuring pattern represented by type (if any)
+    pub alias_symbol: Option<Symbol>,                // Alias associated with type
+    pub alias_type_arguments: Option<Vec<Type<'a>>>, // Alias type arguments (if any)
+    /** @internal */
+    pub permissive_instantiation: Option<Box<Type<'a>>>, // Instantiation with type parameters mapped to wildcard type
+    /** @internal */
+    pub restrictive_instantiation: Option<Box<Type<'a>>>, // Instantiation with type parameters mapped to unconstrained form
+    /** @internal */
+    pub immediate_base_constraint: Option<Box<Type<'a>>>, // Immediate base constraint cache
+    /** @internal */
+    pub widened: Option<Box<Type<'a>>>, // Cached widened form of the type
 }
 
 #[derive(Debug)]
