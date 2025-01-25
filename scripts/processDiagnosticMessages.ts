@@ -71,8 +71,8 @@ function buildInfoFileOutput(messageTable: InputDiagnosticMessageTable, inputFil
         "",
         "use crate::compiler::types::{DiagnosticCategory, DiagnosticMessage};",
         "",
-        "fn diag(code: i32, category: DiagnosticCategory, key: String, message: String, reports_unnecessary: Option<bool>, elided_in_compatibility_pyramid: Option<bool>, reports_deprecated: Option<bool>) -> DiagnosticMessage {",
-        "    DiagnosticMessage { code, category, key, message, reports_unnecessary, elided_in_compatibility_pyramid, reports_deprecated }",
+        "fn diag(code: i32, category: DiagnosticCategory, key: String, message: String, reportsUnnecessary: Option<bool>, elidedInCompatibilityPyramid: Option<bool>, reportsDeprecated: Option<bool>) -> DiagnosticMessage {",
+        "    DiagnosticMessage { code, category, key, message, reportsUnnecessary, elidedInCompatibilityPyramid, reportsDeprecated }",
         "}",
         "",
         "pub struct Diagnostics;",
@@ -96,7 +96,7 @@ function buildInfoFileOutput(messageTable: InputDiagnosticMessageTable, inputFil
         }
     );
 
-    result.push("}");
+    result.push("}\n");
 
     return result.join("\n");
 }
