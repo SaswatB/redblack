@@ -1,2 +1,6 @@
 fn_params_layout = "Compressed" 
 max_width = 300
+# unstable_features=true # set through flags
+# fn_single_line=true # set through flags
+use_small_heuristics="Max"
+use_field_init_shorthand=true

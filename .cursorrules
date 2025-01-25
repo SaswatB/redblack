@@ -1,0 +1,8 @@
+This project is a port of the TypeScript compiler to Rust.
+In an effort to keep the codebase as close to the original as possible, we will follow the TypeScript codebase's naming conventions for copied code.
+Code that diverges from the TypeScript codebase will keep rust naming conventions to keep it easy to spot.
+
+
+Rules for converting TypeScript code to Rust:
+- Unless otherwise specified, keep all comments.
+- Use the exact same names for enum members, properties, and functions.
