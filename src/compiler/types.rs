@@ -973,8 +973,21 @@ pub struct TypeObject<'a> {
     pub widened: Option<Box<dyn Type>>, // Cached widened form of the type
 
     pub object_flags: Option<ObjectFlags>,           // ObjectFlagsType
+    pub intrinsic_props: Option<IntrinsicTypeProps>, // IntrinsicType
     pub object_props: Option<ObjectTypeProps>,       // ObjectType
     pub interface_props: Option<InterfaceTypeProps>, // InterfaceType
+}
+
+/** @internal */
+// Intrinsic types (TypeFlags.Intrinsic)
+#[derive(Debug, Clone)]
+pub struct IntrinsicTypeProps {
+    pub intrinsicName: String, // Name of intrinsic type
+    pub debugIntrinsicName: Option<String>,
+}
+
+pub trait IntrinsicType: ObjectFlagsTrait {
+    fn get_intrinsic_props(&self) -> &IntrinsicTypeProps;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1045,9 +1058,15 @@ impl ObjectFlags {
     pub fn contains(&self, other: ObjectFlags) -> bool { (self.0 & other.0) == other.0 }
 }
 
-pub trait ObjectFlagsType: Type {
-    // NullableType | ObjectType | UnionType | IntersectionType;
+pub trait ObjectFlagsTrait: Type {
     fn get_object_flags(&self) -> ObjectFlags;
+}
+
+enum ObjectFlagsType {
+    // NullableType(Box<dyn NullableType>),
+    ObjectType(Box<dyn ObjectType>),
+    // UnionType(Box<dyn UnionType>),
+    // IntersectionType(Box<dyn IntersectionType>),
 }
 
 #[derive(Debug)]
@@ -1066,7 +1085,7 @@ pub struct ObjectTypeProps {
     pub objectTypeWithoutAbstractConstructSignatures: Option<Box<dyn ObjectType>>,
 }
 
-pub trait ObjectType: ObjectFlagsType {
+pub trait ObjectType: ObjectFlagsTrait {
     fn get_object_props(&self) -> &ObjectTypeProps;
 }
 
