@@ -8,9 +8,6 @@ use std::collections::HashMap;
 pub struct IndexInfo;
 
 #[derive(Debug)]
-pub struct InterfaceType;
-
-#[derive(Debug)]
 pub struct BaseType;
 
 #[derive(Debug)]
@@ -189,32 +186,29 @@ pub struct SymbolTracker;
 #[derive(Debug)]
 pub struct JSDocSignature;
 
-#[derive(Debug)]
-pub struct ObjectType;
-
 pub trait TypeChecker: std::fmt::Debug {
-    fn get_type_of_symbol_at_location(&self, symbol: Symbol, node: AstKind) -> Type;
-    fn get_type_of_symbol(&self, symbol: Symbol) -> Type;
-    fn get_declared_type_of_symbol(&self, symbol: Symbol) -> Type;
-    fn get_properties_of_type(&self, type_: Type) -> Vec<Symbol>;
-    fn get_property_of_type(&self, type_: Type, property_name: &str) -> Option<Symbol>;
-    fn get_private_identifier_property_of_type(&self, left_type: Type, name: &str, location: AstKind) -> Option<Symbol>;
-    /// @internal
-    fn get_type_of_property_of_type(&self, type_: Type, property_name: &str) -> Option<Type>;
-    fn get_index_info_of_type(&self, type_: Type, kind: IndexKind) -> Option<IndexInfo>;
-    fn get_index_infos_of_type(&self, type_: Type) -> Vec<IndexInfo>;
-    fn get_index_infos_of_index_symbol(&self, index_symbol: Symbol) -> Vec<IndexInfo>;
-    fn get_signatures_of_type(&self, type_: Type, kind: SignatureKind) -> Vec<Signature>;
-    fn get_index_type_of_type(&self, type_: Type, kind: IndexKind) -> Option<Type>;
-    /// @internal
-    fn get_index_type(&self, type_: Type) -> Type;
-    fn get_base_types(&self, type_: InterfaceType) -> Vec<BaseType>;
-    fn get_base_type_of_literal_type(&self, type_: Type) -> Type;
-    fn get_widened_type(&self, type_: Type) -> Type;
-    /// @internal
-    fn get_widened_literal_type(&self, type_: Type) -> Type;
-    /// @internal
-    fn get_promised_type_of_promise(&self, promise: Type, error_node: Option<AstKind>) -> Option<Type>;
+    fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol, node: &AstKind) -> &dyn Type;
+    fn getTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type;
+    fn getDeclaredTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type;
+    fn getPropertiesOfType(&self, type_: &dyn Type) -> Vec<&Symbol>;
+    fn getPropertyOfType(&self, type_: &dyn Type, property_name: &str) -> Option<&Symbol>;
+    fn getPrivateIdentifierPropertyOfType(&self, left_type: &dyn Type, name: &str, location: &AstKind) -> Option<&Symbol>;
+    /** @internal */
+    fn getTypeOfPropertyOfType(&self, type_: &dyn Type, propertyName: &str) -> Option<&dyn Type>;
+    fn getIndexInfoOfType(&self, type_: &dyn Type, kind: IndexKind) -> Option<IndexInfo>;
+    fn getIndexInfosOfType(&self, type_: &dyn Type) -> Vec<IndexInfo>;
+    fn getIndexInfosOfIndexSymbol(&self, indexSymbol: Symbol) -> Vec<IndexInfo>;
+    fn getSignaturesOfType(&self, type_: &dyn Type, kind: SignatureKind) -> Vec<&Signature>;
+    fn getIndexTypeOfType(&self, type_: &dyn Type, kind: IndexKind) -> Option<&dyn Type>;
+    /** @internal */
+    fn getIndexType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getBaseTypes(&self, type_: &dyn InterfaceType) -> Vec<BaseType>;
+    fn getBaseTypeOfLiteralType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getWidenedType(&self, type_: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn getWidenedLiteralType(&self, type_: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn getPromisedTypeOfPromise(&self, promise: &dyn Type, errorNode: Option<AstKind>) -> Option<&dyn Type>;
     /// Gets the "awaited type" of a type.
     ///
     /// If an expression has a Promise-like type, the "awaited type" of the expression is
@@ -233,296 +227,296 @@ pub trait TypeChecker: std::fmt::Debug {
     /// and the value undefined will be returned.
     ///
     /// This is used to reflect the runtime behavior of the await keyword.
-    fn get_awaited_type(&self, type_: Type) -> Option<Type>;
-    /// @internal
-    fn is_empty_anonymous_object_type(&self, type_: Type) -> bool;
-    fn get_return_type_of_signature(&self, signature: Signature) -> Type;
+    fn getAwaitedType(&self, type_: &dyn Type) -> Option<&dyn Type>;
+    /** @internal */
+    fn isEmptyAnonymousObjectType(&self, type_: &dyn Type) -> bool;
+    fn getReturnTypeOfSignature(&self, signature: Signature) -> &dyn Type;
     /// Gets the type of a parameter at a given position in a signature.
     /// Returns any if the index is not valid.
     ///
-    /// @internal
-    fn get_parameter_type(&self, signature: Signature, parameter_index: usize) -> Type;
-    /// @internal
-    fn get_parameter_identifier_info_at_position(&self, signature: Signature, parameter_index: usize) -> Option<(Identifier, &str, bool)>;
-    fn get_nullable_type(&self, type_: Type, flags: TypeFlags) -> Type;
-    fn get_non_nullable_type(&self, type_: Type) -> Type;
-    /// @internal
-    fn get_non_optional_type(&self, type_: Type) -> Type;
-    /// @internal
-    fn is_nullable_type(&self, type_: Type) -> bool;
-    fn get_type_arguments(&self, type_: TypeReference) -> Vec<Type>;
+    /** @internal */
+    fn getParameterType(&self, signature: Signature, parameter_index: usize) -> &dyn Type;
+    /** @internal */
+    fn getParameterIdentifierInfoAtPosition(&self, signature: Signature, parameter_index: usize) -> Option<(Identifier, &str, bool)>;
+    fn getNullableType(&self, type_: &dyn Type, flags: TypeFlags) -> &dyn Type;
+    fn getNonNullableType(&self, type_: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn getNonOptionalType(&self, type_: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn isNullableType(&self, type_: &dyn Type) -> bool;
+    fn getTypeArguments(&self, type_: TypeReference) -> Vec<&dyn Type>;
 
     // TODO: GH#18217 `xToDeclaration` calls are frequently asserted as defined.
     /// Note that the resulting nodes cannot be checked.
-    // fn type_to_type_node(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeNode>;
-    /// @internal
-    // fn type_to_type_node_with_internal_flags(&self, type_: Type, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypeNode>;
-    /// @internal
-    // fn type_predicate_to_type_predicate_node(&self, type_predicate: TypePredicate, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypePredicateNode>;
+    // fn typeToTypeNode(&self, type_: Type, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TypeNode>;
+    /** @internal */
+    // fn typeToTypeNodeWithInternalFlags(&self, type_: Type, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>, internalFlags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypeNode>;
+    /** @internal */
+    // fn typePredicateToTypePredicateNode(&self, typePredicate: TypePredicate, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>, internalFlags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<TypePredicateNode>;
     /// Note that the resulting nodes cannot be checked.
-    // fn signature_to_signature_declaration(&self, signature: Signature, kind: SyntaxKind, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<SignatureDeclaration>;
-    /// @internal
-    // fn signature_to_signature_declaration_with_internal_flags(&self, signature: Signature, kind: SyntaxKind, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<SignatureDeclaration>;
+    // fn signatureToSignatureDeclaration(&self, signature: Signature, kind: SyntaxKind, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<SignatureDeclaration>;
+    /** @internal */
+    // fn signatureToSignatureDeclarationWithInternalFlags(&self, signature: Signature, kind: SyntaxKind, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>, internalFlags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<SignatureDeclaration>;
     /// Note that the resulting nodes cannot be checked.
-    // fn index_info_to_index_signature_declaration(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<IndexSignatureDeclaration>;
-    /// @internal
-    // fn index_info_to_index_signature_declaration_with_internal_flags(&self, index_info: IndexInfo, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<IndexSignatureDeclaration>;
+    // fn indexInfoToIndexSignatureDeclaration(&self, indexInfo: IndexInfo, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<IndexSignatureDeclaration>;
+    /** @internal */
+    // fn indexInfoToIndexSignatureDeclarationWithInternalFlags(&self, indexInfo: IndexInfo, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>, internalFlags: Option<InternalNodeBuilderFlags>, tracker: Option<SymbolTracker>) -> Option<IndexSignatureDeclaration>;
     /// Note that the resulting nodes cannot be checked.
-    // fn symbol_to_entity_name(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<EntityName>;
+    // fn symbolToEntityName(&self, symbol: Symbol, meaning: SymbolFlags, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<EntityName>;
     /// Note that the resulting nodes cannot be checked.
-    // fn symbol_to_expression(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Expression>;
+    // fn symbolToExpression(&self, symbol: Symbol, meaning: SymbolFlags, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Expression>;
     /// Note that the resulting nodes cannot be checked.
     ///
-    /// @internal
-    // fn symbol_to_node(&self, symbol: Symbol, meaning: SymbolFlags, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>, internal_flags: Option<InternalNodeBuilderFlags>) -> Option<Node>;
+    /** @internal */
+    // fn symbolToNode(&self, symbol: Symbol, meaning: SymbolFlags, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>, internalFlags: Option<InternalNodeBuilderFlags>) -> Option<Node>;
     /// Note that the resulting nodes cannot be checked.
-    // fn symbol_to_type_parameter_declarations(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Vec<TSTypeParameterDeclaration>>;
+    // fn symbolToTypeParameterDeclarations(&self, symbol: Symbol, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Vec<TSTypeParameterDeclaration>>;
     /// Note that the resulting nodes cannot be checked.
-    // fn symbol_to_parameter_declaration(&self, symbol: Symbol, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Argument>;
+    // fn symbolToParameterDeclaration(&self, symbol: Symbol, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<Argument>;
     /// Note that the resulting nodes cannot be checked.
-    // fn type_parameter_to_declaration(&self, parameter: TypeParameter, enclosing_declaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TSTypeParameterDeclaration>;
+    // fn typeParameterToDeclaration(&self, parameter: TypeParameter, enclosingDeclaration: Option<Node>, flags: Option<NodeBuilderFlags>) -> Option<TSTypeParameterDeclaration>;
 
-    fn get_symbols_in_scope(&self, location: AstKind, meaning: SymbolFlags) -> Vec<Symbol>;
-    fn get_symbol_at_location(&self, node: AstKind) -> Option<Symbol>;
-    /// @internal
-    fn get_index_infos_at_location(&self, node: AstKind) -> Option<Vec<IndexInfo>>;
-    fn get_symbols_of_parameter_property_declaration(&self, parameter: Argument, parameter_name: &str) -> Vec<Symbol>;
+    fn getSymbolsInScope(&self, location: AstKind, meaning: SymbolFlags) -> Vec<Symbol>;
+    fn getSymbolAtLocation(&self, node: AstKind) -> Option<Symbol>;
+    /** @internal */
+    fn getIndexInfosAtLocation(&self, node: AstKind) -> Option<Vec<IndexInfo>>;
+    fn getSymbolsOfParameterPropertyDeclaration(&self, parameter: Argument, parameter_name: &str) -> Vec<Symbol>;
     /// The function returns the value (local variable) symbol of an identifier in the short-hand property assignment.
     /// This is necessary as an identifier in short-hand property assignment can contains two meaning: property name and property value.
-    fn get_shorthand_assignment_value_symbol(&self, location: Option<AstKind>) -> Option<Symbol>;
+    fn getShorthandAssignmentValueSymbol(&self, location: Option<AstKind>) -> Option<Symbol>;
 
-    fn get_export_specifier_local_target_symbol(&self, location: ExportSpecifier) -> Option<Symbol>;
+    fn getExportSpecifierLocalTargetSymbol(&self, location: ExportSpecifier) -> Option<Symbol>;
     /// If a symbol is a local symbol with an associated exported symbol, returns the exported symbol.
     /// Otherwise returns its input.
     /// For example, at `export type T = number;`:
     ///     - `get_symbol_at_location` at the location `T` will return the exported symbol for `T`.
     ///     - But the result of `get_symbols_in_scope` will contain the *local* symbol for `T`, not the exported symbol.
     ///     - Calling `get_export_symbol_of_symbol` on that local symbol will return the exported symbol.
-    fn get_export_symbol_of_symbol(&self, symbol: Symbol) -> Symbol;
-    fn get_property_symbol_of_destructuring_assignment(&self, location: Identifier) -> Option<Symbol>;
-    fn get_type_of_assignment_pattern(&self, pattern: AssignmentPattern) -> Type;
-    fn get_type_at_location(&self, node: AstKind) -> Type;
-    fn get_type_from_type_node(&self, node: TypeNode) -> Type;
+    fn getExportSymbolOfSymbol(&self, symbol: Symbol) -> Symbol;
+    fn getPropertySymbolOfDestructuringAssignment(&self, location: Identifier) -> Option<Symbol>;
+    fn getTypeOfAssignmentPattern(&self, pattern: AssignmentPattern) -> &dyn Type;
+    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type;
+    fn getTypeFromTypeNode(&self, node: TypeNode) -> &dyn Type;
 
-    fn signature_to_string(&self, signature: Signature, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String;
-    fn type_to_string(&self, type_: Type, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
-    fn symbol_to_string(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String;
-    fn type_predicate_to_string(&self, predicate: TypePredicate, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
+    fn signatureToString(&self, signature: Signature, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String;
+    fn typeToString(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
+    fn symbolToString(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String;
+    fn typePredicateToString(&self, predicate: TypePredicate, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
 
-    /// @internal
-    fn write_signature(&self, signature: Signature, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>, writer: Option<EmitTextWriter>) -> String;
-    /// @internal
-    fn write_type(&self, type_: Type, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
-    /// @internal
-    fn write_symbol(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String;
-    /// @internal
-    fn write_type_predicate(&self, predicate: TypePredicate, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    /** @internal */
+    fn writeSignature(&self, signature: Signature, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>, writer: Option<EmitTextWriter>) -> String;
+    /** @internal */
+    fn writeType(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    /** @internal */
+    fn writeSymbol(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    /** @internal */
+    fn writeTypePredicate(&self, predicate: TypePredicate, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
 
-    fn get_fully_qualified_name(&self, symbol: Symbol) -> String;
-    fn get_augmented_properties_of_type(&self, type_: Type) -> Vec<Symbol>;
+    fn getFullyQualifiedName(&self, symbol: Symbol) -> String;
+    fn getAugmentedPropertiesOfType(&self, type_: &dyn Type) -> Vec<&Symbol>;
 
-    fn get_root_symbols(&self, symbol: Symbol) -> Vec<Symbol>;
-    fn get_symbol_of_expando(&self, node: AstKind, allow_declaration: bool) -> Option<Symbol>;
-    fn get_contextual_type(&self, node: Expression) -> Option<Type>;
-    /// @internal
-    fn get_contextual_type_with_flags(&self, node: Expression, context_flags: Option<ContextFlags>) -> Option<Type>;
-    /// @internal
-    fn get_contextual_type_for_object_literal_element(&self, element: ObjectLiteralElementLike) -> Option<Type>;
-    /// @internal
-    fn get_contextual_type_for_argument_at_index(&self, call: CallLikeExpression, arg_index: usize) -> Option<Type>;
-    /// @internal
-    fn get_contextual_type_for_jsx_attribute(&self, attribute: JsxAttribute) -> Option<Type>;
-    /// @internal
-    fn is_context_sensitive(&self, node: Expression) -> bool;
-    /// @internal
-    fn get_type_of_property_of_contextual_type(&self, type_: Type, name: &str) -> Option<Type>;
+    fn getRootSymbols(&self, symbol: Symbol) -> Vec<Symbol>;
+    fn getSymbolOfExpando(&self, node: AstKind, allowDeclaration: bool) -> Option<Symbol>;
+    fn getContextualType(&self, node: Expression) -> Option<&dyn Type>;
+    /** @internal */
+    fn getContextualTypeWithFlags(&self, node: Expression, contextFlags: Option<ContextFlags>) -> Option<&dyn Type>;
+    /** @internal */
+    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type>;
+    /** @internal */
+    fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression, argIndex: usize) -> Option<&dyn Type>;
+    /** @internal */
+    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type>;
+    /** @internal */
+    fn isContextSensitive(&self, node: Expression) -> bool;
+    /** @internal */
+    fn getTypeOfPropertyOfContextualType(&self, type_: &dyn Type, name: &str) -> Option<&dyn Type>;
 
     /// returns unknownSignature in the case of an error.
     /// returns undefined if the node is not valid.
     /// @param argument_count Apparent number of arguments, passed in case of a possibly incomplete call. This should come from an ArgumentListInfo. See `signatureHelp.ts`.
-    fn get_resolved_signature(&self, node: CallLikeExpression, candidates_out_array: Option<Vec<Signature>>, argument_count: Option<usize>) -> Option<Signature>;
-    /// @internal
-    fn get_resolved_signature_for_signature_help(&self, node: CallLikeExpression, candidates_out_array: Option<Vec<Signature>>, argument_count: Option<usize>) -> Option<Signature>;
-    /// @internal
-    fn get_candidate_signatures_for_string_literal_completions(&self, call: CallLikeExpression, editing_argument: AstKind) -> Vec<Signature>;
-    /// @internal
-    fn get_expanded_parameters(&self, sig: Signature) -> Vec<Vec<Symbol>>;
-    /// @internal
-    fn has_effective_rest_parameter(&self, sig: Signature) -> bool;
-    /// @internal
-    fn contains_arguments_reference(&self, declaration: SignatureDeclaration) -> bool;
+    fn getResolvedSignature(&self, node: CallLikeExpression, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature>;
+    /** @internal */
+    fn getResolvedSignatureForSignatureHelp(&self, node: CallLikeExpression, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature>;
+    /** @internal */
+    fn getCandidateSignaturesForStringLiteralCompletions(&self, call: CallLikeExpression, editingArgument: AstKind) -> Vec<Signature>;
+    /** @internal */
+    fn getExpandedParameters(&self, sig: Signature) -> Vec<Vec<Symbol>>;
+    /** @internal */
+    fn hasEffectiveRestParameter(&self, sig: Signature) -> bool;
+    /** @internal */
+    fn containsArgumentsReference(&self, declaration: SignatureDeclaration) -> bool;
 
-    fn get_signature_from_declaration(&self, declaration: SignatureDeclaration) -> Option<Signature>;
-    fn is_implementation_of_overload(&self, node: SignatureDeclaration) -> Option<bool>;
-    fn is_undefined_symbol(&self, symbol: Symbol) -> bool;
-    fn is_arguments_symbol(&self, symbol: Symbol) -> bool;
-    fn is_unknown_symbol(&self, symbol: Symbol) -> bool;
-    fn get_merged_symbol(&self, symbol: Symbol) -> Symbol;
-    /// @internal
-    fn symbol_is_value(&self, symbol: Symbol, include_type_only_members: Option<bool>) -> bool;
+    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration) -> Option<Signature>;
+    fn isImplementationOfOverload(&self, node: SignatureDeclaration) -> Option<bool>;
+    fn isUndefinedSymbol(&self, symbol: Symbol) -> bool;
+    fn isArgumentsSymbol(&self, symbol: Symbol) -> bool;
+    fn isUnknownSymbol(&self, symbol: Symbol) -> bool;
+    fn getMergedSymbol(&self, symbol: Symbol) -> Symbol;
+    /** @internal */
+    fn symbolIsValue(&self, symbol: Symbol, includeTypeOnlyMembers: Option<bool>) -> bool;
 
-    fn get_constant_value(&self, node: EnumMember) -> Option<String>;
-    fn is_valid_property_access(&self, node: PropertyAccessExpression, property_name: &str) -> bool;
+    fn getConstantValue(&self, node: EnumMember) -> Option<String>;
+    fn isValidPropertyAccess(&self, node: PropertyAccessExpression, propertyName: &str) -> bool;
     /// Exclude accesses to private properties.
     ///
-    /// @internal
-    fn is_valid_property_access_for_completions(&self, node: PropertyAccessExpression, type_: Type, property: Symbol) -> bool;
+    /** @internal */
+    fn isValidPropertyAccessForCompletions(&self, node: PropertyAccessExpression, type_: &dyn Type, property: Symbol) -> bool;
     /// Follow all aliases to get the original symbol.
-    fn get_aliased_symbol(&self, symbol: Symbol) -> Symbol;
+    fn getAliasedSymbol(&self, symbol: Symbol) -> Symbol;
     /// Follow a *single* alias to get the immediately aliased symbol.
-    fn get_immediate_aliased_symbol(&self, symbol: Symbol) -> Option<Symbol>;
-    fn get_exports_of_module(&self, module_symbol: Symbol) -> Vec<Symbol>;
+    fn getImmediateAliasedSymbol(&self, symbol: Symbol) -> Option<Symbol>;
+    fn getExportsOfModule(&self, moduleSymbol: Symbol) -> Vec<Symbol>;
     /// Unlike `get_exports_of_module`, this includes properties of an `export =` value.
     ///
-    /// @internal
-    fn get_exports_and_properties_of_module(&self, module_symbol: Symbol) -> Vec<Symbol>;
-    /// @internal
-    // fn for_each_export_and_property_of_module(&self, module_symbol: Symbol, cb: impl Fn(Symbol, &str));
-    fn get_jsx_intrinsic_tag_names_at(&self, location: AstKind) -> Vec<Symbol>;
-    fn is_optional_parameter(&self, node: Argument) -> bool;
-    fn get_ambient_modules(&self) -> Vec<Symbol>;
+    /** @internal */
+    fn getExportsAndPropertiesOfModule(&self, moduleSymbol: Symbol) -> Vec<Symbol>;
+    /** @internal */
+    // fn forEachExportAndPropertyOfModule(&self, moduleSymbol: Symbol, cb: impl Fn(Symbol, &str));
+    fn getJsxIntrinsicTagNamesAt(&self, location: AstKind) -> Vec<Symbol>;
+    fn isOptionalParameter(&self, node: Argument) -> bool;
+    fn getAmbientModules(&self) -> Vec<Symbol>;
 
-    fn try_get_member_in_module_exports(&self, member_name: &str, module_symbol: Symbol) -> Option<Symbol>;
+    fn tryGetMemberInModuleExports(&self, memberName: &str, moduleSymbol: Symbol) -> Option<Symbol>;
     /// Unlike `try_get_member_in_module_exports`, this includes properties of an `export =` value.
     /// Does *not* return properties of primitive types.
     ///
-    /// @internal
-    fn try_get_member_in_module_exports_and_properties(&self, member_name: &str, module_symbol: Symbol) -> Option<Symbol>;
-    fn get_apparent_type(&self, type_: Type) -> Type;
-    /// @internal
-    fn get_suggested_symbol_for_nonexistent_property(&self, name: MemberName, containing_type: Type) -> Option<Symbol>;
-    /// @internal
-    fn get_suggested_symbol_for_nonexistent_jsx_attribute(&self, name: Identifier, containing_type: Type) -> Option<Symbol>;
-    /// @internal
-    fn get_suggested_symbol_for_nonexistent_symbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol>;
-    /// @internal
-    fn get_suggested_symbol_for_nonexistent_module(&self, node: Identifier, target: Symbol) -> Option<Symbol>;
-    /// @internal
-    fn get_suggested_symbol_for_nonexistent_class_member(&self, name: &str, base_type: Type) -> Option<Symbol>;
-    fn get_base_constraint_of_type(&self, type_: Type) -> Option<Type>;
-    fn get_default_from_type_parameter(&self, type_: Type) -> Option<Type>;
+    /** @internal */
+    fn tryGetMemberInModuleExportsAndProperties(&self, memberName: &str, moduleSymbol: Symbol) -> Option<Symbol>;
+    fn getApparentType(&self, type_: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn getSuggestedSymbolForNonexistentProperty(&self, name: MemberName, containingType: &dyn Type) -> Option<Symbol>;
+    /** @internal */
+    fn getSuggestedSymbolForNonexistentJsxAttribute(&self, name: Identifier, containingType: &dyn Type) -> Option<Symbol>;
+    /** @internal */
+    fn getSuggestedSymbolForNonexistentSymbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol>;
+    /** @internal */
+    fn getSuggestedSymbolForNonexistentModule(&self, node: Identifier, target: Symbol) -> Option<Symbol>;
+    /** @internal */
+    fn getSuggestedSymbolForNonexistentClassMember(&self, name: &str, baseType: &dyn Type) -> Option<Symbol>;
+    fn getBaseConstraintOfType(&self, type_: &dyn Type) -> Option<&dyn Type>;
+    fn getDefaultFromTypeParameter(&self, type_: &dyn Type) -> Option<&dyn Type>;
 
     /// Gets the intrinsic `any` type. There are multiple types that act as `any` used internally in the compiler,
     /// so the type returned by this function should not be used in equality checks to determine if another type
     /// is `any`. Instead, use `type.flags & TypeFlags.Any`.
-    fn get_any_type(&self) -> Type;
-    fn get_string_type(&self) -> Type;
-    fn get_string_literal_type(&self, value: &str) -> StringLiteralType;
-    fn get_number_type(&self) -> Type;
-    fn get_number_literal_type(&self, value: f64) -> NumberLiteralType;
-    fn get_big_int_type(&self) -> Type;
-    fn get_big_int_literal_type(&self, value: PseudoBigInt) -> BigIntLiteralType;
-    fn get_boolean_type(&self) -> Type;
-    /// @internal
-    fn get_false_type(&self, fresh: Option<bool>) -> Type;
-    /// @internal
-    fn get_true_type(&self, fresh: Option<bool>) -> Type;
-    fn get_void_type(&self) -> Type;
+    fn getAnyType(&self) -> &dyn Type;
+    fn getStringType(&self) -> &dyn Type;
+    fn getStringLiteralType(&self, value: &str) -> StringLiteralType;
+    fn getNumberType(&self) -> &dyn Type;
+    fn getNumberLiteralType(&self, value: f64) -> NumberLiteralType;
+    fn getBigIntType(&self) -> &dyn Type;
+    fn getBigIntLiteralType(&self, value: PseudoBigInt) -> BigIntLiteralType;
+    fn getBooleanType(&self) -> &dyn Type;
+    /** @internal */
+    fn getFalseType(&self, fresh: Option<bool>) -> &dyn Type;
+    /** @internal */
+    fn getTrueType(&self, fresh: Option<bool>) -> &dyn Type;
+    fn getVoidType(&self) -> &dyn Type;
     /// Gets the intrinsic `undefined` type. There are multiple types that act as `undefined` used internally in the compiler
     /// depending on compiler options, so the type returned by this function should not be used in equality checks to determine
     /// if another type is `undefined`. Instead, use `type.flags & TypeFlags.Undefined`.
-    fn get_undefined_type(&self) -> Type;
+    fn getUndefinedType(&self) -> &dyn Type;
     /// Gets the intrinsic `null` type. There are multiple types that act as `null` used internally in the compiler,
     /// so the type returned by this function should not be used in equality checks to determine if another type
     /// is `null`. Instead, use `type.flags & TypeFlags.Null`.
-    fn get_null_type(&self) -> Type;
-    fn get_es_symbol_type(&self) -> Type;
+    fn getNullType(&self) -> &dyn Type;
+    fn getESSymbolType(&self) -> &dyn Type;
     /// Gets the intrinsic `never` type. There are multiple types that act as `never` used internally in the compiler,
     /// so the type returned by this function should not be used in equality checks to determine if another type
     /// is `never`. Instead, use `type.flags & TypeFlags.Never`.
-    fn get_never_type(&self) -> Type;
-    /// @internal
-    fn get_optional_type(&self) -> Type;
-    /// @internal
-    fn get_union_type(&self, types: Vec<Type>, subtype_reduction: Option<UnionReduction>) -> Type;
-    /// @internal
-    fn create_array_type(&self, element_type: Type) -> Type;
-    /// @internal
-    fn get_element_type_of_array_type(&self, array_type: Type) -> Option<Type>;
-    /// @internal
-    fn create_promise_type(&self, type_: Type) -> Type;
-    /// @internal
-    fn get_promise_type(&self) -> Type;
-    /// @internal
-    fn get_promise_like_type(&self) -> Type;
-    /// @internal
-    fn get_any_async_iterable_type(&self) -> Option<Type>;
+    fn getNeverType(&self) -> &dyn Type;
+    /** @internal */
+    fn getOptionalType(&self) -> &dyn Type;
+    /** @internal */
+    fn getUnionType(&self, types: Vec<&dyn Type>, subtypeReduction: Option<UnionReduction>) -> &dyn Type;
+    /** @internal */
+    fn createArrayType(&self, elementType: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn getElementTypeOfArrayType(&self, arrayType: &dyn Type) -> Option<&dyn Type>;
+    /** @internal */
+    fn createPromiseType(&self, type_: &dyn Type) -> &dyn Type;
+    /** @internal */
+    fn getPromiseType(&self) -> &dyn Type;
+    /** @internal */
+    fn getPromiseLikeType(&self) -> &dyn Type;
+    /** @internal */
+    fn getAnyAsyncIterableType(&self) -> Option<&dyn Type>;
 
     /// Returns true if the "source" type is assignable to the "target" type.
-    fn is_type_assignable_to(&self, source: Type, target: Type) -> bool;
-    /// @internal
-    fn create_anonymous_type(&self, symbol: Option<Symbol>, members: SymbolTable, call_signatures: Vec<Signature>, construct_signatures: Vec<Signature>, index_infos: Vec<IndexInfo>) -> Type;
-    /// @internal
-    fn create_signature(
-        &self, declaration: Option<SignatureDeclaration>, type_parameters: Option<Vec<TypeParameter>>, this_parameter: Option<Symbol>, parameters: Vec<Symbol>, resolved_return_type: Type, type_predicate: Option<TypePredicate>, min_argument_count: usize, flags: SignatureFlags,
+    fn isTypeAssignableTo(&self, source: &dyn Type, target: &dyn Type) -> bool;
+    /** @internal */
+    fn createAnonymousType(&self, symbol: Option<Symbol>, members: SymbolTable, callSignatures: Vec<Signature>, constructSignatures: Vec<Signature>, indexInfos: Vec<IndexInfo>) -> &dyn Type;
+    /** @internal */
+    fn createSignature(
+        &self, declaration: Option<SignatureDeclaration>, typeParameters: Option<Vec<TypeParameter>>, thisParameter: Option<Symbol>, parameters: Vec<Symbol>, resolvedReturnType: &dyn Type, typePredicate: Option<TypePredicate>, minArgumentCount: usize, flags: SignatureFlags,
     ) -> Signature;
-    /// @internal
-    fn create_symbol(&self, flags: SymbolFlags, name: &str) -> TransientSymbol;
-    /// @internal
-    fn create_index_info(&self, key_type: Type, type_: Type, is_readonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
-    /// @internal
-    fn is_symbol_accessible(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: SymbolFlags, should_compute_alias_to_mark_visible: bool) -> SymbolAccessibilityResult;
-    /// @internal
-    fn try_find_ambient_module(&self, module_name: &str) -> Option<Symbol>;
+    /** @internal */
+    fn createSymbol(&self, flags: SymbolFlags, name: &str) -> TransientSymbol;
+    /** @internal */
+    fn createIndexInfo(&self, keyType: &dyn Type, type_: &dyn Type, isReadonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
+    /** @internal */
+    fn isSymbolAccessible(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, shouldComputeAliasToMarkVisible: bool) -> SymbolAccessibilityResult;
+    /** @internal */
+    fn tryFindAmbientModule(&self, moduleName: &str) -> Option<Symbol>;
 
-    /// @internal
-    fn get_symbol_walker(&self, accept: Option<fn(Symbol) -> bool>) -> SymbolWalker;
+    /** @internal */
+    fn getSymbolWalker(&self, accept: Option<fn(Symbol) -> bool>) -> SymbolWalker;
 
     // Should not be called directly.  Should only be accessed through the Program instance.
-    /// @internal
-    fn get_diagnostics(&self, source_file: Option<SourceFile>, cancellation_token: Option<CancellationToken>, nodes_to_check: Option<Vec<AstKind>>) -> Vec<Diagnostic>;
-    /// @internal
-    fn get_global_diagnostics(&self) -> Vec<Diagnostic>;
-    /// @internal
-    fn get_emit_resolver(&self, source_file: Option<SourceFile>, cancellation_token: Option<CancellationToken>, force_dts: Option<bool>) -> EmitResolver;
-    /// @internal
-    fn requires_adding_implicit_undefined(&self, parameter: Argument, enclosing_declaration: Option<AstKind>) -> bool;
+    /** @internal */
+    fn getDiagnostics(&self, sourceFile: Option<SourceFile>, cancellationToken: Option<CancellationToken>, nodesToCheck: Option<Vec<AstKind>>) -> Vec<Diagnostic>;
+    /** @internal */
+    fn getGlobalDiagnostics(&self) -> Vec<Diagnostic>;
+    /** @internal */
+    fn getEmitResolver(&self, sourceFile: Option<SourceFile>, cancellationToken: Option<CancellationToken>, forceDts: Option<bool>) -> EmitResolver;
+    /** @internal */
+    fn requiresAddingImplicitUndefined(&self, parameter: Argument, enclosingDeclaration: Option<AstKind>) -> bool;
 
-    /// @internal
-    fn get_node_count(&self) -> usize;
-    /// @internal
-    fn get_identifier_count(&self) -> usize;
-    /// @internal
-    fn get_symbol_count(&self) -> usize;
-    /// @internal
-    fn get_type_count(&self) -> usize;
-    /// @internal
-    fn get_instantiation_count(&self) -> usize;
-    /// @internal
-    fn get_relation_cache_sizes(&self) -> (usize, usize, usize, usize);
-    /// @internal
-    fn get_recursion_identity(&self, type_: Type) -> Option<Type>;
-    /// @internal
-    fn get_unmatched_properties(&self, source: Type, target: Type, require_optional_properties: bool, match_discriminant_properties: bool) -> Box<dyn Iterator<Item = Symbol>>;
+    /** @internal */
+    fn getNodeCount(&self) -> usize;
+    /** @internal */
+    fn getIdentifierCount(&self) -> usize;
+    /** @internal */
+    fn getSymbolCount(&self) -> usize;
+    /** @internal */
+    fn getTypeCount(&self) -> usize;
+    /** @internal */
+    fn getInstantiationCount(&self) -> usize;
+    /** @internal */
+    fn getRelationCacheSizes(&self) -> (usize, usize, usize, usize);
+    /** @internal */
+    fn getRecursionIdentity(&self, type_: &dyn Type) -> Option<&dyn Type>;
+    /** @internal */
+    fn getUnmatchedProperties(&self, source: &dyn Type, target: &dyn Type, requireOptionalProperties: bool, matchDiscriminantProperties: bool) -> Box<dyn Iterator<Item = Symbol>>;
 
     /// True if this type is the `Array` or `ReadonlyArray` type from lib.d.ts.
     /// This function will _not_ return true if passed a type which
     /// extends `Array` (for example, the TypeScript AST's `NodeArray` type).
-    fn is_array_type(&self, type_: Type) -> bool;
+    fn isArrayType(&self, type_: &dyn Type) -> bool;
     /// True if this type is a tuple type. This function will _not_ return true if
     /// passed a type which extends from a tuple.
-    fn is_tuple_type(&self, type_: Type) -> bool;
+    fn isTupleType(&self, type_: &dyn Type) -> bool;
     /// True if this type is assignable to `ReadonlyArray<any>`.
-    fn is_array_like_type(&self, type_: Type) -> bool;
+    fn isArrayLikeType(&self, type_: &dyn Type) -> bool;
 
     /// True if `contextualType` should not be considered for completions because
     /// e.g. it specifies `kind: "a"` and obj has `kind: "b"`.
     ///
-    /// @internal
-    fn is_type_invalid_due_to_union_discriminant(&self, contextual_type: Type, obj: ObjectExpression) -> bool;
-    /// @internal
-    fn get_exact_optional_properties(&self, type_: Type) -> Vec<Symbol>;
+    /** @internal */
+    fn isTypeInvalidDueToUnionDiscriminant(&self, contextualType: &dyn Type, obj: ObjectExpression) -> bool;
+    /** @internal */
+    fn getExactOptionalProperties(&self, type_: &dyn Type) -> Vec<Symbol>;
     /// For a union, will include a property if it's defined in *any* of the member types.
     /// So for `{ a } | { b }`, this will include both `a` and `b`.
     /// Does not include properties of primitive types.
     ///
-    /// @internal
-    fn get_all_possible_properties_of_types(&self, types: Vec<Type>) -> Vec<Symbol>;
-    fn resolve_name(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, exclude_globals: bool) -> Option<Symbol>;
-    /// @internal
-    fn get_jsx_namespace(&self, location: Option<AstKind>) -> String;
-    /// @internal
-    fn get_jsx_fragment_factory(&self, location: AstKind) -> Option<String>;
+    /** @internal */
+    fn getAllPossiblePropertiesOfTypes(&self, types: Vec<&dyn Type>) -> Vec<Symbol>;
+    fn resolveName(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, excludeGlobals: bool) -> Option<Symbol>;
+    /** @internal */
+    fn getJsxNamespace(&self, location: Option<AstKind>) -> String;
+    /** @internal */
+    fn getJsxFragmentFactory(&self, location: AstKind) -> Option<String>;
 
     /// Note that this will return undefined in the following case:
     ///     // a.ts
@@ -532,51 +526,51 @@ pub trait TypeChecker: std::fmt::Debug {
     /// Where `C` is the symbol we're looking for.
     /// This should be called in a loop climbing parents of the symbol, so we'll get `N`.
     ///
-    /// @internal
-    fn get_accessible_symbol_chain(&self, symbol: Symbol, enclosing_declaration: Option<AstKind>, meaning: SymbolFlags, use_only_external_aliasing: bool) -> Option<Vec<Symbol>>;
-    fn get_type_predicate_of_signature(&self, signature: Signature) -> Option<TypePredicate>;
-    /// @internal
-    fn resolve_external_module_name(&self, module_specifier: Expression) -> Option<Symbol>;
+    /** @internal */
+    fn getAccessibleSymbolChain(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, useOnlyExternalAliasing: bool) -> Option<Vec<Symbol>>;
+    fn getTypePredicateOfSignature(&self, signature: Signature) -> Option<TypePredicate>;
+    /** @internal */
+    fn resolveExternalModuleName(&self, moduleSpecifier: Expression) -> Option<Symbol>;
     /// An external module with an 'export =' declaration resolves to the target of the 'export =' declaration,
     /// and an external module with no 'export =' declaration resolves to the module itself.
     ///
-    /// @internal
-    fn resolve_external_module_symbol(&self, symbol: Symbol) -> Symbol;
+    /** @internal */
+    fn resolveExternalModuleSymbol(&self, symbol: Symbol) -> Symbol;
     /// @param node A location where we might consider accessing `this`. Not necessarily a ThisExpression.
     ///
-    /// @internal
-    fn try_get_this_type_at(&self, node: AstKind, include_global_this: Option<bool>, container: Option<ThisContainer>) -> Option<Type>;
-    /// @internal
-    fn get_type_argument_constraint(&self, node: TypeNode) -> Option<Type>;
+    /** @internal */
+    fn tryGetThisTypeAt(&self, node: AstKind, includeGlobalThis: Option<bool>, container: Option<ThisContainer>) -> Option<&dyn Type>;
+    /** @internal */
+    fn getTypeArgumentConstraint(&self, node: TypeNode) -> Option<&dyn Type>;
 
     /// Does *not* get *all* suggestion diagnostics, just the ones that were convenient to report in the checker.
     /// Others are added in computeSuggestionDiagnostics.
     ///
-    /// @internal
-    fn get_suggestion_diagnostics(&self, file: SourceFile, cancellation_token: Option<CancellationToken>) -> Vec<DiagnosticWithLocation>;
+    /** @internal */
+    fn getSuggestionDiagnostics(&self, file: SourceFile, cancellationToken: Option<CancellationToken>) -> Vec<DiagnosticWithLocation>;
 
     /// Depending on the operation performed, it may be appropriate to throw away the checker
     /// if the cancellation token is triggered. Typically, if it is used for error checking
     /// and the operation is cancelled, then it should be discarded, otherwise it is safe to keep.
-    /// @internal `token = None`
+    /** @internal */ // `token = None`
     // fn run_with_cancellationToken<T>(&self, token: Option<CancellationToken>, cb: impl Fn() -> T) -> T;
 
-    /// @internal
-    fn get_local_type_parameters_of_class_or_interface_or_type_alias(&self, symbol: Symbol) -> Option<Vec<TypeParameter>>;
-    /// @internal
-    fn is_declaration_visible(&self, node: Declaration) -> bool;
-    /// @internal
-    fn is_property_accessible(&self, node: AstKind, is_super: bool, is_write: bool, containing_type: Type, property: Symbol) -> bool;
-    /// @internal
-    fn get_type_only_alias_declaration(&self, symbol: Symbol) -> Option<TypeOnlyAliasDeclaration>;
-    /// @internal
-    fn get_member_override_modifier_status(&self, node: ClassLikeDeclaration, member: ClassElement, member_symbol: Symbol) -> MemberOverrideStatus;
-    /// @internal
-    fn is_type_parameter_possibly_referenced(&self, tp: TypeParameter, node: AstKind) -> bool;
-    /// @internal
-    fn type_has_call_or_construct_signatures(&self, type_: Type) -> bool;
-    /// @internal
-    fn get_symbol_flags(&self, symbol: Symbol) -> SymbolFlags;
+    /** @internal */
+    fn getLocalTypeParametersOfClassOrInterfaceOrTypeAlias(&self, symbol: Symbol) -> Option<Vec<TypeParameter>>;
+    /** @internal */
+    fn isDeclarationVisible(&self, node: Declaration) -> bool;
+    /** @internal */
+    fn isPropertyAccessible(&self, node: AstKind, isSuper: bool, isWrite: bool, containingType: &dyn Type, property: Symbol) -> bool;
+    /** @internal */
+    fn getTypeOnlyAliasDeclaration(&self, symbol: Symbol) -> Option<TypeOnlyAliasDeclaration>;
+    /** @internal */
+    fn getMemberOverrideModifierStatus(&self, node: ClassLikeDeclaration, member: ClassElement, memberSymbol: Symbol) -> MemberOverrideStatus;
+    /** @internal */
+    fn isTypeParameterPossiblyReferenced(&self, tp: TypeParameter, node: AstKind) -> bool;
+    /** @internal */
+    fn typeHasCallOrConstructSignatures(&self, type_: &dyn Type) -> bool;
+    /** @internal */
+    fn getSymbolFlags(&self, symbol: Symbol) -> SymbolFlags;
 }
 
 #[derive(Debug)]
@@ -589,185 +583,179 @@ pub enum SignatureKind {
 pub struct SignatureFlags(pub isize);
 
 impl SignatureFlags {
-    pub const NONE: SignatureFlags = SignatureFlags(0);
+    pub const None: SignatureFlags = SignatureFlags(0);
 
     // Propagating flags
-    pub const HAS_REST_PARAMETER: SignatureFlags = SignatureFlags(1 << 0); // Indicates last parameter is rest parameter
-    pub const HAS_LITERAL_TYPES: SignatureFlags = SignatureFlags(1 << 1); // Indicates signature is specialized
-    pub const ABSTRACT: SignatureFlags = SignatureFlags(1 << 2); // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
+    pub const HasRestParameter: SignatureFlags = SignatureFlags(1 << 0); // Indicates last parameter is rest parameter
+    pub const HasLiteralTypes: SignatureFlags = SignatureFlags(1 << 1); // Indicates signature is specialized
+    pub const Abstract: SignatureFlags = SignatureFlags(1 << 2); // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
 
     // Non-propagating flags
-    pub const IS_INNER_CALL_CHAIN: SignatureFlags = SignatureFlags(1 << 3); // Indicates signature comes from a CallChain nested in an outer OptionalChain
-    pub const IS_OUTER_CALL_CHAIN: SignatureFlags = SignatureFlags(1 << 4); // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
-    pub const IS_UNTYPED_SIGNATURE_IN_JS_FILE: SignatureFlags = SignatureFlags(1 << 5); // Indicates signature is from a js file and has no types
-    pub const IS_NON_INFERRABLE: SignatureFlags = SignatureFlags(1 << 6); // Indicates signature comes from a non-inferrable type
-    pub const IS_SIGNATURE_CANDIDATE_FOR_OVERLOAD_FAILURE: SignatureFlags = SignatureFlags(1 << 7);
+    pub const IsInnerCallChain: SignatureFlags = SignatureFlags(1 << 3); // Indicates signature comes from a CallChain nested in an outer OptionalChain
+    pub const IsOuterCallChain: SignatureFlags = SignatureFlags(1 << 4); // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
+    pub const IsUntypedSignatureInJsFile: SignatureFlags = SignatureFlags(1 << 5); // Indicates signature is from a js file and has no types
+    pub const IsNonInferrable: SignatureFlags = SignatureFlags(1 << 6); // Indicates signature comes from a non-inferrable type
+    pub const IsSignatureCandidateForOverloadFailure: SignatureFlags = SignatureFlags(1 << 7);
 
-    pub const PROPAGATING_FLAGS: SignatureFlags = SignatureFlags(Self::HAS_REST_PARAMETER.0 | Self::HAS_LITERAL_TYPES.0 | Self::ABSTRACT.0 | Self::IS_UNTYPED_SIGNATURE_IN_JS_FILE.0 | Self::IS_SIGNATURE_CANDIDATE_FOR_OVERLOAD_FAILURE.0);
+    pub const PropagatingFlags: SignatureFlags = SignatureFlags(Self::HasRestParameter.0 | Self::HasLiteralTypes.0 | Self::Abstract.0 | Self::IsUntypedSignatureInJsFile.0 | Self::IsSignatureCandidateForOverloadFailure.0);
 
-    pub const CALL_CHAIN_FLAGS: SignatureFlags = SignatureFlags(Self::IS_INNER_CALL_CHAIN.0 | Self::IS_OUTER_CALL_CHAIN.0);
+    pub const CallChainFlags: SignatureFlags = SignatureFlags(Self::IsInnerCallChain.0 | Self::IsOuterCallChain.0);
 }
 
 #[derive(Debug)]
-pub struct Signature<'a> {
-    /// @internal
+pub struct Signature {
+    /** @internal */
     pub flags: SignatureFlags,
-    /// @internal
+    /** @internal */
     pub checker: Option<Box<dyn TypeChecker>>,
-    pub declaration: Option<SignatureDeclaration>,   // Originating declaration
-    pub type_parameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
-    pub parameters: Vec<Symbol>,                     // Parameters
-    pub this_parameter: Option<Symbol>,              // symbol of this-type parameter
-    /// @internal
-    pub resolved_return_type: Option<Type<'a>>, // Lazily set by `getReturnTypeOfSignature`
-    /// @internal
-    pub resolved_type_predicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
-    /// @internal
-    pub min_argument_count: i32,    // Number of non-optional parameters
-    /// @internal
-    pub resolved_min_argument_count: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
-    /// @internal
-    pub target: Option<Box<Signature<'a>>>, // Instantiation target
-    /// @internal
-    pub mapper: Option<TypeMapper<'a>>, // Instantiation mapper
-    /// @internal
-    pub composite_signatures: Option<Vec<Signature<'a>>>, // Underlying signatures of a union/intersection signature
-    /// @internal
-    pub composite_kind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
-    /// @internal
-    pub erased_signature_cache: Option<Box<Signature<'a>>>, // Erased version of signature (deferred)
-    /// @internal
-    pub canonical_signature_cache: Option<Box<Signature<'a>>>, // Canonical version of signature (deferred)
-    /// @internal
-    pub base_signature_cache: Option<Box<Signature<'a>>>, // Base version of signature (deferred)
-    /// @internal
-    pub optional_call_signature_cache: Option<OptionalCallSignatureCache<'a>>, // Optional chained call version of signature (deferred)
-    /// @internal
-    pub isolated_signature_type: Option<ObjectType>, // A manufactured type that just contains the signature for purposes of signature comparison
-    /// @internal
-    pub instantiations: Option<HashMap<String, Signature<'a>>>, // Generic signature instantiation cache
-    /// @internal
-    pub implementation_signature_cache: Option<Box<Signature<'a>>>, // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
+    pub declaration: Option<SignatureDeclaration>,  // Originating declaration
+    pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
+    pub parameters: Vec<Symbol>,                    // Parameters
+    pub thisParameter: Option<Symbol>,              // symbol of this-type parameter
+    /** @internal */
+    pub resolvedReturnType: Option<Box<dyn Type>>, // Lazily set by `getReturnTypeOfSignature`
+    /** @internal */
+    pub resolvedTypePredicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
+    /** @internal */
+    pub minArgumentCount: i32,  // Number of non-optional parameters
+    /** @internal */
+    pub resolvedMinArgumentCount: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
+    /** @internal */
+    pub target: Option<Box<Signature>>, // Instantiation target
+    /** @internal */
+    pub mapper: Option<TypeMapper>, // Instantiation mapper
+    /** @internal */
+    pub compositeSignatures: Option<Vec<Signature>>, // Underlying signatures of a union/intersection signature
+    /** @internal */
+    pub compositeKind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
+    /** @internal */
+    pub erasedSignatureCache: Option<Box<Signature>>, // Erased version of signature (deferred)
+    /** @internal */
+    pub canonicalSignatureCache: Option<Box<Signature>>, // Canonical version of signature (deferred)
+    /** @internal */
+    pub baseSignatureCache: Option<Box<Signature>>, // Base version of signature (deferred)
+    /** @internal */
+    pub optionalCallSignatureCache: Option<OptionalCallSignatureCache>, // Optional chained call version of signature (deferred)
+    /** @internal */
+    pub isolatedSignatureType: Option<Box<dyn ObjectType>>, // A manufactured type that just contains the signature for purposes of signature comparison
+    /** @internal */
+    pub instantiations: Option<HashMap<String, Signature>>, // Generic signature instantiation cache
+    /** @internal */
+    pub implementationSignatureCache: Option<Box<Signature>>, // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
 }
 
 #[derive(Debug)]
-pub struct OptionalCallSignatureCache<'a> {
-    pub inner: Option<Box<Signature<'a>>>,
-    pub outer: Option<Box<Signature<'a>>>,
+pub struct OptionalCallSignatureCache {
+    pub inner: Option<Box<Signature>>,
+    pub outer: Option<Box<Signature>>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct SymbolFlags(pub isize);
 
 impl SymbolFlags {
-    pub const NONE: SymbolFlags = SymbolFlags(0);
-    pub const FUNCTION_SCOPED_VARIABLE: SymbolFlags = SymbolFlags(1 << 0); // Variable (var) or parameter
-    pub const BLOCK_SCOPED_VARIABLE: SymbolFlags = SymbolFlags(1 << 1); // A block-scoped variable (let or const)
-    pub const PROPERTY: SymbolFlags = SymbolFlags(1 << 2); // Property or enum member
-    pub const ENUM_MEMBER: SymbolFlags = SymbolFlags(1 << 3); // Enum member
-    pub const FUNCTION: SymbolFlags = SymbolFlags(1 << 4); // Function
-    pub const CLASS: SymbolFlags = SymbolFlags(1 << 5); // Class
-    pub const INTERFACE: SymbolFlags = SymbolFlags(1 << 6); // Interface
-    pub const CONST_ENUM: SymbolFlags = SymbolFlags(1 << 7); // Const enum
-    pub const REGULAR_ENUM: SymbolFlags = SymbolFlags(1 << 8); // Enum
-    pub const VALUE_MODULE: SymbolFlags = SymbolFlags(1 << 9); // Instantiated module
-    pub const NAMESPACE_MODULE: SymbolFlags = SymbolFlags(1 << 10); // Uninstantiated module
-    pub const TYPE_LITERAL: SymbolFlags = SymbolFlags(1 << 11); // Type Literal or mapped type
-    pub const OBJECT_LITERAL: SymbolFlags = SymbolFlags(1 << 12); // Object Literal
-    pub const METHOD: SymbolFlags = SymbolFlags(1 << 13); // Method
-    pub const CONSTRUCTOR: SymbolFlags = SymbolFlags(1 << 14); // Constructor
-    pub const GET_ACCESSOR: SymbolFlags = SymbolFlags(1 << 15); // Get accessor
-    pub const SET_ACCESSOR: SymbolFlags = SymbolFlags(1 << 16); // Set accessor
-    pub const SIGNATURE: SymbolFlags = SymbolFlags(1 << 17); // Call, construct, or index signature
-    pub const TYPE_PARAMETER: SymbolFlags = SymbolFlags(1 << 18); // Type parameter
-    pub const TYPE_ALIAS: SymbolFlags = SymbolFlags(1 << 19); // Type alias
-    pub const EXPORT_VALUE: SymbolFlags = SymbolFlags(1 << 20); // Exported value marker (see comment in declareModuleMember in binder)
-    pub const ALIAS: SymbolFlags = SymbolFlags(1 << 21); // An alias for another symbol (see comment in isAliasSymbolDeclaration in checker)
-    pub const PROTOTYPE: SymbolFlags = SymbolFlags(1 << 22); // Prototype property (no source representation)
-    pub const EXPORT_STAR: SymbolFlags = SymbolFlags(1 << 23); // Export * declaration
-    pub const OPTIONAL: SymbolFlags = SymbolFlags(1 << 24); // Optional property
-    pub const TRANSIENT: SymbolFlags = SymbolFlags(1 << 25); // Transient symbol (created during type check)
-    pub const ASSIGNMENT: SymbolFlags = SymbolFlags(1 << 26); // Assignment treated as declaration (eg `this.prop = 1`)
-    pub const MODULE_EXPORTS: SymbolFlags = SymbolFlags(1 << 27); // Symbol for CommonJS `module` of `module.exports`
-    pub const ALL: SymbolFlags = SymbolFlags(-1);
+    pub const None: SymbolFlags = SymbolFlags(0);
+    pub const FunctionScopedVariable: SymbolFlags = SymbolFlags(1 << 0); // Variable (var) or parameter
+    pub const BlockScopedVariable: SymbolFlags = SymbolFlags(1 << 1); // A block-scoped variable (let or const)
+    pub const Property: SymbolFlags = SymbolFlags(1 << 2); // Property or enum member
+    pub const EnumMember: SymbolFlags = SymbolFlags(1 << 3); // Enum member
+    pub const Function: SymbolFlags = SymbolFlags(1 << 4); // Function
+    pub const Class: SymbolFlags = SymbolFlags(1 << 5); // Class
+    pub const Interface: SymbolFlags = SymbolFlags(1 << 6); // Interface
+    pub const ConstEnum: SymbolFlags = SymbolFlags(1 << 7); // Const enum
+    pub const RegularEnum: SymbolFlags = SymbolFlags(1 << 8); // Enum
+    pub const ValueModule: SymbolFlags = SymbolFlags(1 << 9); // Instantiated module
+    pub const NamespaceModule: SymbolFlags = SymbolFlags(1 << 10); // Uninstantiated module
+    pub const TypeLiteral: SymbolFlags = SymbolFlags(1 << 11); // Type Literal or mapped type
+    pub const ObjectLiteral: SymbolFlags = SymbolFlags(1 << 12); // Object Literal
+    pub const Method: SymbolFlags = SymbolFlags(1 << 13); // Method
+    pub const Constructor: SymbolFlags = SymbolFlags(1 << 14); // Constructor
+    pub const GetAccessor: SymbolFlags = SymbolFlags(1 << 15); // Get accessor
+    pub const SetAccessor: SymbolFlags = SymbolFlags(1 << 16); // Set accessor
+    pub const Signature: SymbolFlags = SymbolFlags(1 << 17); // Call, construct, or index signature
+    pub const TypeParameter: SymbolFlags = SymbolFlags(1 << 18); // Type parameter
+    pub const TypeAlias: SymbolFlags = SymbolFlags(1 << 19); // Type alias
+    pub const ExportValue: SymbolFlags = SymbolFlags(1 << 20); // Exported value marker (see comment in declareModuleMember in binder)
+    pub const Alias: SymbolFlags = SymbolFlags(1 << 21); // An alias for another symbol (see comment in isAliasSymbolDeclaration in checker)
+    pub const Prototype: SymbolFlags = SymbolFlags(1 << 22); // Prototype property (no source representation)
+    pub const ExportStar: SymbolFlags = SymbolFlags(1 << 23); // Export * declaration
+    pub const Optional: SymbolFlags = SymbolFlags(1 << 24); // Optional property
+    pub const Transient: SymbolFlags = SymbolFlags(1 << 25); // Transient symbol (created during type check)
+    pub const Assignment: SymbolFlags = SymbolFlags(1 << 26); // Assignment treated as declaration (eg `this.prop = 1`)
+    pub const ModuleExports: SymbolFlags = SymbolFlags(1 << 27); // Symbol for CommonJS `module` of `module.exports`
+    pub const All: SymbolFlags = SymbolFlags(-1);
 
-    pub const ENUM: SymbolFlags = SymbolFlags(Self::REGULAR_ENUM.0 | Self::CONST_ENUM.0);
-    pub const VARIABLE: SymbolFlags = SymbolFlags(Self::FUNCTION_SCOPED_VARIABLE.0 | Self::BLOCK_SCOPED_VARIABLE.0);
-    pub const VALUE: SymbolFlags = SymbolFlags(Self::VARIABLE.0 | Self::PROPERTY.0 | Self::ENUM_MEMBER.0 | Self::OBJECT_LITERAL.0 | Self::FUNCTION.0 | Self::CLASS.0 | Self::ENUM.0 | Self::VALUE_MODULE.0 | Self::METHOD.0 | Self::GET_ACCESSOR.0 | Self::SET_ACCESSOR.0);
-    pub const TYPE: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::INTERFACE.0 | Self::ENUM.0 | Self::ENUM_MEMBER.0 | Self::TYPE_LITERAL.0 | Self::TYPE_PARAMETER.0 | Self::TYPE_ALIAS.0);
-    pub const NAMESPACE: SymbolFlags = SymbolFlags(Self::VALUE_MODULE.0 | Self::NAMESPACE_MODULE.0 | Self::ENUM.0);
-    pub const MODULE: SymbolFlags = SymbolFlags(Self::VALUE_MODULE.0 | Self::NAMESPACE_MODULE.0);
-    pub const ACCESSOR: SymbolFlags = SymbolFlags(Self::GET_ACCESSOR.0 | Self::SET_ACCESSOR.0);
+    pub const Enum: SymbolFlags = SymbolFlags(Self::RegularEnum.0 | Self::ConstEnum.0);
+    pub const Variable: SymbolFlags = SymbolFlags(Self::FunctionScopedVariable.0 | Self::BlockScopedVariable.0);
+    pub const Value: SymbolFlags = SymbolFlags(Self::Variable.0 | Self::Property.0 | Self::EnumMember.0 | Self::ObjectLiteral.0 | Self::Function.0 | Self::Class.0 | Self::Enum.0 | Self::ValueModule.0 | Self::Method.0 | Self::GetAccessor.0 | Self::SetAccessor.0);
+    pub const Type: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Interface.0 | Self::Enum.0 | Self::EnumMember.0 | Self::TypeLiteral.0 | Self::TypeParameter.0 | Self::TypeAlias.0);
+    pub const Namespace: SymbolFlags = SymbolFlags(Self::ValueModule.0 | Self::NamespaceModule.0 | Self::Enum.0);
+    pub const Module: SymbolFlags = SymbolFlags(Self::ValueModule.0 | Self::NamespaceModule.0);
+    pub const Accessor: SymbolFlags = SymbolFlags(Self::GetAccessor.0 | Self::SetAccessor.0);
 
     // Variables can be redeclared, but can not redeclare a block-scoped declaration with the
     // same name, or any other value that is not a variable, e.g. ValueModule or Class
-    pub const FUNCTION_SCOPED_VARIABLE_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::FUNCTION_SCOPED_VARIABLE.0);
+    pub const FunctionScopedVariableExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::FunctionScopedVariable.0);
 
     // Block-scoped declarations are not allowed to be re-declared
     // they can not merge with anything in the value space
-    pub const BLOCK_SCOPED_VARIABLE_EXCLUDES: SymbolFlags = Self::VALUE;
+    pub const BlockScopedVariableExcludes: SymbolFlags = Self::Value;
 
-    pub const PARAMETER_EXCLUDES: SymbolFlags = Self::VALUE;
-    pub const PROPERTY_EXCLUDES: SymbolFlags = Self::NONE;
-    pub const ENUM_MEMBER_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 | Self::TYPE.0);
-    pub const FUNCTION_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !(Self::FUNCTION.0 | Self::VALUE_MODULE.0 | Self::CLASS.0));
-    pub const CLASS_EXCLUDES: SymbolFlags = SymbolFlags((Self::VALUE.0 | Self::TYPE.0) & !(Self::VALUE_MODULE.0 | Self::INTERFACE.0 | Self::FUNCTION.0)); // class-interface mergability done in checker.ts
-    pub const INTERFACE_EXCLUDES: SymbolFlags = SymbolFlags(Self::TYPE.0 & !(Self::INTERFACE.0 | Self::CLASS.0));
-    pub const REGULAR_ENUM_EXCLUDES: SymbolFlags = SymbolFlags((Self::VALUE.0 | Self::TYPE.0) & !(Self::REGULAR_ENUM.0 | Self::VALUE_MODULE.0)); // regular enums merge only with regular enums and modules
-    pub const CONST_ENUM_EXCLUDES: SymbolFlags = SymbolFlags((Self::VALUE.0 | Self::TYPE.0) & !Self::CONST_ENUM.0); // const enums merge only with const enums
-    pub const VALUE_MODULE_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !(Self::FUNCTION.0 | Self::CLASS.0 | Self::REGULAR_ENUM.0 | Self::VALUE_MODULE.0));
-    pub const NAMESPACE_MODULE_EXCLUDES: SymbolFlags = Self::NONE;
-    pub const METHOD_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::METHOD.0);
-    pub const GET_ACCESSOR_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::SET_ACCESSOR.0);
-    pub const SET_ACCESSOR_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::GET_ACCESSOR.0);
-    pub const ACCESSOR_EXCLUDES: SymbolFlags = SymbolFlags(Self::VALUE.0 & !Self::ACCESSOR.0);
-    pub const TYPE_PARAMETER_EXCLUDES: SymbolFlags = SymbolFlags(Self::TYPE.0 & !Self::TYPE_PARAMETER.0);
-    pub const TYPE_ALIAS_EXCLUDES: SymbolFlags = Self::TYPE;
-    pub const ALIAS_EXCLUDES: SymbolFlags = Self::ALIAS;
+    pub const ParameterExcludes: SymbolFlags = Self::Value;
+    pub const PropertyExcludes: SymbolFlags = Self::None;
+    pub const EnumMemberExcludes: SymbolFlags = SymbolFlags(Self::Value.0 | Self::Type.0);
+    pub const FunctionExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !(Self::Function.0 | Self::ValueModule.0 | Self::Class.0));
+    pub const ClassExcludes: SymbolFlags = SymbolFlags((Self::Value.0 | Self::Type.0) & !(Self::ValueModule.0 | Self::Interface.0 | Self::Function.0)); // class-interface mergability done in checker.ts
+    pub const InterfaceExcludes: SymbolFlags = SymbolFlags(Self::Type.0 & !(Self::Interface.0 | Self::Class.0));
+    pub const RegularEnumExcludes: SymbolFlags = SymbolFlags((Self::Value.0 | Self::Type.0) & !(Self::RegularEnum.0 | Self::ValueModule.0)); // regular enums merge only with regular enums and modules
+    pub const ConstEnumExcludes: SymbolFlags = SymbolFlags((Self::Value.0 | Self::Type.0) & !Self::ConstEnum.0); // const enums merge only with const enums
+    pub const ValueModuleExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !(Self::Function.0 | Self::Class.0 | Self::RegularEnum.0 | Self::ValueModule.0));
+    pub const NamespaceModuleExcludes: SymbolFlags = Self::None;
+    pub const MethodExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::Method.0);
+    pub const GetAccessorExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::SetAccessor.0);
+    pub const SetAccessorExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::GetAccessor.0);
+    pub const AccessorExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::Accessor.0);
+    pub const TypeParameterExcludes: SymbolFlags = SymbolFlags(Self::Type.0 & !Self::TypeParameter.0);
+    pub const TypeAliasExcludes: SymbolFlags = Self::Type;
+    pub const AliasExcludes: SymbolFlags = Self::Alias;
 
-    pub const MODULE_MEMBER: SymbolFlags = SymbolFlags(Self::VARIABLE.0 | Self::FUNCTION.0 | Self::CLASS.0 | Self::INTERFACE.0 | Self::ENUM.0 | Self::MODULE.0 | Self::TYPE_ALIAS.0 | Self::ALIAS.0);
+    pub const ModuleMember: SymbolFlags = SymbolFlags(Self::Variable.0 | Self::Function.0 | Self::Class.0 | Self::Interface.0 | Self::Enum.0 | Self::Module.0 | Self::TypeAlias.0 | Self::Alias.0);
 
-    pub const EXPORT_HAS_LOCAL: SymbolFlags = SymbolFlags(Self::FUNCTION.0 | Self::CLASS.0 | Self::ENUM.0 | Self::VALUE_MODULE.0);
+    pub const ExportHasLocal: SymbolFlags = SymbolFlags(Self::Function.0 | Self::Class.0 | Self::Enum.0 | Self::ValueModule.0);
 
-    pub const BLOCK_SCOPED: SymbolFlags = SymbolFlags(Self::BLOCK_SCOPED_VARIABLE.0 | Self::CLASS.0 | Self::ENUM.0);
+    pub const BlockScoped: SymbolFlags = SymbolFlags(Self::BlockScopedVariable.0 | Self::Class.0 | Self::Enum.0);
 
-    pub const PROPERTY_OR_ACCESSOR: SymbolFlags = SymbolFlags(Self::PROPERTY.0 | Self::ACCESSOR.0);
+    pub const PropertyOrAccessor: SymbolFlags = SymbolFlags(Self::Property.0 | Self::Accessor.0);
 
-    pub const CLASS_MEMBER: SymbolFlags = SymbolFlags(Self::METHOD.0 | Self::ACCESSOR.0 | Self::PROPERTY.0);
-
-    /** @internal */
-    pub const EXPORT_SUPPORTS_DEFAULT_MODIFIER: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::FUNCTION.0 | Self::INTERFACE.0);
+    pub const ClassMember: SymbolFlags = SymbolFlags(Self::Method.0 | Self::Accessor.0 | Self::Property.0);
 
     /** @internal */
-    pub const EXPORT_DOES_NOT_SUPPORT_DEFAULT_MODIFIER: SymbolFlags = SymbolFlags(!Self::EXPORT_SUPPORTS_DEFAULT_MODIFIER.0);
+    pub const ExportSupportsDefaultModifier: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Function.0 | Self::Interface.0);
+
+    /** @internal */
+    pub const ExportDoesNotSupportDefaultModifier: SymbolFlags = SymbolFlags(!Self::ExportSupportsDefaultModifier.0);
 
     /** @internal */
     // The set of things we consider semantically classifiable.  Used to speed up the LS during
     // classification.
-    pub const CLASSIFIABLE: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::ENUM.0 | Self::TYPE_ALIAS.0 | Self::INTERFACE.0 | Self::TYPE_PARAMETER.0 | Self::MODULE.0 | Self::ALIAS.0);
+    pub const Classifiable: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Enum.0 | Self::TypeAlias.0 | Self::Interface.0 | Self::TypeParameter.0 | Self::Module.0 | Self::Alias.0);
 
     /** @internal */
-    pub const LATE_BINDING_CONTAINER: SymbolFlags = SymbolFlags(Self::CLASS.0 | Self::INTERFACE.0 | Self::TYPE_LITERAL.0 | Self::OBJECT_LITERAL.0 | Self::FUNCTION.0);
+    pub const LateBindingContainer: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Interface.0 | Self::TypeLiteral.0 | Self::ObjectLiteral.0 | Self::Function.0);
 
-    pub fn contains(&self, flags: SymbolFlags) -> bool {
-        (self.0 & flags.0) == flags.0
-    }
+    pub fn contains(&self, flags: SymbolFlags) -> bool { (self.0 & flags.0) == flags.0 }
 }
 
 impl std::ops::BitOr for SymbolFlags {
     type Output = Self;
 
-    fn bitor(self, rhs: Self) -> Self {
-        SymbolFlags(self.0 | rhs.0)
-    }
+    fn bitor(self, rhs: Self) -> Self { SymbolFlags(self.0 | rhs.0) }
 }
 
 impl std::ops::BitAnd for SymbolFlags {
     type Output = Self;
 
-    fn bitand(self, rhs: Self) -> Self {
-        SymbolFlags(self.0 & rhs.0)
-    }
+    fn bitand(self, rhs: Self) -> Self { SymbolFlags(self.0 & rhs.0) }
 }
 
 /** @internal */
@@ -776,154 +764,150 @@ pub type SymbolId = usize;
 #[derive(Debug)]
 pub struct Symbol {
     pub flags: SymbolFlags,                     // Symbol flags
-    pub escaped_name: String,                   // Name of symbol
+    pub escapedName: String,                    // Name of symbol
     pub declarations: Option<Vec<Declaration>>, // Declarations associated with this symbol
-    pub value_declaration: Option<Declaration>, // First value declaration of the symbol
+    pub valueDeclaration: Option<Declaration>,  // First value declaration of the symbol
     pub members: Option<SymbolTable>,           // Class, interface or object literal instance members
     pub exports: Option<SymbolTable>,           // Module exports
-    pub global_exports: Option<SymbolTable>,    // Conditional global UMD exports
+    pub globalExports: Option<SymbolTable>,     // Conditional global UMD exports
     /** @internal */
     pub id: SymbolId,       // Unique id (used to look up SymbolLinks)
     /** @internal */
-    pub merge_id: usize,    // Merge id (used to look up merged symbol)
+    pub mergeId: usize,     // Merge id (used to look up merged symbol)
     /** @internal */
     pub parent: Option<Box<Symbol>>, // Parent symbol
     /** @internal */
-    pub export_symbol: Option<Box<Symbol>>, // Exported symbol associated with this symbol
+    pub exportSymbol: Option<Box<Symbol>>, // Exported symbol associated with this symbol
     /** @internal */
-    pub const_enum_only_module: Option<bool>, // True if module contains only const enums or other modules with only const enums
+    pub constEnumOnlyModule: Option<bool>, // True if module contains only const enums or other modules with only const enums
     /** @internal */
-    pub is_referenced: Option<SymbolFlags>, // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
+    pub isReferenced: Option<SymbolFlags>, // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
     /** @internal */
-    pub last_assignment_pos: Option<usize>, // Source position of last node that assigns value to symbol
+    pub lastAssignmentPos: Option<usize>, // Source position of last node that assigns value to symbol
     /** @internal */
-    pub is_replaceable_by_method: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
+    pub isReplaceableByMethod: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
     /** @internal */
-    pub assignment_declaration_members: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
+    pub assignmentDeclarationMembers: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct TypeFlags(pub isize);
 
 impl TypeFlags {
-    pub const ANY: TypeFlags = TypeFlags(1 << 0);
-    pub const UNKNOWN: TypeFlags = TypeFlags(1 << 1);
-    pub const STRING: TypeFlags = TypeFlags(1 << 2);
-    pub const NUMBER: TypeFlags = TypeFlags(1 << 3);
-    pub const BOOLEAN: TypeFlags = TypeFlags(1 << 4);
-    pub const ENUM: TypeFlags = TypeFlags(1 << 5); // Numeric computed enum member value
-    pub const BIG_INT: TypeFlags = TypeFlags(1 << 6);
-    pub const STRING_LITERAL: TypeFlags = TypeFlags(1 << 7);
-    pub const NUMBER_LITERAL: TypeFlags = TypeFlags(1 << 8);
-    pub const BOOLEAN_LITERAL: TypeFlags = TypeFlags(1 << 9);
-    pub const ENUM_LITERAL: TypeFlags = TypeFlags(1 << 10); // Always combined with StringLiteral, NumberLiteral, or Union
-    pub const BIG_INT_LITERAL: TypeFlags = TypeFlags(1 << 11);
-    pub const ES_SYMBOL: TypeFlags = TypeFlags(1 << 12); // Type of symbol primitive introduced in ES6
-    pub const UNIQUE_ES_SYMBOL: TypeFlags = TypeFlags(1 << 13); // unique symbol
-    pub const VOID: TypeFlags = TypeFlags(1 << 14);
-    pub const UNDEFINED: TypeFlags = TypeFlags(1 << 15);
-    pub const NULL: TypeFlags = TypeFlags(1 << 16);
-    pub const NEVER: TypeFlags = TypeFlags(1 << 17); // Never type
-    pub const TYPE_PARAMETER: TypeFlags = TypeFlags(1 << 18); // Type parameter
-    pub const OBJECT: TypeFlags = TypeFlags(1 << 19); // Object type
-    pub const UNION: TypeFlags = TypeFlags(1 << 20); // Union (T | U)
-    pub const INTERSECTION: TypeFlags = TypeFlags(1 << 21); // Intersection (T & U)
-    pub const INDEX: TypeFlags = TypeFlags(1 << 22); // keyof T
-    pub const INDEXED_ACCESS: TypeFlags = TypeFlags(1 << 23); // T[K]
-    pub const CONDITIONAL: TypeFlags = TypeFlags(1 << 24); // T extends U ? X : Y
-    pub const SUBSTITUTION: TypeFlags = TypeFlags(1 << 25); // Type parameter substitution
-    pub const NON_PRIMITIVE: TypeFlags = TypeFlags(1 << 26); // intrinsic object type
-    pub const TEMPLATE_LITERAL: TypeFlags = TypeFlags(1 << 27); // Template literal type
-    pub const STRING_MAPPING: TypeFlags = TypeFlags(1 << 28); // Uppercase/Lowercase type
+    pub const Any: TypeFlags = TypeFlags(1 << 0);
+    pub const Unknown: TypeFlags = TypeFlags(1 << 1);
+    pub const String: TypeFlags = TypeFlags(1 << 2);
+    pub const Number: TypeFlags = TypeFlags(1 << 3);
+    pub const Boolean: TypeFlags = TypeFlags(1 << 4);
+    pub const Enum: TypeFlags = TypeFlags(1 << 5); // Numeric computed enum member value
+    pub const BigInt: TypeFlags = TypeFlags(1 << 6);
+    pub const StringLiteral: TypeFlags = TypeFlags(1 << 7);
+    pub const NumberLiteral: TypeFlags = TypeFlags(1 << 8);
+    pub const BooleanLiteral: TypeFlags = TypeFlags(1 << 9);
+    pub const EnumLiteral: TypeFlags = TypeFlags(1 << 10); // Always combined with StringLiteral, NumberLiteral, or Union
+    pub const BigIntLiteral: TypeFlags = TypeFlags(1 << 11);
+    pub const ESSymbol: TypeFlags = TypeFlags(1 << 12); // Type of symbol primitive introduced in ES6
+    pub const UniqueESSymbol: TypeFlags = TypeFlags(1 << 13); // unique symbol
+    pub const Void: TypeFlags = TypeFlags(1 << 14);
+    pub const Undefined: TypeFlags = TypeFlags(1 << 15);
+    pub const Null: TypeFlags = TypeFlags(1 << 16);
+    pub const Never: TypeFlags = TypeFlags(1 << 17); // Never type
+    pub const TypeParameter: TypeFlags = TypeFlags(1 << 18); // Type parameter
+    pub const Object: TypeFlags = TypeFlags(1 << 19); // Object type
+    pub const Union: TypeFlags = TypeFlags(1 << 20); // Union (T | U)
+    pub const Intersection: TypeFlags = TypeFlags(1 << 21); // Intersection (T & U)
+    pub const Index: TypeFlags = TypeFlags(1 << 22); // keyof T
+    pub const IndexedAccess: TypeFlags = TypeFlags(1 << 23); // T[K]
+    pub const Conditional: TypeFlags = TypeFlags(1 << 24); // T extends U ? X : Y
+    pub const Substitution: TypeFlags = TypeFlags(1 << 25); // Type parameter substitution
+    pub const NonPrimitive: TypeFlags = TypeFlags(1 << 26); // intrinsic object type
+    pub const TemplateLiteral: TypeFlags = TypeFlags(1 << 27); // Template literal type
+    pub const StringMapping: TypeFlags = TypeFlags(1 << 28); // Uppercase/Lowercase type
     /** @internal */
-    pub const RESERVED1: TypeFlags = TypeFlags(1 << 29); // Used by union/intersection type construction
+    pub const Reserved1: TypeFlags = TypeFlags(1 << 29); // Used by union/intersection type construction
     /** @internal */
-    pub const RESERVED2: TypeFlags = TypeFlags(1 << 30); // Used by union/intersection type construction
+    pub const Reserved2: TypeFlags = TypeFlags(1 << 30); // Used by union/intersection type construction
 
     /** @internal */
-    pub const ANY_OR_UNKNOWN: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0);
+    pub const AnyOrUnknown: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0);
     /** @internal */
-    pub const NULLABLE: TypeFlags = TypeFlags(Self::UNDEFINED.0 | Self::NULL.0);
-    pub const LITERAL: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0 | Self::BIG_INT_LITERAL.0 | Self::BOOLEAN_LITERAL.0);
-    pub const UNIT: TypeFlags = TypeFlags(Self::ENUM.0 | Self::LITERAL.0 | Self::UNIQUE_ES_SYMBOL.0 | Self::NULLABLE.0);
-    pub const FRESHABLE: TypeFlags = TypeFlags(Self::ENUM.0 | Self::LITERAL.0);
-    pub const STRING_OR_NUMBER_LITERAL: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0);
+    pub const Nullable: TypeFlags = TypeFlags(Self::Undefined.0 | Self::Null.0);
+    pub const Literal: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0 | Self::BigIntLiteral.0 | Self::BooleanLiteral.0);
+    pub const Unit: TypeFlags = TypeFlags(Self::Enum.0 | Self::Literal.0 | Self::UniqueESSymbol.0 | Self::Nullable.0);
+    pub const Freshable: TypeFlags = TypeFlags(Self::Enum.0 | Self::Literal.0);
+    pub const StringOrNumberLiteral: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0);
     /** @internal */
-    pub const STRING_OR_NUMBER_LITERAL_OR_UNIQUE: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0 | Self::UNIQUE_ES_SYMBOL.0);
+    pub const StringOrNumberLiteralOrUnique: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0 | Self::UniqueESSymbol.0);
     /** @internal */
-    pub const DEFINITELY_FALSY: TypeFlags = TypeFlags(Self::STRING_LITERAL.0 | Self::NUMBER_LITERAL.0 | Self::BIG_INT_LITERAL.0 | Self::BOOLEAN_LITERAL.0 | Self::VOID.0 | Self::UNDEFINED.0 | Self::NULL.0);
-    pub const POSSIBLY_FALSY: TypeFlags = TypeFlags(Self::DEFINITELY_FALSY.0 | Self::STRING.0 | Self::NUMBER.0 | Self::BIG_INT.0 | Self::BOOLEAN.0);
+    pub const DefinitelyFalsy: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0 | Self::BigIntLiteral.0 | Self::BooleanLiteral.0 | Self::Void.0 | Self::Undefined.0 | Self::Null.0);
+    pub const PossiblyFalsy: TypeFlags = TypeFlags(Self::DefinitelyFalsy.0 | Self::String.0 | Self::Number.0 | Self::BigInt.0 | Self::Boolean.0);
     /** @internal */
-    pub const INTRINSIC: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::STRING.0 | Self::NUMBER.0 | Self::BIG_INT.0 | Self::BOOLEAN.0 | Self::BOOLEAN_LITERAL.0 | Self::ES_SYMBOL.0 | Self::VOID.0 | Self::UNDEFINED.0 | Self::NULL.0 | Self::NEVER.0 | Self::NON_PRIMITIVE.0);
-    pub const STRING_LIKE: TypeFlags = TypeFlags(Self::STRING.0 | Self::STRING_LITERAL.0 | Self::TEMPLATE_LITERAL.0 | Self::STRING_MAPPING.0);
-    pub const NUMBER_LIKE: TypeFlags = TypeFlags(Self::NUMBER.0 | Self::NUMBER_LITERAL.0 | Self::ENUM.0);
-    pub const BIG_INT_LIKE: TypeFlags = TypeFlags(Self::BIG_INT.0 | Self::BIG_INT_LITERAL.0);
-    pub const BOOLEAN_LIKE: TypeFlags = TypeFlags(Self::BOOLEAN.0 | Self::BOOLEAN_LITERAL.0);
-    pub const ENUM_LIKE: TypeFlags = TypeFlags(Self::ENUM.0 | Self::ENUM_LITERAL.0);
-    pub const ES_SYMBOL_LIKE: TypeFlags = TypeFlags(Self::ES_SYMBOL.0 | Self::UNIQUE_ES_SYMBOL.0);
-    pub const VOID_LIKE: TypeFlags = TypeFlags(Self::VOID.0 | Self::UNDEFINED.0);
+    pub const Intrinsic: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::String.0 | Self::Number.0 | Self::BigInt.0 | Self::Boolean.0 | Self::BooleanLiteral.0 | Self::ESSymbol.0 | Self::Void.0 | Self::Undefined.0 | Self::Null.0 | Self::Never.0 | Self::NonPrimitive.0);
+    pub const StringLike: TypeFlags = TypeFlags(Self::String.0 | Self::StringLiteral.0 | Self::TemplateLiteral.0 | Self::StringMapping.0);
+    pub const NumberLike: TypeFlags = TypeFlags(Self::Number.0 | Self::NumberLiteral.0 | Self::Enum.0);
+    pub const BigIntLiteralLike: TypeFlags = TypeFlags(Self::BigInt.0 | Self::BigIntLiteral.0);
+    pub const BooleanLike: TypeFlags = TypeFlags(Self::Boolean.0 | Self::BooleanLiteral.0);
+    pub const EnumLike: TypeFlags = TypeFlags(Self::Enum.0 | Self::EnumLiteral.0);
+    pub const ESSymbolLike: TypeFlags = TypeFlags(Self::ESSymbol.0 | Self::UniqueESSymbol.0);
+    pub const VoidLike: TypeFlags = TypeFlags(Self::Void.0 | Self::Undefined.0);
     /** @internal */
-    pub const PRIMITIVE: TypeFlags = TypeFlags(Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ENUM_LIKE.0 | Self::ES_SYMBOL_LIKE.0 | Self::VOID_LIKE.0 | Self::NULL.0);
+    pub const Primitive: TypeFlags = TypeFlags(Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::EnumLike.0 | Self::ESSymbolLike.0 | Self::VoidLike.0 | Self::Null.0);
     /** @internal */
-    pub const DEFINITELY_NON_NULLABLE: TypeFlags = TypeFlags(Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ENUM_LIKE.0 | Self::ES_SYMBOL_LIKE.0 | Self::OBJECT.0 | Self::NON_PRIMITIVE.0);
+    pub const DefinitelyNonNullable: TypeFlags = TypeFlags(Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::EnumLike.0 | Self::ESSymbolLike.0 | Self::Object.0 | Self::NonPrimitive.0);
     /** @internal */
-    pub const DISJOINT_DOMAINS: TypeFlags = TypeFlags(Self::NON_PRIMITIVE.0 | Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ES_SYMBOL_LIKE.0 | Self::VOID_LIKE.0 | Self::NULL.0);
-    pub const UNION_OR_INTERSECTION: TypeFlags = TypeFlags(Self::UNION.0 | Self::INTERSECTION.0);
-    pub const STRUCTURED_TYPE: TypeFlags = TypeFlags(Self::OBJECT.0 | Self::UNION.0 | Self::INTERSECTION.0);
-    pub const TYPE_VARIABLE: TypeFlags = TypeFlags(Self::TYPE_PARAMETER.0 | Self::INDEXED_ACCESS.0);
-    pub const INSTANTIABLE_NON_PRIMITIVE: TypeFlags = TypeFlags(Self::TYPE_VARIABLE.0 | Self::CONDITIONAL.0 | Self::SUBSTITUTION.0);
-    pub const INSTANTIABLE_PRIMITIVE: TypeFlags = TypeFlags(Self::INDEX.0 | Self::TEMPLATE_LITERAL.0 | Self::STRING_MAPPING.0);
-    pub const INSTANTIABLE: TypeFlags = TypeFlags(Self::INSTANTIABLE_NON_PRIMITIVE.0 | Self::INSTANTIABLE_PRIMITIVE.0);
-    pub const STRUCTURED_OR_INSTANTIABLE: TypeFlags = TypeFlags(Self::STRUCTURED_TYPE.0 | Self::INSTANTIABLE.0);
+    pub const DisjointDomains: TypeFlags = TypeFlags(Self::NonPrimitive.0 | Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::ESSymbolLike.0 | Self::VoidLike.0 | Self::Null.0);
+    pub const UnionOrIntersection: TypeFlags = TypeFlags(Self::Union.0 | Self::Intersection.0);
+    pub const StructuredType: TypeFlags = TypeFlags(Self::Object.0 | Self::Union.0 | Self::Intersection.0);
+    pub const TypeVariable: TypeFlags = TypeFlags(Self::TypeParameter.0 | Self::IndexedAccess.0);
+    pub const InstantiableNonPrimitive: TypeFlags = TypeFlags(Self::TypeVariable.0 | Self::Conditional.0 | Self::Substitution.0);
+    pub const InstantiablePrimitive: TypeFlags = TypeFlags(Self::Index.0 | Self::TemplateLiteral.0 | Self::StringMapping.0);
+    pub const Instantiable: TypeFlags = TypeFlags(Self::InstantiableNonPrimitive.0 | Self::InstantiablePrimitive.0);
+    pub const StructuredOrInstantiable: TypeFlags = TypeFlags(Self::StructuredType.0 | Self::Instantiable.0);
     /** @internal */
-    pub const OBJECT_FLAGS_TYPE: TypeFlags = TypeFlags(Self::ANY.0 | Self::NULLABLE.0 | Self::NEVER.0 | Self::OBJECT.0 | Self::UNION.0 | Self::INTERSECTION.0);
+    pub const ObjectFlagsType: TypeFlags = TypeFlags(Self::Any.0 | Self::Nullable.0 | Self::Never.0 | Self::Object.0 | Self::Union.0 | Self::Intersection.0);
     /** @internal */
-    pub const SIMPLIFIABLE: TypeFlags = TypeFlags(Self::INDEXED_ACCESS.0 | Self::CONDITIONAL.0);
+    pub const Simplifiable: TypeFlags = TypeFlags(Self::IndexedAccess.0 | Self::Conditional.0);
     /** @internal */
-    pub const SINGLETON: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::STRING.0 | Self::NUMBER.0 | Self::BOOLEAN.0 | Self::BIG_INT.0 | Self::ES_SYMBOL.0 | Self::VOID.0 | Self::UNDEFINED.0 | Self::NULL.0 | Self::NEVER.0 | Self::NON_PRIMITIVE.0);
+    pub const Singleton: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::String.0 | Self::Number.0 | Self::Boolean.0 | Self::BigInt.0 | Self::ESSymbol.0 | Self::Void.0 | Self::Undefined.0 | Self::Null.0 | Self::Never.0 | Self::NonPrimitive.0);
     // 'Narrowable' types are types where narrowing actually narrows.
     // This *should* be every type other than null, undefined, void, and never
-    pub const NARROWABLE: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::STRUCTURED_OR_INSTANTIABLE.0 | Self::STRING_LIKE.0 | Self::NUMBER_LIKE.0 | Self::BIG_INT_LIKE.0 | Self::BOOLEAN_LIKE.0 | Self::ES_SYMBOL.0 | Self::UNIQUE_ES_SYMBOL.0 | Self::NON_PRIMITIVE.0);
+    pub const Narrowable: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::StructuredOrInstantiable.0 | Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::ESSymbol.0 | Self::UniqueESSymbol.0 | Self::NonPrimitive.0);
     // The following flags are aggregated during union and intersection type construction
     /** @internal */
-    pub const INCLUDES_MASK: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::PRIMITIVE.0 | Self::NEVER.0 | Self::OBJECT.0 | Self::UNION.0 | Self::INTERSECTION.0 | Self::NON_PRIMITIVE.0 | Self::TEMPLATE_LITERAL.0 | Self::STRING_MAPPING.0);
+    pub const IncludesMask: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::Primitive.0 | Self::Never.0 | Self::Object.0 | Self::Union.0 | Self::Intersection.0 | Self::NonPrimitive.0 | Self::TemplateLiteral.0 | Self::StringMapping.0);
     // The following flags are used for different purposes during union and intersection type construction
     /** @internal */
-    pub const INCLUDES_MISSING_TYPE: TypeFlags = TypeFlags(Self::TYPE_PARAMETER.0);
+    pub const IncludesMissingType: TypeFlags = TypeFlags(Self::TypeParameter.0);
     /** @internal */
-    pub const INCLUDES_NON_WIDENING_TYPE: TypeFlags = TypeFlags(Self::INDEX.0);
+    pub const IncludesNonWidenningType: TypeFlags = TypeFlags(Self::Index.0);
     /** @internal */
-    pub const INCLUDES_WILDCARD: TypeFlags = TypeFlags(Self::INDEXED_ACCESS.0);
+    pub const IncludesWildcard: TypeFlags = TypeFlags(Self::IndexedAccess.0);
     /** @internal */
-    pub const INCLUDES_EMPTY_OBJECT: TypeFlags = TypeFlags(Self::CONDITIONAL.0);
+    pub const IncludesEmptyObject: TypeFlags = TypeFlags(Self::Conditional.0);
     /** @internal */
-    pub const INCLUDES_INSTANTIABLE: TypeFlags = TypeFlags(Self::SUBSTITUTION.0);
+    pub const IncludesInstantiable: TypeFlags = TypeFlags(Self::Substitution.0);
     /** @internal */
-    pub const INCLUDES_CONSTRAINED_TYPE_VARIABLE: TypeFlags = TypeFlags(Self::RESERVED1.0);
+    pub const IncludesConstrainedTypeVariable: TypeFlags = TypeFlags(Self::Reserved1.0);
     /** @internal */
-    pub const INCLUDES_ERROR: TypeFlags = TypeFlags(Self::RESERVED2.0);
+    pub const IncludesError: TypeFlags = TypeFlags(Self::Reserved2.0);
     /** @internal */
-    pub const NOT_PRIMITIVE_UNION: TypeFlags = TypeFlags(Self::ANY.0 | Self::UNKNOWN.0 | Self::VOID.0 | Self::NEVER.0 | Self::OBJECT.0 | Self::INTERSECTION.0 | Self::INCLUDES_INSTANTIABLE.0);
+    pub const NotPrimitiveUnion: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::Void.0 | Self::Never.0 | Self::Object.0 | Self::Intersection.0 | Self::IncludesInstantiable.0);
 
-    pub fn contains(&self, flags: TypeFlags) -> bool {
-        (self.0 & flags.0) == flags.0
-    }
+    pub fn contains(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) == flags.0 }
+
+    pub fn intersects(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) != 0 }
 }
 
 impl std::ops::BitOr for TypeFlags {
     type Output = Self;
 
-    fn bitor(self, rhs: Self) -> Self {
-        TypeFlags(self.0 | rhs.0)
-    }
+    fn bitor(self, rhs: Self) -> Self { TypeFlags(self.0 | rhs.0) }
 }
 
 impl std::ops::BitAnd for TypeFlags {
     type Output = Self;
 
-    fn bitand(self, rhs: Self) -> Self {
-        TypeFlags(self.0 & rhs.0)
-    }
+    fn bitand(self, rhs: Self) -> Self { TypeFlags(self.0 & rhs.0) }
 }
 
 #[derive(Debug)]
@@ -936,16 +920,16 @@ pub enum TypeMapKind {
     Merged,
 }
 
-pub enum TypeMapper<'a> {
-    Simple { source: Type<'a>, target: Type<'a> },
-    Array { sources: Vec<Type<'a>>, targets: Option<Vec<Type<'a>>> },
-    Deferred { sources: Vec<Type<'a>>, targets: Vec<Box<dyn Fn() -> Type<'a>>> },
-    Function { func: Box<dyn Fn(Type<'a>) -> Type<'a>>, debug_info: Option<Box<dyn Fn() -> String>> },
-    Composite { mapper1: Box<TypeMapper<'a>>, mapper2: Box<TypeMapper<'a>> },
-    Merged { mapper1: Box<TypeMapper<'a>>, mapper2: Box<TypeMapper<'a>> },
+pub enum TypeMapper {
+    Simple { source: Box<dyn Type>, target: Box<dyn Type> },
+    Array { sources: Vec<Box<dyn Type>>, targets: Option<Vec<Box<dyn Type>>> },
+    Deferred { sources: Vec<Box<dyn Type>>, targets: Vec<Box<dyn Fn() -> Box<dyn Type>>> },
+    Function { func: Box<dyn Fn(Box<dyn Type>) -> Box<dyn Type>>, debug_info: Option<Box<dyn Fn() -> String>> },
+    Composite { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+    Merged { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
 }
 
-impl<'a> std::fmt::Debug for TypeMapper<'a> {
+impl std::fmt::Debug for TypeMapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Simple { source, target } => f.debug_struct("Simple").field("source", source).field("target", target).finish(),
@@ -969,24 +953,352 @@ pub enum DestructuringPattern<'a> {
 pub type TypeId = usize;
 
 #[derive(Debug)]
-pub struct Type<'a> {
+pub struct TypeObject<'a> {
     pub flags: TypeFlags, // Flags
     /** @internal */
     pub id: TypeId, // Unique ID
     /** @internal */
     pub checker: Box<dyn TypeChecker>,
-    pub symbol: Symbol,                              // Symbol associated with type (if any)
-    pub pattern: Option<DestructuringPattern<'a>>,   // Destructuring pattern represented by type (if any)
-    pub alias_symbol: Option<Symbol>,                // Alias associated with type
-    pub alias_type_arguments: Option<Vec<Type<'a>>>, // Alias type arguments (if any)
+    pub symbol: Symbol,                                 // Symbol associated with type (if any)
+    pub pattern: Option<DestructuringPattern<'a>>,      // Destructuring pattern represented by type (if any)
+    pub aliasSymbol: Option<Symbol>,                    // Alias associated with type
+    pub aliasTypeArguments: Option<Vec<Box<dyn Type>>>, // Alias type arguments (if any)
     /** @internal */
-    pub permissive_instantiation: Option<Box<Type<'a>>>, // Instantiation with type parameters mapped to wildcard type
+    pub permissiveInstantiation: Option<Box<dyn Type>>, // Instantiation with type parameters mapped to wildcard type
     /** @internal */
-    pub restrictive_instantiation: Option<Box<Type<'a>>>, // Instantiation with type parameters mapped to unconstrained form
+    pub restrictiveInstantiation: Option<Box<dyn Type>>, // Instantiation with type parameters mapped to unconstrained form
     /** @internal */
-    pub immediate_base_constraint: Option<Box<Type<'a>>>, // Immediate base constraint cache
+    pub immediateBaseConstraint: Option<Box<dyn Type>>, // Immediate base constraint cache
     /** @internal */
-    pub widened: Option<Box<Type<'a>>>, // Cached widened form of the type
+    pub widened: Option<Box<dyn Type>>, // Cached widened form of the type
+
+    pub object_flags: Option<ObjectFlags>,           // ObjectFlagsType
+    pub object_props: Option<ObjectTypeProps>,       // ObjectType
+    pub interface_props: Option<InterfaceTypeProps>, // InterfaceType
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ObjectFlags(pub isize);
+
+impl ObjectFlags {
+    pub const None: ObjectFlags = ObjectFlags(0);
+    pub const Class: ObjectFlags = ObjectFlags(1 << 0);
+    pub const Interface: ObjectFlags = ObjectFlags(1 << 1);
+    pub const Reference: ObjectFlags = ObjectFlags(1 << 2);
+    pub const Tuple: ObjectFlags = ObjectFlags(1 << 3);
+    pub const Anonymous: ObjectFlags = ObjectFlags(1 << 4);
+    pub const Mapped: ObjectFlags = ObjectFlags(1 << 5);
+    pub const Instantiated: ObjectFlags = ObjectFlags(1 << 6);
+    pub const ObjectLiteral: ObjectFlags = ObjectFlags(1 << 7);
+    pub const EvolvingArray: ObjectFlags = ObjectFlags(1 << 8);
+    pub const ObjectLiteralPatternWithComputedProperties: ObjectFlags = ObjectFlags(1 << 9);
+    pub const ReverseMapped: ObjectFlags = ObjectFlags(1 << 10);
+    pub const JSXAttributes: ObjectFlags = ObjectFlags(1 << 11);
+    pub const JSLiteral: ObjectFlags = ObjectFlags(1 << 12);
+    pub const FreshLiteral: ObjectFlags = ObjectFlags(1 << 13);
+    pub const ArrayLiteral: ObjectFlags = ObjectFlags(1 << 14);
+    pub const PrimitiveUnion: ObjectFlags = ObjectFlags(1 << 15);
+    pub const ContainsWideningType: ObjectFlags = ObjectFlags(1 << 16);
+    pub const ContainsObjectOrArrayLiteral: ObjectFlags = ObjectFlags(1 << 17);
+    pub const NonInferrableType: ObjectFlags = ObjectFlags(1 << 18);
+    pub const CouldContainTypeVariablesComputed: ObjectFlags = ObjectFlags(1 << 19);
+    pub const CouldContainTypeVariables: ObjectFlags = ObjectFlags(1 << 20);
+    pub const ContainsSpread: ObjectFlags = ObjectFlags(1 << 21);
+    pub const ObjectRestType: ObjectFlags = ObjectFlags(1 << 22);
+    pub const InstantiationExpressionType: ObjectFlags = ObjectFlags(1 << 23);
+    pub const IsClassInstanceClone: ObjectFlags = ObjectFlags(1 << 24);
+    pub const IdenticalBaseTypeCalculated: ObjectFlags = ObjectFlags(1 << 25);
+    pub const IdenticalBaseTypeExists: ObjectFlags = ObjectFlags(1 << 26);
+    pub const SingleSignatureType: ObjectFlags = ObjectFlags(1 << 27);
+
+    pub const ClassOrInterface: ObjectFlags = ObjectFlags(Self::Class.0 | Self::Interface.0);
+    pub const RequiresWidening: ObjectFlags = ObjectFlags(Self::ContainsWideningType.0 | Self::ContainsObjectOrArrayLiteral.0);
+    pub const PropagatingFlags: ObjectFlags = ObjectFlags(Self::ContainsWideningType.0 | Self::ContainsObjectOrArrayLiteral.0 | Self::NonInferrableType.0);
+    pub const InstantiatedMapped: ObjectFlags = ObjectFlags(Self::Mapped.0 | Self::Instantiated.0);
+    pub const ObjectTypeKindMask: ObjectFlags = ObjectFlags(Self::ClassOrInterface.0 | Self::Reference.0 | Self::Tuple.0 | Self::Anonymous.0 | Self::Mapped.0 | Self::ReverseMapped.0 | Self::EvolvingArray.0);
+
+    pub const IsGenericTypeComputed: ObjectFlags = ObjectFlags(1 << 21);
+    pub const IsGenericObjectType: ObjectFlags = ObjectFlags(1 << 22);
+    pub const IsGenericIndexType: ObjectFlags = ObjectFlags(1 << 23);
+    pub const IsGenericType: ObjectFlags = ObjectFlags(Self::IsGenericObjectType.0 | Self::IsGenericIndexType.0);
+
+    pub const ContainsIntersections: ObjectFlags = ObjectFlags(1 << 24);
+    pub const IsUnknownLikeUnionComputed: ObjectFlags = ObjectFlags(1 << 25);
+    pub const IsUnknownLikeUnion: ObjectFlags = ObjectFlags(1 << 26);
+
+    pub const IsNeverIntersectionComputed: ObjectFlags = ObjectFlags(1 << 24);
+    pub const IsNeverIntersection: ObjectFlags = ObjectFlags(1 << 25);
+    pub const IsConstrainedTypeVariable: ObjectFlags = ObjectFlags(1 << 26);
+}
+
+impl std::ops::BitOr for ObjectFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self { ObjectFlags(self.0 | rhs.0) }
+}
+
+impl std::ops::BitAnd for ObjectFlags {
+    type Output = Self;
+    fn bitand(self, rhs: Self) -> Self { ObjectFlags(self.0 & rhs.0) }
+}
+
+impl ObjectFlags {
+    pub fn contains(&self, other: ObjectFlags) -> bool { (self.0 & other.0) == other.0 }
+}
+
+pub trait ObjectFlagsType: Type {
+    // NullableType | ObjectType | UnionType | IntersectionType;
+    fn get_object_flags(&self) -> ObjectFlags;
+}
+
+#[derive(Debug)]
+pub struct ObjectTypeProps {
+    /** @internal */
+    pub members: Option<SymbolTable>, // Properties by name
+    /** @internal */
+    pub properties: Option<Vec<Symbol>>, // Properties
+    /** @internal */
+    pub callSignatures: Option<Vec<Signature>>, // Call signatures of type
+    /** @internal */
+    pub constructSignatures: Option<Vec<Signature>>, // Construct signatures of type
+    /** @internal */
+    pub indexInfos: Option<Vec<IndexInfo>>, // Index signatures
+    /** @internal */
+    pub objectTypeWithoutAbstractConstructSignatures: Option<Box<dyn ObjectType>>,
+}
+
+pub trait ObjectType: ObjectFlagsType {
+    fn get_object_props(&self) -> &ObjectTypeProps;
+}
+
+#[derive(Debug)]
+pub struct InterfaceTypeProps {
+    pub typeParameters: Option<Vec<TypeParameter>>,      // Type parameters (undefined if non-generic)
+    pub outerTypeParameters: Option<Vec<TypeParameter>>, // Outer type parameters (undefined if none)
+    pub localTypeParameters: Option<Vec<TypeParameter>>, // Local type parameters (undefined if none)
+    pub thisType: Option<TypeParameter>,                 // The "this" type (undefined if none)
+    /** @internal */
+    pub resolvedBaseConstructorType: Option<Box<dyn Type>>, // Resolved base constructor type of class
+    /** @internal */
+    pub resolvedBaseTypes: Vec<BaseType>, // Resolved base types
+    /** @internal */
+    pub baseTypesResolved: Option<bool>,
+}
+
+pub trait InterfaceType: ObjectType {
+    fn get_interface_props(&self) -> &InterfaceTypeProps;
+}
+
+pub trait Type: std::fmt::Debug {
+    fn getFlags(&self) -> TypeFlags;
+    fn getSymbol(&self) -> Option<&Symbol>;
+    fn getProperties(&self) -> Vec<&Symbol>;
+    fn getProperty(&self, property_name: &str) -> Option<&Symbol>;
+    fn getApparentProperties(&self) -> Vec<&Symbol>;
+    fn getCallSignatures(&self) -> Vec<&Signature>;
+    fn getConstructSignatures(&self) -> Vec<&Signature>;
+    fn getStringIndexType(&self) -> Option<&dyn Type>;
+    fn getNumberIndexType(&self) -> Option<&dyn Type>;
+    fn getBaseTypes(&self) -> Option<Vec<BaseType>>;
+    fn getNonNullableType(&self) -> &dyn Type;
+    fn getNonOptionalType(&self) -> &dyn Type;
+    fn isNullableType(&self) -> bool;
+    fn getConstraint(&self) -> Option<&dyn Type>;
+    fn getDefault(&self) -> Option<&dyn Type>;
+    fn isUnion(&self) -> bool;
+    fn isIntersection(&self) -> bool;
+    fn isUnionOrIntersection(&self) -> bool;
+    fn isLiteral(&self) -> bool;
+    fn isStringLiteral(&self) -> bool;
+    fn isNumberLiteral(&self) -> bool;
+    fn isTypeParameter(&self) -> bool;
+    fn isClassOrInterface(&self) -> bool;
+    fn isClass(&self) -> bool;
+    fn isIndexType(&self) -> bool;
+}
+
+#[derive(Debug)]
+pub struct CompilerOptions {
+    /** @internal */
+    pub all: Option<bool>,
+    pub allowImportingTsExtensions: Option<bool>,
+    pub allowJs: Option<bool>,
+    /** @internal */
+    pub allowNonTsExtensions: Option<bool>,
+    pub allowArbitraryExtensions: Option<bool>,
+    pub allowSyntheticDefaultImports: Option<bool>,
+    pub allowUmdGlobalAccess: Option<bool>,
+    pub allowUnreachableCode: Option<bool>,
+    pub allowUnusedLabels: Option<bool>,
+    pub alwaysStrict: Option<bool>, // Always combine with strict property
+    pub baseUrl: Option<String>,
+    /**
+     * An error if set - this should only go through the -b pipeline and not actually be observed
+     *
+     * @internal
+     */
+    pub build: Option<bool>,
+    /** @deprecated */
+    pub charset: Option<String>,
+    pub checkJs: Option<bool>,
+    /** @internal */
+    pub configFilePath: Option<String>,
+    /**
+     * configFile is set as non enumerable property so as to avoid checking of json source files
+     *
+     * @internal
+     */
+    // pub configFile: Option<TsConfigSourceFile>,
+    pub customConditions: Option<Vec<String>>,
+    pub declaration: Option<bool>,
+    pub declarationMap: Option<bool>,
+    pub emitDeclarationOnly: Option<bool>,
+    pub declarationDir: Option<String>,
+    /** @internal */
+    pub diagnostics: Option<bool>,
+    /** @internal */
+    pub extendedDiagnostics: Option<bool>,
+    pub disableSizeLimit: Option<bool>,
+    pub disableSourceOfProjectReferenceRedirect: Option<bool>,
+    pub disableSolutionSearching: Option<bool>,
+    pub disableReferencedProjectLoad: Option<bool>,
+    pub downlevelIteration: Option<bool>,
+    pub emitBom: Option<bool>,
+    pub emitDecoratorMetadata: Option<bool>,
+    pub exactOptionalPropertyTypes: Option<bool>,
+    pub experimentalDecorators: Option<bool>,
+    pub forceConsistentCasingInFileNames: Option<bool>,
+    /** @internal */
+    pub generateCpuProfile: Option<String>,
+    /** @internal */
+    pub generateTrace: Option<String>,
+    /** @internal */
+    pub help: Option<bool>,
+    pub ignoreDeprecations: Option<String>,
+    pub importHelpers: Option<bool>,
+    /** @deprecated */
+    // pub importsNotUsedAsValues: Option<ImportsNotUsedAsValues>,
+    /** @internal */
+    pub init: Option<bool>,
+    pub inlineSourceMap: Option<bool>,
+    pub inlineSources: Option<bool>,
+    pub isolatedModules: Option<bool>,
+    pub isolatedDeclarations: Option<bool>,
+    // pub jsx: Option<JsxEmit>,
+    /** @deprecated */
+    pub keyofStringsOnly: Option<bool>,
+    pub lib: Option<Vec<String>>,
+    /** @internal */
+    pub listEmittedFiles: Option<bool>,
+    /** @internal */
+    pub listFiles: Option<bool>,
+    /** @internal */
+    pub explainFiles: Option<bool>,
+    /** @internal */
+    pub listFilesOnly: Option<bool>,
+    pub locale: Option<String>,
+    pub mapRoot: Option<String>,
+    pub maxNodeModuleJsDepth: Option<i32>,
+    // pub module: Option<ModuleKind>,
+    // pub moduleResolution: Option<ModuleResolutionKind>,
+    // pub moduleSuffixes: Option<Vec<String>>,
+    // pub moduleDetection: Option<ModuleDetectionKind>,
+    // pub newLine: Option<NewLineKind>,
+    pub noEmit: Option<bool>,
+    /** @internal */
+    pub noCheck: Option<bool>,
+    /** @internal */
+    pub noEmitForJsFiles: Option<bool>,
+    pub noEmitHelpers: Option<bool>,
+    pub noEmitOnError: Option<bool>,
+    pub noErrorTruncation: Option<bool>,
+    pub noFallthroughCasesInSwitch: Option<bool>,
+    pub noImplicitAny: Option<bool>, // Always combine with strict property
+    pub noImplicitReturns: Option<bool>,
+    pub noImplicitThis: Option<bool>, // Always combine with strict property
+    /** @deprecated */
+    pub noStrictGenericChecks: Option<bool>,
+    pub noUnusedLocals: Option<bool>,
+    pub noUnusedParameters: Option<bool>,
+    /** @deprecated */
+    pub noImplicitUseStrict: Option<bool>,
+    pub noPropertyAccessFromIndexSignature: Option<bool>,
+    pub assumeChangesOnlyAffectDirectDependencies: Option<bool>,
+    pub noLib: Option<bool>,
+    pub noResolve: Option<bool>,
+    /** @internal */
+    pub noDtsResolution: Option<bool>,
+    pub noUncheckedIndexedAccess: Option<bool>,
+    /** @deprecated */
+    pub out: Option<String>,
+    pub outDir: Option<String>,
+    pub outFile: Option<String>,
+    // pub paths: Option<MapLike<Vec<String>>>,
+    /**
+     * The directory of the config file that specified 'paths'. Used to resolve relative paths when 'baseUrl' is absent.
+     *
+     * @internal
+     */
+    pub pathsBasePath: Option<String>,
+    /** @internal */
+    // pub plugins: Option<Vec<PluginImport>>,
+    pub preserveConstEnums: Option<bool>,
+    pub noImplicitOverride: Option<bool>,
+    pub preserveSymlinks: Option<bool>,
+    /** @deprecated */
+    pub preserveValueImports: Option<bool>,
+    /** @internal */
+    pub preserveWatchOutput: Option<bool>,
+    pub project: Option<String>,
+    /** @internal */
+    pub pretty: Option<bool>,
+    pub reactNamespace: Option<String>,
+    pub jsxFactory: Option<String>,
+    pub jsxFragmentFactory: Option<String>,
+    pub jsxImportSource: Option<String>,
+    pub composite: Option<bool>,
+    pub incremental: Option<bool>,
+    pub tsBuildInfoFile: Option<String>,
+    pub removeComments: Option<bool>,
+    pub resolvePackageJsonExports: Option<bool>,
+    pub resolvePackageJsonImports: Option<bool>,
+    pub rootDir: Option<String>,
+    pub rootDirs: Option<Vec<String>>,
+    pub skipLibCheck: Option<bool>,
+    pub skipDefaultLibCheck: Option<bool>,
+    pub sourceMap: Option<bool>,
+    pub sourceRoot: Option<String>,
+    pub strict: Option<bool>,
+    pub strictFunctionTypes: Option<bool>,          // Always combine with strict property
+    pub strictBindCallApply: Option<bool>,          // Always combine with strict property
+    pub strictNullChecks: Option<bool>,             // Always combine with strict property
+    pub strictPropertyInitialization: Option<bool>, // Always combine with strict property
+    pub strictBuiltinIteratorReturn: Option<bool>,  // Always combine with strict property
+    pub stripInternal: Option<bool>,
+    /** @deprecated */
+    pub suppressExcessPropertyErrors: Option<bool>,
+    /** @deprecated */
+    pub suppressImplicitAnyIndexErrors: Option<bool>,
+    /** @internal */
+    pub suppressOutputPathCheck: Option<bool>,
+    // pub target: Option<ScriptTarget>,
+    pub traceResolution: Option<bool>,
+    pub useUnknownInCatchVariables: Option<bool>,
+    pub noUncheckedSideEffectImports: Option<bool>,
+    pub resolveJsonModule: Option<bool>,
+    pub types: Option<Vec<String>>,
+    /** Paths used to compute primary types search locations */
+    pub typeRoots: Option<Vec<String>>,
+    pub verbatimModuleSyntax: Option<bool>,
+    /** @internal */
+    pub version: Option<bool>,
+    /** @internal */
+    pub watch: Option<bool>,
+    pub esModuleInterop: Option<bool>,
+    /** @internal */
+    pub showConfig: Option<bool>,
+    pub useDefineForClassFields: Option<bool>,
+    /** @internal */
+    pub tscBuild: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -1003,7 +1315,7 @@ pub struct DiagnosticMessage {
     pub category: DiagnosticCategory,
     pub key: String,
     pub message: String,
-    pub reports_unnecessary: Option<bool>,
-    pub elided_in_compatibility_pyramid: Option<bool>,
-    pub reports_deprecated: Option<bool>,
+    pub reportsUnnecessary: Option<bool>,
+    pub elidedInCompatibilityPyramid: Option<bool>,
+    pub reportsDeprecated: Option<bool>,
 }
