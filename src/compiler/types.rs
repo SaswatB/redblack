@@ -117,7 +117,7 @@ pub struct ClassElement;
 #[derive(Debug)]
 pub struct AnyImportSyntax;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Declaration;
 
 #[derive(Debug)]
@@ -132,7 +132,7 @@ pub struct BigIntLiteralType;
 #[derive(Debug)]
 pub struct PseudoBigInt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolTable;
 
 #[derive(Debug)]
@@ -186,7 +186,27 @@ pub struct SymbolTracker;
 #[derive(Debug)]
 pub struct JSDocSignature;
 
-pub trait TypeChecker: std::fmt::Debug {
+// 5010
+/** @internal */
+pub trait TypeCheckerHost: ModuleSpecifierResolutionHost {
+    fn getCompilerOptions(&self) -> CompilerOptions;
+    fn getSourceFiles(&self) -> Vec<&SourceFile>;
+    fn getSourceFile(&self, file_name: &str) -> Option<&SourceFile>;
+    fn getProjectReferenceRedirect(&self, file_name: &str) -> Option<String>;
+    fn isSourceOfProjectReferenceRedirect(&self, file_name: &str) -> bool;
+    // fn getEmitSyntaxForUsageLocation(&self, file: &SourceFile, usage: &StringLiteralLike) -> ResolutionMode;
+    // fn getRedirectReferenceForResolutionFromSourceOfProject(&self, file_path: Path) -> Option<ResolvedProjectReference>;
+    // fn getModeForUsageLocation(&self, file: &SourceFile, usage: &StringLiteralLike) -> ResolutionMode;
+    // fn getDefaultResolutionModeForFile(&self, source_file: &SourceFile) -> ResolutionMode;
+    // fn getImpliedNodeFormatForEmit(&self, source_file: &SourceFile) -> ResolutionMode;
+    // fn getEmitModuleFormatOfFile(&self, source_file: &SourceFile) -> ModuleKind;
+    // fn getResolvedModule(&self, f: &SourceFile, module_name: &str, mode: ResolutionMode) -> Option<ResolvedModuleWithFailedLookupLocations>;
+    // fn getRedirectTargetsMap(&self) -> &RedirectTargetsMap;
+    fn typesPackageExists(&self, package_name: &str) -> bool;
+    fn packageBundlesTypes(&self, package_name: &str) -> bool;
+}
+
+pub trait TypeCheckerTrait: std::fmt::Debug {
     fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol, node: &AstKind) -> &dyn Type;
     fn getTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type;
     fn getDeclaredTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type;
@@ -572,6 +592,7 @@ pub trait TypeChecker: std::fmt::Debug {
     /** @internal */
     fn getSymbolFlags(&self, symbol: Symbol) -> SymbolFlags;
 }
+// 5416
 
 #[derive(Debug)]
 pub enum SignatureKind {
@@ -607,7 +628,7 @@ pub struct Signature {
     /** @internal */
     pub flags: SignatureFlags,
     /** @internal */
-    pub checker: Option<Box<dyn TypeChecker>>,
+    pub checker: Option<Box<dyn TypeCheckerTrait>>,
     pub declaration: Option<SignatureDeclaration>,  // Originating declaration
     pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
     pub parameters: Vec<Symbol>,                    // Parameters
@@ -650,6 +671,7 @@ pub struct OptionalCallSignatureCache {
     pub outer: Option<Box<Signature>>,
 }
 
+// region: 5864
 #[derive(Debug, Clone, Copy)]
 pub struct SymbolFlags(pub isize);
 
@@ -761,7 +783,7 @@ impl std::ops::BitAnd for SymbolFlags {
 /** @internal */
 pub type SymbolId = usize;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Symbol {
     pub flags: SymbolFlags,                     // Symbol flags
     pub escapedName: String,                    // Name of symbol
@@ -789,7 +811,9 @@ pub struct Symbol {
     /** @internal */
     pub assignmentDeclarationMembers: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
 }
+// endregion: 5976
 
+// region: 6246
 #[derive(Debug, Clone, Copy)]
 pub struct TypeFlags(pub isize);
 
@@ -911,38 +935,6 @@ impl std::ops::BitAnd for TypeFlags {
 }
 
 #[derive(Debug)]
-pub enum TypeMapKind {
-    Simple,
-    Array,
-    Deferred,
-    Function,
-    Composite,
-    Merged,
-}
-
-pub enum TypeMapper {
-    Simple { source: Box<dyn Type>, target: Box<dyn Type> },
-    Array { sources: Vec<Box<dyn Type>>, targets: Option<Vec<Box<dyn Type>>> },
-    Deferred { sources: Vec<Box<dyn Type>>, targets: Vec<Box<dyn Fn() -> Box<dyn Type>>> },
-    Function { func: Box<dyn Fn(Box<dyn Type>) -> Box<dyn Type>>, debug_info: Option<Box<dyn Fn() -> String>> },
-    Composite { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
-    Merged { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
-}
-
-impl std::fmt::Debug for TypeMapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Simple { source, target } => f.debug_struct("Simple").field("source", source).field("target", target).finish(),
-            Self::Array { sources, targets } => f.debug_struct("Array").field("sources", sources).field("targets", targets).finish(),
-            Self::Deferred { sources, .. } => f.debug_struct("Deferred").field("sources", sources).finish(),
-            Self::Function { .. } => f.debug_struct("Function").finish(),
-            Self::Composite { mapper1, mapper2 } => f.debug_struct("Composite").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
-            Self::Merged { mapper1, mapper2 } => f.debug_struct("Merged").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub enum DestructuringPattern<'a> {
     BindingPattern(Box<BindingPattern<'a>>),
     ObjectExpression(Box<ObjectExpression<'a>>),
@@ -958,10 +950,10 @@ pub struct TypeObject<'a> {
     /** @internal */
     pub id: TypeId, // Unique ID
     /** @internal */
-    pub checker: Box<dyn TypeChecker>,
-    pub symbol: Symbol,                                 // Symbol associated with type (if any)
-    pub pattern: Option<DestructuringPattern<'a>>,      // Destructuring pattern represented by type (if any)
-    pub aliasSymbol: Option<Symbol>,                    // Alias associated with type
+    // pub checker: Arc<Mutex<dyn TypeCheckerTrait>>, //Arc<&'a dyn TypeCheckerTrait>,
+    pub symbol: Symbol, // Symbol associated with type (if any)
+    pub pattern: Option<DestructuringPattern<'a>>, // Destructuring pattern represented by type (if any)
+    pub aliasSymbol: Option<Symbol>, // Alias associated with type
     pub aliasTypeArguments: Option<Vec<Box<dyn Type>>>, // Alias type arguments (if any)
     /** @internal */
     pub permissiveInstantiation: Option<Box<dyn Type>>, // Instantiation with type parameters mapped to wildcard type
@@ -972,10 +964,38 @@ pub struct TypeObject<'a> {
     /** @internal */
     pub widened: Option<Box<dyn Type>>, // Cached widened form of the type
 
-    pub object_flags: Option<ObjectFlags>,           // ObjectFlagsType
-    pub intrinsic_props: Option<IntrinsicTypeProps>, // IntrinsicType
-    pub object_props: Option<ObjectTypeProps>,       // ObjectType
-    pub interface_props: Option<InterfaceTypeProps>, // InterfaceType
+    pub object_flags: Option<ObjectFlags>,               // ObjectFlagsType
+    pub intrinsic_props: Option<IntrinsicTypeProps>,     // IntrinsicType
+    pub freshable_props: Option<FreshableTypeProps<'a>>, // FreshableType
+    pub object_props: Option<ObjectTypeProps>,           // ObjectType
+    pub interface_props: Option<InterfaceTypeProps>,     // InterfaceType
+}
+pub trait Type: std::fmt::Debug {
+    fn getFlags(&self) -> TypeFlags;
+    fn getSymbol(&self) -> Option<&Symbol>;
+    // fn getProperties(&self) -> Vec<&Symbol>;
+    // fn getProperty(&self, property_name: &str) -> Option<&Symbol>;
+    // fn getApparentProperties(&self) -> Vec<&Symbol>;
+    // fn getCallSignatures(&self) -> Vec<&Signature>;
+    // fn getConstructSignatures(&self) -> Vec<&Signature>;
+    // fn getStringIndexType(&self) -> Option<&dyn Type>;
+    // fn getNumberIndexType(&self) -> Option<&dyn Type>;
+    // fn getBaseTypes(&self) -> Option<Vec<BaseType>>;
+    // fn getNonNullableType(&self) -> &dyn Type;
+    // fn getNonOptionalType(&self) -> &dyn Type;
+    // fn isNullableType(&self) -> bool;
+    // fn getConstraint(&self) -> Option<&dyn Type>;
+    // fn getDefault(&self) -> Option<&dyn Type>;
+    fn isUnion(&self) -> bool;
+    fn isIntersection(&self) -> bool;
+    fn isUnionOrIntersection(&self) -> bool;
+    fn isLiteral(&self) -> bool;
+    fn isStringLiteral(&self) -> bool;
+    fn isNumberLiteral(&self) -> bool;
+    fn isTypeParameter(&self) -> bool;
+    fn isClassOrInterface(&self) -> bool;
+    fn isClass(&self) -> bool;
+    fn isIndexType(&self) -> bool;
 }
 
 /** @internal */
@@ -990,9 +1010,30 @@ pub trait IntrinsicType: ObjectFlagsTrait {
     fn get_intrinsic_props(&self) -> &IntrinsicTypeProps;
 }
 
+/** @internal */
+pub trait NullableType: IntrinsicType {}
+
+#[derive(Debug, Clone)]
+pub struct FreshableTypeProps<'a> {
+    pub freshType: &'a dyn FreshableType,   // Fresh version of type
+    pub regularType: &'a dyn FreshableType, // Regular version of type
+}
+
+pub trait FreshableType: Type {
+    fn get_freshable_type_props(&self) -> &FreshableTypeProps;
+}
+
+/** @internal */
+pub trait FreshableIntrinsicType: FreshableType + IntrinsicType {}
+// endregion: 6392
+
+// region: 6423
 #[derive(Debug, Clone, Copy)]
 pub struct ObjectFlags(pub isize);
 
+// Types included in TypeFlags.ObjectFlagsType have an objectFlags property. Some ObjectFlags
+// are specific to certain types and reuse the same bit position. Those ObjectFlags require a check
+// for a certain TypeFlags value to determine their meaning.
 impl ObjectFlags {
     pub const None: ObjectFlags = ObjectFlags(0);
     pub const Class: ObjectFlags = ObjectFlags(1 << 0);
@@ -1063,7 +1104,7 @@ pub trait ObjectFlagsTrait: Type {
 }
 
 enum ObjectFlagsType {
-    // NullableType(Box<dyn NullableType>),
+    NullableType(Box<dyn NullableType>),
     ObjectType(Box<dyn ObjectType>),
     // UnionType(Box<dyn UnionType>),
     // IntersectionType(Box<dyn IntersectionType>),
@@ -1106,35 +1147,112 @@ pub struct InterfaceTypeProps {
 pub trait InterfaceType: ObjectType {
     fn get_interface_props(&self) -> &InterfaceTypeProps;
 }
+// endregion: 6537
 
-pub trait Type: std::fmt::Debug {
-    fn getFlags(&self) -> TypeFlags;
-    fn getSymbol(&self) -> Option<&Symbol>;
-    fn getProperties(&self) -> Vec<&Symbol>;
-    fn getProperty(&self, property_name: &str) -> Option<&Symbol>;
-    fn getApparentProperties(&self) -> Vec<&Symbol>;
-    fn getCallSignatures(&self) -> Vec<&Signature>;
-    fn getConstructSignatures(&self) -> Vec<&Signature>;
-    fn getStringIndexType(&self) -> Option<&dyn Type>;
-    fn getNumberIndexType(&self) -> Option<&dyn Type>;
-    fn getBaseTypes(&self) -> Option<Vec<BaseType>>;
-    fn getNonNullableType(&self) -> &dyn Type;
-    fn getNonOptionalType(&self) -> &dyn Type;
-    fn isNullableType(&self) -> bool;
-    fn getConstraint(&self) -> Option<&dyn Type>;
-    fn getDefault(&self) -> Option<&dyn Type>;
-    fn isUnion(&self) -> bool;
-    fn isIntersection(&self) -> bool;
-    fn isUnionOrIntersection(&self) -> bool;
-    fn isLiteral(&self) -> bool;
-    fn isStringLiteral(&self) -> bool;
-    fn isNumberLiteral(&self) -> bool;
-    fn isTypeParameter(&self) -> bool;
-    fn isClassOrInterface(&self) -> bool;
-    fn isClass(&self) -> bool;
-    fn isIndexType(&self) -> bool;
+// region: 6995
+#[derive(Debug)]
+pub enum TypeMapKind {
+    Simple,
+    Array,
+    Deferred,
+    Function,
+    Composite,
+    Merged,
 }
 
+pub enum TypeMapper {
+    Simple { source: Box<dyn Type>, target: Box<dyn Type> },
+    Array { sources: Vec<Box<dyn Type>>, targets: Option<Vec<Box<dyn Type>>> },
+    Deferred { sources: Vec<Box<dyn Type>>, targets: Vec<Box<dyn Fn() -> Box<dyn Type>>> },
+    Function { func: Box<dyn Fn(Box<dyn Type>) -> Box<dyn Type>>, debug_info: Option<Box<dyn Fn() -> String>> },
+    Composite { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+    Merged { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+}
+
+impl std::fmt::Debug for TypeMapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Simple { source, target } => f.debug_struct("Simple").field("source", source).field("target", target).finish(),
+            Self::Array { sources, targets } => f.debug_struct("Array").field("sources", sources).field("targets", targets).finish(),
+            Self::Deferred { sources, .. } => f.debug_struct("Deferred").field("sources", sources).finish(),
+            Self::Function { .. } => f.debug_struct("Function").finish(),
+            Self::Composite { mapper1, mapper2 } => f.debug_struct("Composite").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
+            Self::Merged { mapper1, mapper2 } => f.debug_struct("Merged").field("mapper1", mapper1).field("mapper2", mapper2).finish(),
+        }
+    }
+}
+// endregion: 7010
+
+// region: 7136
+#[derive(Debug)]
+pub struct DiagnosticMessage {
+    pub code: i32,
+    pub category: DiagnosticCategory,
+    pub key: String,
+    pub message: String,
+    pub reportsUnnecessary: Option<bool>,
+    pub elidedInCompatibilityPyramid: Option<bool>,
+    pub reportsDeprecated: Option<bool>,
+}
+// endregion: 7145
+
+// region: 7231
+#[derive(Debug)]
+pub enum DiagnosticCategory {
+    Error,
+    Warning,
+    Suggestion,
+    Message,
+}
+/** @internal */
+pub fn diagnosticCategoryName(d: &DiagnosticCategory, lower_case: bool) -> String {
+    let name = match d {
+        DiagnosticCategory::Error => "Error",
+        DiagnosticCategory::Warning => "Warning",
+        DiagnosticCategory::Suggestion => "Suggestion",
+        DiagnosticCategory::Message => "Message",
+    };
+    return if lower_case { name.to_lowercase() } else { name.to_string() };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModuleResolutionKind {
+    Classic = 1,
+    /**
+     * @deprecated
+     * `NodeJs` was renamed to `Node10` to better reflect the version of Node that it targets.
+     * Use the new name or consider switching to a modern module resolution target.
+     */
+    // NodeJs = 2,
+    Node10 = 2,
+    // Starting with node12, node's module resolver has significant departures from traditional cjs resolution
+    // to better support ECMAScript modules and their use within node - however more features are still being added.
+    // TypeScript's Node ESM support was introduced after Node 12 went end-of-life, and Node 14 is the earliest stable
+    // version that supports both pattern trailers - *but*, Node 16 is the first version that also supports ECMAScript 2022.
+    // In turn, we offer both a `NodeNext` moving resolution target, and a `Node16` version-anchored resolution target
+    Node16 = 3,
+    NodeNext = 99, // Not simply `Node16` so that compiled code linked against TS can use the `Next` value reliably (same as with `ModuleKind`)
+    Bundler = 100,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModuleDetectionKind {
+    /**
+     * Files with imports, exports and/or import.meta are considered modules
+     */
+    Legacy = 1,
+    /**
+     * Legacy, but also files with jsx under react-jsx or react-jsxdev and esm mode files under moduleResolution: node16+
+     */
+    Auto = 2,
+    /**
+     * Consider all non-declaration files modules, regardless of present syntax
+     */
+    Force = 3,
+}
+// endregion: 7275
+
+// region: 7317
 #[derive(Debug)]
 pub struct CompilerOptions {
     /** @internal */
@@ -1319,22 +1437,32 @@ pub struct CompilerOptions {
     /** @internal */
     pub tscBuild: Option<bool>,
 }
+// endregion: 7478
 
-#[derive(Debug)]
-pub enum DiagnosticCategory {
-    Error,
-    Warning,
-    Suggestion,
-    Message,
-}
+// region: 9840
+/** @internal */
+pub trait ModuleSpecifierResolutionHost {
+    fn useCaseSensitiveFileNames(&self) -> Option<bool>;
+    fn fileExists(&self, path: &str) -> bool;
+    fn getCurrentDirectory(&self) -> String;
+    fn directoryExists(&self, path: &str) -> Option<bool>;
+    fn readFile(&self, path: &str) -> Option<String>;
+    fn realpath(&self, path: &str) -> Option<String>;
+    // fn getSymlinkCache(&self) -> Option<SymlinkCache>;
+    // fn getModuleSpecifierCache(&self) -> Option<ModuleSpecifierCache>;
+    // fn getPackageJsonInfoCache(&self) -> Option<PackageJsonInfoCache>;
+    fn getGlobalTypingsCacheLocation(&self) -> Option<String>;
+    fn getNearestAncestorDirectoryWithPackageJson(&self, file_name: &str, root_dir: Option<&str>) -> Option<String>;
 
-#[derive(Debug)]
-pub struct DiagnosticMessage {
-    pub code: i32,
-    pub category: DiagnosticCategory,
-    pub key: String,
-    pub message: String,
-    pub reportsUnnecessary: Option<bool>,
-    pub elidedInCompatibilityPyramid: Option<bool>,
-    pub reportsDeprecated: Option<bool>,
+    // fn getRedirectTargetsMap(&self) -> &RedirectTargetsMap;
+    fn getProjectReferenceRedirect(&self, file_name: &str) -> Option<String>;
+    fn isSourceOfProjectReferenceRedirect(&self, file_name: &str) -> bool;
+    // fn getFileIncludeReasons(&self) -> MultiMap<Path, FileIncludeReason>;
+    fn getCommonSourceDirectory(&self) -> String;
+    // fn getDefaultResolutionModeForFile(&self, source_file: &SourceFile) -> ResolutionMode;
+    // fn getModeForResolutionAtIndex(&self, file: &SourceFile, index: usize) -> ResolutionMode;
+
+    // fn getModuleResolutionCache(&self) -> Option<ModuleResolutionCache>;
+    fn trace(&self, s: &str) -> Option<()>;
 }
+// endregion: 9864
