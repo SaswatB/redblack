@@ -4,6 +4,7 @@ use oxc::ast::ast::Program;
 use std::path::PathBuf;
 use std::sync::Arc;
 // use std::thread_local;
+use oxc::span::cmp::ContentEq;
 
 use super::moduleNameResolver::PackageJsonInfo;
 use super::rb_host::RbTypeCheckerHost;
@@ -93,6 +94,7 @@ use super::types::{CompilerOptions, ResolutionMode};
 use paste::paste;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::thread_local;
 
@@ -104,6 +106,28 @@ macro_rules! entity_properties {
         $($name:ident: $type:ty = $default:expr),* $(,)?
     }) => {
         paste! {
+            #[derive(Clone)]
+            struct EntityKey<'a>(&'a $entity<'a>);
+
+            impl<'a> Hash for EntityKey<'a> {
+                fn hash<H: Hasher>(&self, state: &mut H) {
+                    // Use the content-based equality to create a stable hash
+                    format!("{:?}", self.0).hash(state);
+                }
+            }
+
+            impl<'a> PartialEq for EntityKey<'a> {
+                fn eq(&self, other: &Self) -> bool {
+                    self.0.content_eq(other.0)
+                }
+            }
+
+            impl<'a> Eq for EntityKey<'a> {}
+
+            thread_local! {
+                static [<$entity:upper _INFO_MAP>]: RefCell<HashMap<String, [<$entity Info>]>> = RefCell::new(HashMap::new());
+            }
+
             #[derive(Clone)]
             struct [<$entity Info>] {
                 $($name: $type,)*
@@ -119,11 +143,8 @@ macro_rules! entity_properties {
                 }
             }
 
-            thread_local! {
-                static [<$entity:upper _INFO_MAP>]: RefCell<HashMap<usize, [<$entity Info>]>> = RefCell::new(HashMap::new());
-            }
-
             pub trait [<$entity Ext>] {
+                fn get_key(&self) -> String;
                 $(
                     fn [<set_ $name>](&self, value: $type);
                     fn $name(&self) -> $type;
@@ -131,18 +152,27 @@ macro_rules! entity_properties {
             }
 
             impl<'a> [<$entity Ext>] for $entity<'a> {
+                fn get_key(&self) -> String {
+                    format!("{:?}", self) // todo this probably breaks on programs with the same content
+                }
+
                 $(
                     fn [<set_ $name>](&self, value: $type) {
-                        let ptr = self as *const _ as usize;
+                        let key = self.get_key();
                         [<$entity:upper _INFO_MAP>].with(|map| {
                             let mut map = map.borrow_mut();
-                            map.entry(ptr).or_insert_with(|| [<$entity Info>]::default()).$name = value;
+                            map.entry(key).or_insert_with(|| [<$entity Info>]::default()).$name = value;
                         });
                     }
 
                     fn $name(&self) -> $type {
-                        let ptr = self as *const _ as usize;
-                        [<$entity:upper _INFO_MAP>].with(|map| map.borrow().get(&ptr).map(|info| info.$name.clone()).unwrap_or($default))
+                        let key = self.get_key();
+                        [<$entity:upper _INFO_MAP>].with(|map| {
+                            map.borrow()
+                                .get(&key)
+                                .map(|info| info.$name.clone())
+                                .unwrap_or($default)
+                        })
                     }
                 )*
             }
