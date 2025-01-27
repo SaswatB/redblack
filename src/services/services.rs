@@ -1,6 +1,4 @@
 use crate::compiler::types::*;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 impl Symbol {
     pub fn new(flags: SymbolFlags, name: &str) -> Self {
@@ -80,6 +78,8 @@ impl<'a> Type for TypeObject<'a> {
     fn isClassOrInterface(&self) -> bool { self.get_object_flags().contains(ObjectFlags::ClassOrInterface) }
     fn isClass(&self) -> bool { self.get_object_flags().contains(ObjectFlags::Class) }
     fn isIndexType(&self) -> bool { self.flags.contains(TypeFlags::Index) }
+
+    fn as_type(&self) -> &dyn Type { self }
 }
 
 impl<'a> IntrinsicType for TypeObject<'a> {

@@ -1,117 +1,123 @@
+use crate::compiler::parser::*;
 use crate::compiler::types::*;
 use oxc::ast::{
-    ast::{Argument, Expression, ObjectExpression, Program},
+    ast::{Argument, Expression, ObjectExpression},
     AstKind,
 };
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 #[derive(Debug)]
 pub struct TypeChecker<'a> {
-    checker: Arc<Mutex<Self>>,
+    host: Arc<dyn TypeCheckerHost>,
+
     typeCount: usize,
     seenIntrinsicNames: HashSet<String>,
-    anyType: Box<dyn IntrinsicType + 'a>,
-    autoType: Box<dyn IntrinsicType + 'a>,
-    wildcardType: Box<dyn IntrinsicType + 'a>,
-    blockedStringType: Box<dyn IntrinsicType + 'a>,
-    errorType: Box<dyn IntrinsicType + 'a>,
-    unresolvedType: Box<dyn IntrinsicType + 'a>,
-    nonInferrableAnyType: Box<dyn IntrinsicType + 'a>,
-    intrinsicMarkerType: Box<dyn IntrinsicType + 'a>,
-    unknownType: Box<dyn IntrinsicType + 'a>,
-    undefinedType: Box<dyn IntrinsicType + 'a>,
-    undefinedWideningType: Box<dyn IntrinsicType + 'a>,
-    missingType: Box<dyn IntrinsicType + 'a>,
-    undefinedOrMissingType: Box<dyn IntrinsicType + 'a>,
-    optionalType: Box<dyn IntrinsicType + 'a>,
-    nullType: Box<dyn IntrinsicType + 'a>,
-    nullWideningType: Box<dyn IntrinsicType + 'a>,
-    stringType: Box<dyn IntrinsicType + 'a>,
-    numberType: Box<dyn IntrinsicType + 'a>,
-    bigintType: Box<dyn IntrinsicType + 'a>,
-    falseType: Box<dyn FreshableIntrinsicType + 'a>,
-    regularFalseType: Box<dyn FreshableIntrinsicType + 'a>,
-    trueType: Box<dyn FreshableIntrinsicType + 'a>,
-    regularTrueType: Box<dyn FreshableIntrinsicType + 'a>,
+    anyType: Arc<dyn IntrinsicType + 'a>,
+    autoType: Arc<dyn IntrinsicType + 'a>,
+    wildcardType: Arc<dyn IntrinsicType + 'a>,
+    blockedStringType: Arc<dyn IntrinsicType + 'a>,
+    errorType: Arc<dyn IntrinsicType + 'a>,
+    unresolvedType: Arc<dyn IntrinsicType + 'a>,
+    nonInferrableAnyType: Arc<dyn IntrinsicType + 'a>,
+    intrinsicMarkerType: Arc<dyn IntrinsicType + 'a>,
+    unknownType: Arc<dyn IntrinsicType + 'a>,
+    undefinedType: Arc<dyn IntrinsicType + 'a>,
+    undefinedWideningType: Arc<dyn IntrinsicType + 'a>,
+    missingType: Arc<dyn IntrinsicType + 'a>,
+    undefinedOrMissingType: Arc<dyn IntrinsicType + 'a>,
+    optionalType: Arc<dyn IntrinsicType + 'a>,
+    nullType: Arc<dyn IntrinsicType + 'a>,
+    nullWideningType: Arc<dyn IntrinsicType + 'a>,
+    stringType: Arc<dyn IntrinsicType + 'a>,
+    numberType: Arc<dyn IntrinsicType + 'a>,
+    bigintType: Arc<dyn IntrinsicType + 'a>,
+    falseType: Arc<dyn FreshableIntrinsicType + 'a>,
+    regularFalseType: Arc<dyn FreshableIntrinsicType + 'a>,
+    trueType: Arc<dyn FreshableIntrinsicType + 'a>,
+    regularTrueType: Arc<dyn FreshableIntrinsicType + 'a>,
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new() -> Arc<Mutex<Self>> {
-        let checker = Arc::new(Mutex::new(Self {
-            checker: unsafe { std::mem::zeroed() },
+    pub fn new(host: Arc<dyn TypeCheckerHost>) -> Arc<RefCell<Self>> {
+        let checker = Arc::new(RefCell::new(Self {
+            host,
             typeCount: 0,
             seenIntrinsicNames: HashSet::new(),
-            anyType: unsafe { std::mem::zeroed() },
-            autoType: unsafe { std::mem::zeroed() },
-            wildcardType: unsafe { std::mem::zeroed() },
-            blockedStringType: unsafe { std::mem::zeroed() },
-            errorType: unsafe { std::mem::zeroed() },
-            unresolvedType: unsafe { std::mem::zeroed() },
-            nonInferrableAnyType: unsafe { std::mem::zeroed() },
-            intrinsicMarkerType: unsafe { std::mem::zeroed() },
-            unknownType: unsafe { std::mem::zeroed() },
-            undefinedType: unsafe { std::mem::zeroed() },
-            undefinedWideningType: unsafe { std::mem::zeroed() },
-            missingType: unsafe { std::mem::zeroed() },
-            undefinedOrMissingType: unsafe { std::mem::zeroed() },
-            optionalType: unsafe { std::mem::zeroed() },
-            nullType: unsafe { std::mem::zeroed() },
-            nullWideningType: unsafe { std::mem::zeroed() },
-            stringType: unsafe { std::mem::zeroed() },
-            numberType: unsafe { std::mem::zeroed() },
-            bigintType: unsafe { std::mem::zeroed() },
-            falseType: unsafe { std::mem::zeroed() },
-            regularFalseType: unsafe { std::mem::zeroed() },
-            trueType: unsafe { std::mem::zeroed() },
-            regularTrueType: unsafe { std::mem::zeroed() },
-        }));
-        checker.lock().unwrap().checker = checker.clone();
-        checker.lock().unwrap().init_intrinsic_types();
 
+            // Initialize with empty types that will be properly set in init_intrinsic_types
+            anyType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            autoType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            wildcardType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            blockedStringType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            errorType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            unresolvedType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            nonInferrableAnyType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            intrinsicMarkerType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            unknownType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            undefinedType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            undefinedWideningType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            missingType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            undefinedOrMissingType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            optionalType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            nullType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            nullWideningType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            stringType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            numberType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            bigintType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            falseType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            regularFalseType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            trueType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            regularTrueType: Arc::new(TypeObject::new(TypeFlags::Any)),
+        }));
+
+        checker.borrow_mut().init_intrinsic_types();
         checker
     }
 
     fn init_intrinsic_types(&mut self) {
-        // 2046
-        self.anyType = Box::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, None));
-        self.autoType = Box::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::NonInferrableType, Some("auto")));
-        self.wildcardType = Box::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("wildcard")));
-        self.blockedStringType = Box::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("blocked string")));
-        self.errorType = Box::new(self.createIntrinsicType(TypeFlags::Any, "error", ObjectFlags::None, None));
-        self.unresolvedType = Box::new(self.createIntrinsicType(TypeFlags::Any, "unresolved", ObjectFlags::None, None));
-        self.nonInferrableAnyType = Box::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::ContainsWideningType, Some("non-inferrable")));
-        self.intrinsicMarkerType = Box::new(self.createIntrinsicType(TypeFlags::Any, "intrinsic", ObjectFlags::None, None));
-        self.unknownType = Box::new(self.createIntrinsicType(TypeFlags::Unknown, "unknown", ObjectFlags::None, None));
-        self.undefinedType = Box::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, None));
-        self.undefinedWideningType = Box::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::ContainsWideningType, Some("widening")));
-        self.missingType = Box::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("missing")));
-        // var undefinedOrMissingType = exactOptionalPropertyTypes ? missingType : undefinedType;
-        self.optionalType = Box::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("optional")));
-        self.nullType = Box::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::None, None));
-        // var nullWideningType = strictNullChecks ? nullType : createIntrinsicType(TypeFlags.Null, "null", ObjectFlags.ContainsWideningType, "widening");
-        self.stringType = Box::new(self.createIntrinsicType(TypeFlags::String, "string", ObjectFlags::None, None));
-        self.numberType = Box::new(self.createIntrinsicType(TypeFlags::Number, "number", ObjectFlags::None, None));
-        self.bigintType = Box::new(self.createIntrinsicType(TypeFlags::BigInt, "bigint", ObjectFlags::None, None));
+        let exactOptionalPropertyTypes = self.host.getCompilerOptions().exactOptionalPropertyTypes.unwrap_or(false);
+        let strictNullChecks = self.host.getCompilerOptions().strictNullChecks.unwrap_or(false);
+
+        // region: 2046
+        self.anyType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, None));
+        self.autoType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::NonInferrableType, Some("auto")));
+        self.wildcardType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("wildcard")));
+        self.blockedStringType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("blocked string")));
+        self.errorType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "error", ObjectFlags::None, None));
+        self.unresolvedType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "unresolved", ObjectFlags::None, None));
+        self.nonInferrableAnyType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::ContainsWideningType, Some("non-inferrable")));
+        self.intrinsicMarkerType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "intrinsic", ObjectFlags::None, None));
+        self.unknownType = Arc::new(self.createIntrinsicType(TypeFlags::Unknown, "unknown", ObjectFlags::None, None));
+        self.undefinedType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, None));
+        self.undefinedWideningType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::ContainsWideningType, Some("widening")));
+        self.missingType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("missing")));
+        self.undefinedOrMissingType = if exactOptionalPropertyTypes { Arc::clone(&self.missingType) } else { Arc::clone(&self.undefinedType) };
+        self.optionalType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("optional")));
+        self.nullType = Arc::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::None, None));
+        self.nullWideningType = if strictNullChecks { Arc::clone(&self.nullType) } else { Arc::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::ContainsWideningType, Some("widening"))) };
+        self.stringType = Arc::new(self.createIntrinsicType(TypeFlags::String, "string", ObjectFlags::None, None));
+        self.numberType = Arc::new(self.createIntrinsicType(TypeFlags::Number, "number", ObjectFlags::None, None));
+        self.bigintType = Arc::new(self.createIntrinsicType(TypeFlags::BigInt, "bigint", ObjectFlags::None, None));
         let mut false_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "false", ObjectFlags::None, Some("fresh"));
         let mut regular_false_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "false", ObjectFlags::None, None);
         let false_type_freshable_props = FreshableTypeProps { freshType: unsafe { &*(&false_type as *const _ as *const dyn FreshableType) }, regularType: unsafe { &*(&regular_false_type as *const _ as *const dyn FreshableType) } };
         false_type.freshable_props = Some(false_type_freshable_props.clone());
         regular_false_type.freshable_props = Some(false_type_freshable_props.clone());
-        self.falseType = Box::new(false_type);
-        self.regularFalseType = Box::new(regular_false_type);
+        self.falseType = Arc::new(false_type);
+        self.regularFalseType = Arc::new(regular_false_type);
         let mut true_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "true", ObjectFlags::None, Some("fresh"));
         let mut regular_true_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "true", ObjectFlags::None, None);
         let true_type_freshable_props = FreshableTypeProps { freshType: unsafe { &*(&true_type as *const _ as *const dyn FreshableType) }, regularType: unsafe { &*(&regular_true_type as *const _ as *const dyn FreshableType) } };
         true_type.freshable_props = Some(true_type_freshable_props.clone());
         regular_true_type.freshable_props = Some(true_type_freshable_props.clone());
-        self.trueType = Box::new(true_type);
-        self.regularTrueType = Box::new(regular_true_type);
-        // 2068
+        self.trueType = Arc::new(true_type);
+        self.regularTrueType = Arc::new(regular_true_type);
+        // endregion: 2068
     }
 
-    // 5337
+    // region: 5337
     fn createType(&mut self, flags: TypeFlags) -> TypeObject<'a> {
         let mut result: TypeObject<'a> = TypeObject::new(flags);
         self.typeCount += 1;
@@ -150,9 +156,94 @@ impl<'a> TypeChecker<'a> {
         result.object_props = Some(ObjectTypeProps { members: None, properties: None, callSignatures: None, constructSignatures: None, indexInfos: None, objectTypeWithoutAbstractConstructSignatures: None });
         result
     }
-    // 5381
+    // endregion: 5381
+
+    // region: 49169
+    fn getTypeOfNode(&self, node: &AstKind) -> &dyn Type {
+        if let Some(program) = node.as_program() {
+            if !isExternalModule(program) {
+                return self.errorType.as_type();
+            }
+        }
+
+        // if (node.flags & NodeFlags.InWithStatement) {
+        //     // We cannot answer semantic questions within a with block, do not proceed any further
+        //     return errorType;
+        // }
+
+        // const classDecl = tryGetClassImplementingOrExtendingExpressionWithTypeArguments(node);
+        // const classType = classDecl && getDeclaredTypeOfClassOrInterface(getSymbolOfDeclaration(classDecl.class));
+        // if (isPartOfTypeNode(node)) {
+        //     const typeFromTypeNode = getTypeFromTypeNode(node as TypeNode);
+        //     return classType ? getTypeWithThisArgument(typeFromTypeNode, classType.thisType) : typeFromTypeNode;
+        // }
+
+        // if let Some(expression) = as_expression(node) {
+        //     return getRegularTypeOfExpression(expression);
+        // }
+
+        // if (classType && !classDecl.isImplements) {
+        //     // A SyntaxKind.ExpressionWithTypeArguments is considered a type node, except when it occurs in the
+        //     // extends clause of a class. We handle that case here.
+        //     const baseType = firstOrUndefined(getBaseTypes(classType));
+        //     return baseType ? getTypeWithThisArgument(baseType, classType.thisType) : errorType;
+        // }
+
+        // if (isTypeDeclaration(node)) {
+        //     // In this case, we call getSymbolOfNode instead of getSymbolAtLocation because it is a declaration
+        //     const symbol = getSymbolOfDeclaration(node);
+        //     return getDeclaredTypeOfSymbol(symbol);
+        // }
+
+        // if (isTypeDeclarationName(node)) {
+        //     const symbol = getSymbolAtLocation(node);
+        //     return symbol ? getDeclaredTypeOfSymbol(symbol) : errorType;
+        // }
+
+        // if let Some(binding_identifier) = node.as_binding_identifier() {
+        //     return getTypeForVariableLikeDeclaration(node, /*includeOptionality*/ true, CheckMode.Normal) || self.errorType.as_type();
+        // }
+
+        // if (isDeclaration(node)) {
+        //     // In this case, we call getSymbolOfNode instead of getSymbolAtLocation because it is a declaration
+        //     const symbol = getSymbolOfDeclaration(node);
+        //     return symbol ? getTypeOfSymbol(symbol) : errorType;
+        // }
+
+        // if (isDeclarationNameOrImportPropertyName(node)) {
+        //     const symbol = getSymbolAtLocation(node);
+        //     if (symbol) {
+        //         return getTypeOfSymbol(symbol);
+        //     }
+        //     return errorType;
+        // }
+
+        // if (isBindingPattern(node)) {
+        //     return getTypeForVariableLikeDeclaration(node.parent, /*includeOptionality*/ true, CheckMode.Normal) || errorType;
+        // }
+
+        // if (isInRightSideOfImportOrExportAssignment(node as Identifier)) {
+        //     const symbol = getSymbolAtLocation(node);
+        //     if (symbol) {
+        //         const declaredType = getDeclaredTypeOfSymbol(symbol);
+        //         return !isErrorType(declaredType) ? declaredType : getTypeOfSymbol(symbol);
+        //     }
+        // }
+
+        // if (isMetaProperty(node.parent) && node.parent.keywordToken === node.kind) {
+        //     return checkMetaPropertyKeyword(node.parent);
+        // }
+
+        // if (isImportAttributes(node)) {
+        //     return getGlobalImportAttributesType(/*reportErrors*/ false);
+        // }
+
+        return self.errorType.as_type();
+    }
+    // endregion: 49247
 }
 
+#[allow(unused_variables)]
 impl<'a> TypeCheckerTrait for TypeChecker<'a> {
     fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol, node: &AstKind) -> &dyn Type { todo!() }
     fn getTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type { todo!() }
@@ -191,7 +282,7 @@ impl<'a> TypeCheckerTrait for TypeChecker<'a> {
     fn getExportSymbolOfSymbol(&self, symbol: Symbol) -> Symbol { todo!() }
     fn getPropertySymbolOfDestructuringAssignment(&self, location: Identifier) -> Option<Symbol> { todo!() }
     fn getTypeOfAssignmentPattern(&self, pattern: AssignmentPattern) -> &dyn Type { todo!() }
-    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type { todo!() }
+    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type { self.getTypeOfNode(&node) }
     fn getTypeFromTypeNode(&self, node: TypeNode) -> &dyn Type { todo!() }
     fn signatureToString(&self, signature: Signature, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String { todo!() }
     fn typeToString(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String { todo!() }

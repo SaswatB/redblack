@@ -4,10 +4,14 @@ use oxc::ast::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug)]
+use crate::flag_names_impl;
+
+use super::moduleNameResolver::PackageJsonInfoCache;
+
+#[derive(Debug, Clone)]
 pub struct IndexInfo;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BaseType;
 
 #[derive(Debug)]
@@ -22,7 +26,7 @@ pub struct TypePredicateNode;
 #[derive(Debug)]
 pub struct SignatureDeclaration;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypeParameter;
 
 #[derive(Debug)]
@@ -186,10 +190,19 @@ pub struct SymbolTracker;
 #[derive(Debug)]
 pub struct JSDocSignature;
 
-// 5010
+// region: 4291
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolutionMode {
+    ESNext,
+    CommonJS,
+    Undefined,
+}
+// endregion: 4291
+
+// region: 5010
 /** @internal */
-pub trait TypeCheckerHost: ModuleSpecifierResolutionHost {
-    fn getCompilerOptions(&self) -> CompilerOptions;
+pub trait TypeCheckerHost: ModuleSpecifierResolutionHost + std::fmt::Debug {
+    fn getCompilerOptions(&self) -> &CompilerOptions;
     fn getSourceFiles(&self) -> Vec<&SourceFile>;
     fn getSourceFile(&self, file_name: &str) -> Option<&SourceFile>;
     fn getProjectReferenceRedirect(&self, file_name: &str) -> Option<String>;
@@ -592,7 +605,7 @@ pub trait TypeCheckerTrait: std::fmt::Debug {
     /** @internal */
     fn getSymbolFlags(&self, symbol: Symbol) -> SymbolFlags;
 }
-// 5416
+// endregion: 5416
 
 #[derive(Debug)]
 pub enum SignatureKind {
@@ -600,7 +613,7 @@ pub enum SignatureKind {
     Construct,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct SignatureFlags(pub isize);
 
 impl SignatureFlags {
@@ -621,6 +634,34 @@ impl SignatureFlags {
     pub const PropagatingFlags: SignatureFlags = SignatureFlags(Self::HasRestParameter.0 | Self::HasLiteralTypes.0 | Self::Abstract.0 | Self::IsUntypedSignatureInJsFile.0 | Self::IsSignatureCandidateForOverloadFailure.0);
 
     pub const CallChainFlags: SignatureFlags = SignatureFlags(Self::IsInnerCallChain.0 | Self::IsOuterCallChain.0);
+
+    pub fn contains(&self, flags: SignatureFlags) -> bool { (self.0 & flags.0) == flags.0 }
+
+    fn flag_names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        flag_names_impl!(self, &mut names,
+            Self::HasRestParameter => "HasRestParameter",
+            Self::HasLiteralTypes => "HasLiteralTypes",
+            Self::Abstract => "Abstract",
+            Self::IsInnerCallChain => "IsInnerCallChain",
+            Self::IsOuterCallChain => "IsOuterCallChain",
+            Self::IsUntypedSignatureInJsFile => "IsUntypedSignatureInJsFile",
+            Self::IsNonInferrable => "IsNonInferrable",
+            Self::IsSignatureCandidateForOverloadFailure => "IsSignatureCandidateForOverloadFailure"
+        );
+        names
+    }
+}
+
+impl std::fmt::Debug for SignatureFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names = self.flag_names();
+        if names.is_empty() {
+            write!(f, "SignatureFlags(None)")
+        } else {
+            write!(f, "SignatureFlags({})", names.join(" | "))
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -672,7 +713,7 @@ pub struct OptionalCallSignatureCache {
 }
 
 // region: 5864
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct SymbolFlags(pub isize);
 
 impl SymbolFlags {
@@ -766,6 +807,52 @@ impl SymbolFlags {
     pub const LateBindingContainer: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Interface.0 | Self::TypeLiteral.0 | Self::ObjectLiteral.0 | Self::Function.0);
 
     pub fn contains(&self, flags: SymbolFlags) -> bool { (self.0 & flags.0) == flags.0 }
+
+    fn flag_names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        flag_names_impl!(self, &mut names,
+            Self::FunctionScopedVariable => "FunctionScopedVariable",
+            Self::BlockScopedVariable => "BlockScopedVariable",
+            Self::Property => "Property",
+            Self::EnumMember => "EnumMember",
+            Self::Function => "Function",
+            Self::Class => "Class",
+            Self::Interface => "Interface",
+            Self::ConstEnum => "ConstEnum",
+            Self::RegularEnum => "RegularEnum",
+            Self::ValueModule => "ValueModule",
+            Self::NamespaceModule => "NamespaceModule",
+            Self::TypeLiteral => "TypeLiteral",
+            Self::ObjectLiteral => "ObjectLiteral",
+            Self::Method => "Method",
+            Self::Constructor => "Constructor",
+            Self::GetAccessor => "GetAccessor",
+            Self::SetAccessor => "SetAccessor",
+            Self::Signature => "Signature",
+            Self::TypeParameter => "TypeParameter",
+            Self::TypeAlias => "TypeAlias",
+            Self::ExportValue => "ExportValue",
+            Self::Alias => "Alias",
+            Self::Prototype => "Prototype",
+            Self::ExportStar => "ExportStar",
+            Self::Optional => "Optional",
+            Self::Transient => "Transient",
+            Self::Assignment => "Assignment",
+            Self::ModuleExports => "ModuleExports"
+        );
+        names
+    }
+}
+
+impl std::fmt::Debug for SymbolFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names = self.flag_names();
+        if names.is_empty() {
+            write!(f, "SymbolFlags(None)")
+        } else {
+            write!(f, "SymbolFlags({})", names.join(" | "))
+        }
+    }
 }
 
 impl std::ops::BitOr for SymbolFlags {
@@ -814,7 +901,7 @@ pub struct Symbol {
 // endregion: 5976
 
 // region: 6246
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct TypeFlags(pub isize);
 
 impl TypeFlags {
@@ -920,6 +1007,55 @@ impl TypeFlags {
     pub fn contains(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) == flags.0 }
 
     pub fn intersects(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) != 0 }
+
+    fn flag_names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        flag_names_impl!(self, &mut names,
+            Self::Any => "Any",
+            Self::Unknown => "Unknown",
+            Self::String => "String",
+            Self::Number => "Number",
+            Self::Boolean => "Boolean",
+            Self::Enum => "Enum",
+            Self::BigInt => "BigInt",
+            Self::StringLiteral => "StringLiteral",
+            Self::NumberLiteral => "NumberLiteral",
+            Self::BooleanLiteral => "BooleanLiteral",
+            Self::EnumLiteral => "EnumLiteral",
+            Self::BigIntLiteral => "BigIntLiteral",
+            Self::ESSymbol => "ESSymbol",
+            Self::UniqueESSymbol => "UniqueESSymbol",
+            Self::Void => "Void",
+            Self::Undefined => "Undefined",
+            Self::Null => "Null",
+            Self::Never => "Never",
+            Self::TypeParameter => "TypeParameter",
+            Self::Object => "Object",
+            Self::Union => "Union",
+            Self::Intersection => "Intersection",
+            Self::Index => "Index",
+            Self::IndexedAccess => "IndexedAccess",
+            Self::Conditional => "Conditional",
+            Self::Substitution => "Substitution",
+            Self::NonPrimitive => "NonPrimitive",
+            Self::TemplateLiteral => "TemplateLiteral",
+            Self::StringMapping => "StringMapping",
+            Self::Reserved1 => "Reserved1",
+            Self::Reserved2 => "Reserved2",
+        );
+        names
+    }
+}
+
+impl std::fmt::Debug for TypeFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names = self.flag_names();
+        if names.is_empty() {
+            write!(f, "TypeFlags(None)")
+        } else {
+            write!(f, "TypeFlags({})", names.join(" | "))
+        }
+    }
 }
 
 impl std::ops::BitOr for TypeFlags {
@@ -996,6 +1132,8 @@ pub trait Type: std::fmt::Debug {
     fn isClassOrInterface(&self) -> bool;
     fn isClass(&self) -> bool;
     fn isIndexType(&self) -> bool;
+
+    fn as_type(&self) -> &dyn Type;
 }
 
 /** @internal */
@@ -1028,7 +1166,7 @@ pub trait FreshableIntrinsicType: FreshableType + IntrinsicType {}
 // endregion: 6392
 
 // region: 6423
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct ObjectFlags(pub isize);
 
 // Types included in TypeFlags.ObjectFlagsType have an objectFlags property. Some ObjectFlags
@@ -1083,6 +1221,61 @@ impl ObjectFlags {
     pub const IsNeverIntersectionComputed: ObjectFlags = ObjectFlags(1 << 24);
     pub const IsNeverIntersection: ObjectFlags = ObjectFlags(1 << 25);
     pub const IsConstrainedTypeVariable: ObjectFlags = ObjectFlags(1 << 26);
+
+    fn flag_names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        flag_names_impl!(self, &mut names,
+            Self::Class => "Class",
+            Self::Interface => "Interface",
+            Self::Reference => "Reference",
+            Self::Tuple => "Tuple",
+            Self::Anonymous => "Anonymous",
+            Self::Mapped => "Mapped",
+            Self::Instantiated => "Instantiated",
+            Self::ObjectLiteral => "ObjectLiteral",
+            Self::EvolvingArray => "EvolvingArray",
+            Self::ObjectLiteralPatternWithComputedProperties => "ObjectLiteralPatternWithComputedProperties",
+            Self::ReverseMapped => "ReverseMapped",
+            Self::JSXAttributes => "JSXAttributes",
+            Self::JSLiteral => "JSLiteral",
+            Self::FreshLiteral => "FreshLiteral",
+            Self::ArrayLiteral => "ArrayLiteral",
+            Self::PrimitiveUnion => "PrimitiveUnion",
+            Self::ContainsWideningType => "ContainsWideningType",
+            Self::ContainsObjectOrArrayLiteral => "ContainsObjectOrArrayLiteral",
+            Self::NonInferrableType => "NonInferrableType",
+            Self::CouldContainTypeVariablesComputed => "CouldContainTypeVariablesComputed",
+            Self::CouldContainTypeVariables => "CouldContainTypeVariables",
+            Self::ContainsSpread => "ContainsSpread",
+            Self::ObjectRestType => "ObjectRestType",
+            Self::InstantiationExpressionType => "InstantiationExpressionType",
+            Self::IsClassInstanceClone => "IsClassInstanceClone",
+            Self::IdenticalBaseTypeCalculated => "IdenticalBaseTypeCalculated",
+            Self::IdenticalBaseTypeExists => "IdenticalBaseTypeExists",
+            Self::SingleSignatureType => "SingleSignatureType",
+            Self::IsGenericTypeComputed => "IsGenericTypeComputed",
+            Self::IsGenericObjectType => "IsGenericObjectType",
+            Self::IsGenericIndexType => "IsGenericIndexType",
+            Self::ContainsIntersections => "ContainsIntersections",
+            Self::IsUnknownLikeUnionComputed => "IsUnknownLikeUnionComputed",
+            Self::IsUnknownLikeUnion => "IsUnknownLikeUnion",
+            Self::IsNeverIntersectionComputed => "IsNeverIntersectionComputed",
+            Self::IsNeverIntersection => "IsNeverIntersection",
+            Self::IsConstrainedTypeVariable => "IsConstrainedTypeVariable"
+        );
+        names
+    }
+}
+
+impl std::fmt::Debug for ObjectFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let names = self.flag_names();
+        if names.is_empty() {
+            write!(f, "ObjectFlags(None)")
+        } else {
+            write!(f, "ObjectFlags({})", names.join(" | "))
+        }
+    }
 }
 
 impl std::ops::BitOr for ObjectFlags {
@@ -1215,7 +1408,7 @@ pub fn diagnosticCategoryName(d: &DiagnosticCategory, lower_case: bool) -> Strin
     return if lower_case { name.to_lowercase() } else { name.to_string() };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub enum ModuleResolutionKind {
     Classic = 1,
     /**
@@ -1235,7 +1428,7 @@ pub enum ModuleResolutionKind {
     Bundler = 100,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModuleDetectionKind {
     /**
      * Files with imports, exports and/or import.meta are considered modules
@@ -1253,7 +1446,7 @@ pub enum ModuleDetectionKind {
 // endregion: 7275
 
 // region: 7317
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CompilerOptions {
     /** @internal */
     pub all: Option<bool>,
@@ -1313,14 +1506,14 @@ pub struct CompilerOptions {
     pub ignoreDeprecations: Option<String>,
     pub importHelpers: Option<bool>,
     /** @deprecated */
-    // pub importsNotUsedAsValues: Option<ImportsNotUsedAsValues>,
+    pub importsNotUsedAsValues: Option<ImportsNotUsedAsValues>,
     /** @internal */
     pub init: Option<bool>,
     pub inlineSourceMap: Option<bool>,
     pub inlineSources: Option<bool>,
     pub isolatedModules: Option<bool>,
     pub isolatedDeclarations: Option<bool>,
-    // pub jsx: Option<JsxEmit>,
+    pub jsx: Option<JsxEmit>,
     /** @deprecated */
     pub keyofStringsOnly: Option<bool>,
     pub lib: Option<Vec<String>>,
@@ -1335,11 +1528,11 @@ pub struct CompilerOptions {
     pub locale: Option<String>,
     pub mapRoot: Option<String>,
     pub maxNodeModuleJsDepth: Option<i32>,
-    // pub module: Option<ModuleKind>,
-    // pub moduleResolution: Option<ModuleResolutionKind>,
-    // pub moduleSuffixes: Option<Vec<String>>,
-    // pub moduleDetection: Option<ModuleDetectionKind>,
-    // pub newLine: Option<NewLineKind>,
+    pub module: Option<ModuleKind>,
+    pub moduleResolution: Option<ModuleResolutionKind>,
+    pub moduleSuffixes: Option<Vec<String>>,
+    pub moduleDetection: Option<ModuleDetectionKind>,
+    pub newLine: Option<NewLineKind>,
     pub noEmit: Option<bool>,
     /** @internal */
     pub noCheck: Option<bool>,
@@ -1369,7 +1562,7 @@ pub struct CompilerOptions {
     pub out: Option<String>,
     pub outDir: Option<String>,
     pub outFile: Option<String>,
-    // pub paths: Option<MapLike<Vec<String>>>,
+    pub paths: Option<HashMap<String, Vec<String>>>,
     /**
      * The directory of the config file that specified 'paths'. Used to resolve relative paths when 'baseUrl' is absent.
      *
@@ -1417,7 +1610,7 @@ pub struct CompilerOptions {
     pub suppressImplicitAnyIndexErrors: Option<bool>,
     /** @internal */
     pub suppressOutputPathCheck: Option<bool>,
-    // pub target: Option<ScriptTarget>,
+    pub target: Option<ScriptTarget>,
     pub traceResolution: Option<bool>,
     pub useUnknownInCatchVariables: Option<bool>,
     pub noUncheckedSideEffectImports: Option<bool>,
@@ -1439,18 +1632,171 @@ pub struct CompilerOptions {
 }
 // endregion: 7478
 
+// region: 7499
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+pub enum ModuleKind {
+    None = 0,
+    CommonJS = 1,
+    AMD = 2,
+    UMD = 3,
+    System = 4,
+
+    // NOTE: ES module kinds should be contiguous to more easily check whether a module kind is *any* ES module kind.
+    //       Non-ES module kinds should not come between ES2015 (the earliest ES module kind) and ESNext (the last ES
+    //       module kind).
+    ES2015 = 5,
+    ES2020 = 6,
+    ES2022 = 7,
+    ESNext = 99,
+
+    // Node16+ is an amalgam of commonjs (albeit updated) and es2022+, and represents a distinct module system from es2020/esnext
+    Node16 = 100,
+    NodeNext = 199,
+
+    // Emit as written
+    Preserve = 200,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsxEmit {
+    None = 0,
+    Preserve = 1,
+    React = 2,
+    ReactNative = 3,
+    ReactJSX = 4,
+    ReactJSXDev = 5,
+}
+
+/** @deprecated */
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportsNotUsedAsValues {
+    Remove,
+    Preserve,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewLineKind {
+    CarriageReturnLineFeed = 0,
+    LineFeed = 1,
+}
+
+#[derive(Debug, Clone)]
+pub struct LineAndCharacter {
+    /** 0-based. */
+    pub line: usize,
+    /*
+     * 0-based. This value denotes the character position in line and is different from the 'column' because of tab characters.
+     */
+    pub character: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptKind {
+    Unknown = 0,
+    JS = 1,
+    JSX = 2,
+    TS = 3,
+    TSX = 4,
+    External = 5,
+    JSON = 6,
+    /**
+     * Used on extensions that doesn't define the ScriptKind but the content defines it.
+     * Deferred extensions are going to be included in all project contexts.
+     */
+    Deferred = 7,
+}
+
+// NOTE: We must reevaluate the target for upcoming features when each successive TC39 edition is ratified in
+//       June of each year. This includes changes to `LanguageFeatureMinimumTarget`, `ScriptTarget`,
+//       transformers/esnext.ts, commandLineParser.ts, and the contents of each lib/esnext.*.d.ts file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ScriptTarget {
+    /** @deprecated */
+    ES3 = 0,
+    ES5 = 1,
+    ES2015 = 2,
+    ES2016 = 3,
+    ES2017 = 4,
+    ES2018 = 5,
+    ES2019 = 6,
+    ES2020 = 7,
+    ES2021 = 8,
+    ES2022 = 9,
+    ES2023 = 10,
+    ESNext = 99,
+    JSON = 100,
+    // Latest = 99, // Same as ESNext
+}
+
+// import LanguageVariant from oxc
+// endregion: 7591
+
+// region: 7876
+pub trait ModuleResolutionHost {
+    // TODO: GH#18217 Optional methods frequently used as non-optional
+
+    fn fileExists(&self, fileName: &str) -> bool;
+    // readFile function is used to read arbitrary text files on disk, i.e. when resolution procedure needs the content of 'package.json'
+    // to determine location of bundled typings for node module
+    fn readFile(&self, fileName: &str) -> Option<String>;
+    fn trace(&self, s: &str) -> Option<()>;
+    fn directoryExists(&self, directoryName: &str) -> Option<bool>;
+    /**
+     * Resolve a symbolic link.
+     * @see https://nodejs.org/api/fs.html#fs_fs_realpathsync_path_options
+     */
+    fn realpath(&self, path: &str) -> Option<String>;
+    fn getCurrentDirectory(&self) -> Option<String>;
+    fn getDirectories(&self, path: &str) -> Option<Vec<String>>;
+    fn useCaseSensitiveFileNames(&self) -> Option<bool>;
+}
+// endregion: 7893
+
+// region: 7961
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Extension {
+    Ts,
+    Tsx,
+    Dts,
+    Js,
+    Jsx,
+    Json,
+    TsBuildInfo,
+    Mjs,
+    Mts,
+    Dmts,
+    Cjs,
+    Cts,
+    Dcts,
+}
+impl Extension {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Extension::Ts => ".ts",
+            Extension::Tsx => ".tsx",
+            Extension::Dts => ".d.ts",
+            Extension::Js => ".js",
+            Extension::Jsx => ".jsx",
+            Extension::Json => ".json",
+            Extension::TsBuildInfo => ".tsbuildinfo",
+            Extension::Mjs => ".mjs",
+            Extension::Mts => ".mts",
+            Extension::Dmts => ".d.mts",
+            Extension::Cjs => ".cjs",
+            Extension::Cts => ".cts",
+            Extension::Dcts => ".d.cts",
+        }
+    }
+}
+// endregion: 7976
+
 // region: 9840
 /** @internal */
-pub trait ModuleSpecifierResolutionHost {
-    fn useCaseSensitiveFileNames(&self) -> Option<bool>;
-    fn fileExists(&self, path: &str) -> bool;
-    fn getCurrentDirectory(&self) -> String;
-    fn directoryExists(&self, path: &str) -> Option<bool>;
-    fn readFile(&self, path: &str) -> Option<String>;
-    fn realpath(&self, path: &str) -> Option<String>;
+pub trait ModuleSpecifierResolutionHost: ModuleResolutionHost {
     // fn getSymlinkCache(&self) -> Option<SymlinkCache>;
     // fn getModuleSpecifierCache(&self) -> Option<ModuleSpecifierCache>;
-    // fn getPackageJsonInfoCache(&self) -> Option<PackageJsonInfoCache>;
+    fn getPackageJsonInfoCache(&self) -> Option<&dyn PackageJsonInfoCache>;
     fn getGlobalTypingsCacheLocation(&self) -> Option<String>;
     fn getNearestAncestorDirectoryWithPackageJson(&self, file_name: &str, root_dir: Option<&str>) -> Option<String>;
 
@@ -1463,6 +1809,5 @@ pub trait ModuleSpecifierResolutionHost {
     // fn getModeForResolutionAtIndex(&self, file: &SourceFile, index: usize) -> ResolutionMode;
 
     // fn getModuleResolutionCache(&self) -> Option<ModuleResolutionCache>;
-    fn trace(&self, s: &str) -> Option<()>;
 }
 // endregion: 9864
