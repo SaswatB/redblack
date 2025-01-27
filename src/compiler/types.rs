@@ -637,7 +637,7 @@ impl SignatureFlags {
 
     pub fn contains(&self, flags: SignatureFlags) -> bool { (self.0 & flags.0) == flags.0 }
 
-    fn flag_names(&self) -> Vec<&'static str> {
+    fn flag_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         flag_names_impl!(self, &mut names,
             Self::HasRestParameter => "HasRestParameter",
@@ -808,7 +808,7 @@ impl SymbolFlags {
 
     pub fn contains(&self, flags: SymbolFlags) -> bool { (self.0 & flags.0) == flags.0 }
 
-    fn flag_names(&self) -> Vec<&'static str> {
+    fn flag_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         flag_names_impl!(self, &mut names,
             Self::FunctionScopedVariable => "FunctionScopedVariable",
@@ -1008,7 +1008,7 @@ impl TypeFlags {
 
     pub fn intersects(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) != 0 }
 
-    fn flag_names(&self) -> Vec<&'static str> {
+    fn flag_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         flag_names_impl!(self, &mut names,
             Self::Any => "Any",
@@ -1222,7 +1222,9 @@ impl ObjectFlags {
     pub const IsNeverIntersection: ObjectFlags = ObjectFlags(1 << 25);
     pub const IsConstrainedTypeVariable: ObjectFlags = ObjectFlags(1 << 26);
 
-    fn flag_names(&self) -> Vec<&'static str> {
+    pub fn contains(&self, other: ObjectFlags) -> bool { (self.0 & other.0) == other.0 }
+
+    fn flag_names(&self) -> Vec<String> {
         let mut names = Vec::new();
         flag_names_impl!(self, &mut names,
             Self::Class => "Class",
@@ -1286,10 +1288,6 @@ impl std::ops::BitOr for ObjectFlags {
 impl std::ops::BitAnd for ObjectFlags {
     type Output = Self;
     fn bitand(self, rhs: Self) -> Self { ObjectFlags(self.0 & rhs.0) }
-}
-
-impl ObjectFlags {
-    pub fn contains(&self, other: ObjectFlags) -> bool { (self.0 & other.0) == other.0 }
 }
 
 pub trait ObjectFlagsTrait: Type {
