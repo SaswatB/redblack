@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-oxc = { version = "*", features = ["full"] }
+oxc = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc", features = ["full"] }
 serde = "*"
 serde_json = "*"
 weak-table = "*"
