@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 oxc = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc", features = ["full"] }
+oxc_traverse = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc_traverse" }
 serde = "*"
 serde_json = "*"
 weak-table = "*"

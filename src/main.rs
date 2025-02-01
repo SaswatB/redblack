@@ -11,7 +11,25 @@ use compiler::parser::createSourceFile;
 use compiler::rb_extra::{cleanup_PROGRAM_INFO_MAP, RB_CTX};
 use compiler::rb_host::RbTypeCheckerHost;
 use compiler::types::{CompilerOptions, TypeCheckerTrait};
-use oxc::ast::AstKind;
+use oxc::ast::ast::Program;
+use oxc::ast::{ast::Statement, AstKind};
+
+use std::collections::VecDeque;
+
+fn fill_parents(program: &mut Box<Program>) {
+    let mut queue = VecDeque::<AstKind>::new();
+    queue.push_back(AstKind::Program(program.as_ref()));
+
+    while let Some(node) = queue.pop_front() {
+        println!("fill_parents - Node: {:?}", node);
+        println!();
+        let children = node.get_children();
+        for mut child in children {
+            child.set_parent(node);
+            queue.push_back(child);
+        }
+    }
+}
 
 fn main() {
     // let diag = Diagnostics::Unterminated_string_literal();
@@ -25,7 +43,7 @@ fn main() {
     let type_checker_host = Arc::new(RbTypeCheckerHost::new(cwd, CompilerOptions::default()));
     RB_CTX.set_type_checker_host(type_checker_host.clone());
 
-    let name = "src/compiler/types.ts";
+    let name = "src/compiler/test.ts";
     let path = Path::new(&name);
     let source_text = fs::read_to_string(path).unwrap();
     // let source_type = SourceType::from_path(path).unwrap();
@@ -35,15 +53,23 @@ fn main() {
     // let program = ret.program;
     // program.set_filepath(path.to_path_buf());
     // program.set_package_json_scope(None); // todo
-    let program = createSourceFile(name, &source_text);
+    let mut program = Box::new(createSourceFile(name, &source_text));
     let type_checker = TypeChecker::new(type_checker_host);
+    fill_parents(&mut program);
 
-    let tc = type_checker.borrow();
-    let type_ = tc.getTypeAtLocation(AstKind::Program(&program));
-    println!("Type: {:?}", type_);
+    println!("AST:");
+    println!("{program:#?}");
 
-    // println!("AST:");
-    // println!("{program:#?}");
+    // if let Statement::VariableDeclaration(node) = &program.body[0] {
+    //     println!("Node: {:?}", node);
+    //     println!("Parent: {:?}", node.parent);
+    //     let id = node.declarations[0].id.kind.get_binding_identifier().unwrap();
+    //     println!("Id: {:?}", id);
+
+    //     let tc = type_checker.borrow();
+    //     let type_ = tc.getTypeAtLocation(AstKind::BindingIdentifier(&id));
+    //     println!("Type: {:?}", type_);
+    // }
 
     // if ret.errors.is_empty() {
     //     println!("Parsed Successfully.");
