@@ -15,21 +15,16 @@ use compiler::types::{CompilerOptions, TypeCheckerTrait};
 use oxc_ast::ast::{Program, Statement};
 use oxc_ast::{AstKind, GetChildren};
 
-use std::collections::VecDeque;
-
 fn fill_parents(program: &mut Box<Program>) {
-    let mut queue = VecDeque::<AstKind>::new();
-    queue.push_back(AstKind::Program(program.as_ref()));
-
-    while let Some(node) = queue.pop_front() {
-        println!("fill_parents - Node: {:?}", node);
-        println!();
+    fn dfs(node: AstKind) {
         let children = node.get_children();
         for child in children {
             child.set_parent(Some(unsafe { mem::transmute(node) }));
-            queue.push_back(child);
+            dfs(child);
         }
     }
+
+    dfs(AstKind::Program(program.as_ref()));
 }
 
 fn main() {
