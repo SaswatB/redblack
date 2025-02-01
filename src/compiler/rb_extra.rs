@@ -1,4 +1,6 @@
-use oxc::ast::ast::Program;
+use oxc_ast::ast::Program;
+use oxc_ast::AstKind;
+use oxc_ast::GetChildren;
 // use std::cell::RefCell;
 // use std::collections::HashMap;
 use std::path::PathBuf;
@@ -96,6 +98,15 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::thread_local;
 
+// macro_rules! replace_lifetime {
+//     (Option<AstKind<'_>>, $lifetime:lifetime) => {
+//         Option<AstKind<$lifetime>>
+//     };
+//     ($type:ty, $lifetime:lifetime) => {
+//         $type
+//     };
+// }
+
 /**
  * Add extra properties to the given struct, with getters and setters.
  */
@@ -133,16 +144,16 @@ macro_rules! entity_properties {
             impl<'a> [<$entity Ext>] for $entity<'a> {
                 $(
                     fn [<set_ $name>](&self, value: $type) {
-                        let id = self.id;
+                        let ptr = self.get_node_id();
                         [<$entity:upper _INFO_MAP>].with(|map| {
                             let mut map = map.borrow_mut();
-                            map.entry(id).or_insert_with(|| [<$entity Info>]::default()).$name = value;
+                            map.entry(ptr).or_insert_with(|| [<$entity Info>]::default()).$name = value;
                         });
                     }
 
                     fn $name(&self) -> $type {
-                        let id = self.id;
-                        [<$entity:upper _INFO_MAP>].with(|map| map.borrow().get(&id).map(|info| info.$name.clone()).unwrap_or($default))
+                        let ptr = self.get_node_id();
+                        [<$entity:upper _INFO_MAP>].with(|map| map.borrow().get(&ptr).map(|info| info.$name.clone()).unwrap_or($default))
                     }
                 )*
             }
@@ -160,6 +171,10 @@ entity_properties!(Program, {
     package_json_scope: Option<PackageJsonInfo> = None,
     external_module_indicator: bool = false,
     implied_node_format: ResolutionMode = ResolutionMode::Undefined,
+});
+
+entity_properties!(AstKind, {
+    parent: Option<AstKind<'static>> = None,
 });
 
 macro_rules! thread_local_store {

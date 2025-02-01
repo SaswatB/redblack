@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-oxc = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc", features = ["full"] }
-oxc_traverse = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc_traverse" }
+# oxc = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc", features = ["full"] }
+oxc_ast = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc_ast" }
+oxc_parser = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc_parser" }
+oxc_allocator = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc_allocator" }
+oxc_span = { path = "/Users/saswat/Documents/clones/oxc/crates/oxc_span" }
 serde = "*"
 serde_json = "*"
+serde_derive = "*"
 weak-table = "*"
 once_cell = "*"
 paste = "*"

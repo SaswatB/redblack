@@ -4,7 +4,7 @@ use crate::compiler::moduleNameResolver::*;
 use crate::compiler::path::*;
 use crate::compiler::types::*;
 use crate::compiler::utilities::*;
-use oxc::ast::ast::Program;
+use oxc_ast::ast::Program;
 
 // region: 1372
 /**

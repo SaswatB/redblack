@@ -1,15 +1,12 @@
+use oxc_allocator::Allocator;
+use oxc_ast::{
+    ast::{MetaProperty, Program, Statement},
+    match_module_declaration, Visit,
+};
+use oxc_parser::{ParseOptions, Parser};
+use oxc_span::SourceType;
 use std::path::Path;
 use std::sync::LazyLock;
-
-use oxc::{
-    allocator::Allocator,
-    ast::{
-        ast::{MetaProperty, Program, Statement},
-        match_module_declaration, Visit,
-    },
-    parser::{ParseOptions, Parser},
-    span::SourceType,
-};
 
 use super::{
     moduleNameResolver::PackageJsonInfo,

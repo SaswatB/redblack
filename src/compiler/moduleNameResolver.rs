@@ -1,6 +1,6 @@
 use super::path::{combinePaths, forEachAncestorDirectory};
 use crate::compiler::types::*;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // region: 312

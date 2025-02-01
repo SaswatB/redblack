@@ -1,4 +1,4 @@
-use oxc::ast::{
+use oxc_ast::{
     ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, TaggedTemplateExpression},
     AstKind,
 };

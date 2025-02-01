@@ -1,7 +1,7 @@
 use crate::compiler::parser::*;
 use crate::compiler::types::*;
 use crate::flag_names_impl;
-use oxc::ast::{
+use oxc_ast::{
     ast::{Argument, Expression, ObjectExpression},
     AstKind,
 };

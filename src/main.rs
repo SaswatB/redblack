@@ -3,16 +3,17 @@
 #[allow(non_upper_case_globals)]
 mod compiler;
 mod services;
+use std::mem;
 use std::sync::Arc;
 use std::{fs, path::Path};
 
 use compiler::checker::TypeChecker;
 use compiler::parser::createSourceFile;
-use compiler::rb_extra::{cleanup_PROGRAM_INFO_MAP, RB_CTX};
+use compiler::rb_extra::{cleanup_PROGRAM_INFO_MAP, AstKindExt, RB_CTX};
 use compiler::rb_host::RbTypeCheckerHost;
 use compiler::types::{CompilerOptions, TypeCheckerTrait};
-use oxc::ast::ast::Program;
-use oxc::ast::{ast::Statement, AstKind};
+use oxc_ast::ast::{Program, Statement};
+use oxc_ast::{AstKind, GetChildren};
 
 use std::collections::VecDeque;
 
@@ -24,8 +25,8 @@ fn fill_parents(program: &mut Box<Program>) {
         println!("fill_parents - Node: {:?}", node);
         println!();
         let children = node.get_children();
-        for mut child in children {
-            child.set_parent(node);
+        for child in children {
+            child.set_parent(Some(unsafe { mem::transmute(node) }));
             queue.push_back(child);
         }
     }
@@ -60,16 +61,16 @@ fn main() {
     println!("AST:");
     println!("{program:#?}");
 
-    // if let Statement::VariableDeclaration(node) = &program.body[0] {
-    //     println!("Node: {:?}", node);
-    //     println!("Parent: {:?}", node.parent);
-    //     let id = node.declarations[0].id.kind.get_binding_identifier().unwrap();
-    //     println!("Id: {:?}", id);
+    if let Statement::VariableDeclaration(node) = &program.body[0] {
+        println!("Node: {:?}", node);
+        println!("Parent: {:?}", node.to_ast_kind().parent());
+        let id = node.declarations[0].id.kind.get_binding_identifier().unwrap();
+        println!("Id: {:?}", id);
 
-    //     let tc = type_checker.borrow();
-    //     let type_ = tc.getTypeAtLocation(AstKind::BindingIdentifier(&id));
-    //     println!("Type: {:?}", type_);
-    // }
+        let tc = type_checker.borrow();
+        let type_ = tc.getTypeAtLocation(id.to_ast_kind());
+        println!("Type: {:?}", type_);
+    }
 
     // if ret.errors.is_empty() {
     //     println!("Parsed Successfully.");

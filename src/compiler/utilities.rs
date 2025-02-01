@@ -4,7 +4,7 @@ use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
 use crate::compiler::types::*;
-use oxc::ast::{ast::Program, AstKind, Visit};
+use oxc_ast::{ast::Program, AstKind, Visit};
 
 use super::rb_extra::ProgramExt;
 
