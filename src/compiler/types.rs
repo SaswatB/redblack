@@ -4,7 +4,7 @@ use oxc_ast::{
 };
 use std::collections::HashMap;
 
-use crate::flag_names_impl;
+use crate::{define_flags, define_string_enum, flag_names_impl};
 
 use super::moduleNameResolver::PackageJsonInfoCache;
 
@@ -135,9 +135,6 @@ pub struct BigIntLiteralType;
 
 #[derive(Debug)]
 pub struct PseudoBigInt;
-
-#[derive(Debug, Clone)]
-pub struct SymbolTable;
 
 #[derive(Debug)]
 pub struct TransientSymbol;
@@ -613,56 +610,23 @@ pub enum SignatureKind {
     Construct,
 }
 
-#[derive(Clone, Copy)]
-pub struct SignatureFlags(pub isize);
-
-impl SignatureFlags {
-    pub const None: SignatureFlags = SignatureFlags(0);
-
+define_flags!(SignatureFlags {
     // Propagating flags
-    pub const HasRestParameter: SignatureFlags = SignatureFlags(1 << 0); // Indicates last parameter is rest parameter
-    pub const HasLiteralTypes: SignatureFlags = SignatureFlags(1 << 1); // Indicates signature is specialized
-    pub const Abstract: SignatureFlags = SignatureFlags(1 << 2); // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
+    HasRestParameter = 1 << 0,  // Indicates last parameter is rest parameter
+    HasLiteralTypes = 1 << 1,  // Indicates signature is specialized
+    Abstract = 1 << 2,  // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
 
     // Non-propagating flags
-    pub const IsInnerCallChain: SignatureFlags = SignatureFlags(1 << 3); // Indicates signature comes from a CallChain nested in an outer OptionalChain
-    pub const IsOuterCallChain: SignatureFlags = SignatureFlags(1 << 4); // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
-    pub const IsUntypedSignatureInJsFile: SignatureFlags = SignatureFlags(1 << 5); // Indicates signature is from a js file and has no types
-    pub const IsNonInferrable: SignatureFlags = SignatureFlags(1 << 6); // Indicates signature comes from a non-inferrable type
-    pub const IsSignatureCandidateForOverloadFailure: SignatureFlags = SignatureFlags(1 << 7);
+    IsInnerCallChain = 1 << 3,  // Indicates signature comes from a CallChain nested in an outer OptionalChain
+    IsOuterCallChain = 1 << 4,  // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
+    IsUntypedSignatureInJsFile = 1 << 5,  // Indicates signature is from a js file and has no types
+    IsNonInferrable = 1 << 6,  // Indicates signature comes from a non-inferrable type
+    IsSignatureCandidateForOverloadFailure = 1 << 7,
 
-    pub const PropagatingFlags: SignatureFlags = SignatureFlags(Self::HasRestParameter.0 | Self::HasLiteralTypes.0 | Self::Abstract.0 | Self::IsUntypedSignatureInJsFile.0 | Self::IsSignatureCandidateForOverloadFailure.0);
+    PropagatingFlags = Self::HasRestParameter.0 | Self::HasLiteralTypes.0 | Self::Abstract.0 | Self::IsUntypedSignatureInJsFile.0 | Self::IsSignatureCandidateForOverloadFailure.0,
 
-    pub const CallChainFlags: SignatureFlags = SignatureFlags(Self::IsInnerCallChain.0 | Self::IsOuterCallChain.0);
-
-    pub fn contains(&self, flags: SignatureFlags) -> bool { (self.0 & flags.0) == flags.0 }
-
-    fn flag_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        flag_names_impl!(self, &mut names,
-            Self::HasRestParameter => "HasRestParameter",
-            Self::HasLiteralTypes => "HasLiteralTypes",
-            Self::Abstract => "Abstract",
-            Self::IsInnerCallChain => "IsInnerCallChain",
-            Self::IsOuterCallChain => "IsOuterCallChain",
-            Self::IsUntypedSignatureInJsFile => "IsUntypedSignatureInJsFile",
-            Self::IsNonInferrable => "IsNonInferrable",
-            Self::IsSignatureCandidateForOverloadFailure => "IsSignatureCandidateForOverloadFailure"
-        );
-        names
-    }
-}
-
-impl std::fmt::Debug for SignatureFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let names = self.flag_names();
-        if names.is_empty() {
-            write!(f, "SignatureFlags(None)")
-        } else {
-            write!(f, "SignatureFlags({})", names.join(" | "))
-        }
-    }
-}
+    CallChainFlags = Self::IsInnerCallChain.0 | Self::IsOuterCallChain.0,
+});
 
 #[derive(Debug)]
 pub struct Signature {
@@ -713,159 +677,97 @@ pub struct OptionalCallSignatureCache {
 }
 
 // region: 5864
-#[derive(Clone, Copy)]
-pub struct SymbolFlags(pub isize);
+define_flags!(SymbolFlags {
+    None = 0,
+    FunctionScopedVariable= 1 << 0, // Variable (var) or parameter
+    BlockScopedVariable = 1 << 1, // A block-scoped variable (let or const)
+    Property = 1 << 2, // Property or enum member
+    EnumMember = 1 << 3, // Enum member
+    Function = 1 << 4, // Function
+    Class = 1 << 5, // Class
+    Interface = 1 << 6, // Interface
+    ConstEnum = 1 << 7, // Const enum
+    RegularEnum = 1 << 8, // Enum
+    ValueModule = 1 << 9, // Instantiated module
+    NamespaceModule = 1 << 10, // Uninstantiated module
+    TypeLiteral = 1 << 11, // Type Literal or mapped type
+    ObjectLiteral = 1 << 12, // Object Literal
+    Method = 1 << 13, // Method
+    Constructor = 1 << 14, // Constructor
+    GetAccessor = 1 << 15, // Get accessor
+    SetAccessor = 1 << 16, // Set accessor
+    Signature = 1 << 17, // Call, construct, or index signature
+    TypeParameter = 1 << 18, // Type parameter
+    TypeAlias = 1 << 19, // Type alias
+    ExportValue = 1 << 20, // Exported value marker (see comment in declareModuleMember in binder)
+    Alias = 1 << 21, // An alias for another symbol (see comment in isAliasSymbolDeclaration in checker)
+    Prototype = 1 << 22, // Prototype property (no source representation)
+    ExportStar = 1 << 23, // Export * declaration
+    Optional = 1 << 24, // Optional property
+    Transient = 1 << 25, // Transient symbol (created during type check)
+    Assignment = 1 << 26, // Assignment treated as declaration (eg `this.prop = 1`)
+    ModuleExports = 1 << 27, // Symbol for CommonJS `module` of `module.exports`
+    All = u64::MAX,
 
-impl SymbolFlags {
-    pub const None: SymbolFlags = SymbolFlags(0);
-    pub const FunctionScopedVariable: SymbolFlags = SymbolFlags(1 << 0); // Variable (var) or parameter
-    pub const BlockScopedVariable: SymbolFlags = SymbolFlags(1 << 1); // A block-scoped variable (let or const)
-    pub const Property: SymbolFlags = SymbolFlags(1 << 2); // Property or enum member
-    pub const EnumMember: SymbolFlags = SymbolFlags(1 << 3); // Enum member
-    pub const Function: SymbolFlags = SymbolFlags(1 << 4); // Function
-    pub const Class: SymbolFlags = SymbolFlags(1 << 5); // Class
-    pub const Interface: SymbolFlags = SymbolFlags(1 << 6); // Interface
-    pub const ConstEnum: SymbolFlags = SymbolFlags(1 << 7); // Const enum
-    pub const RegularEnum: SymbolFlags = SymbolFlags(1 << 8); // Enum
-    pub const ValueModule: SymbolFlags = SymbolFlags(1 << 9); // Instantiated module
-    pub const NamespaceModule: SymbolFlags = SymbolFlags(1 << 10); // Uninstantiated module
-    pub const TypeLiteral: SymbolFlags = SymbolFlags(1 << 11); // Type Literal or mapped type
-    pub const ObjectLiteral: SymbolFlags = SymbolFlags(1 << 12); // Object Literal
-    pub const Method: SymbolFlags = SymbolFlags(1 << 13); // Method
-    pub const Constructor: SymbolFlags = SymbolFlags(1 << 14); // Constructor
-    pub const GetAccessor: SymbolFlags = SymbolFlags(1 << 15); // Get accessor
-    pub const SetAccessor: SymbolFlags = SymbolFlags(1 << 16); // Set accessor
-    pub const Signature: SymbolFlags = SymbolFlags(1 << 17); // Call, construct, or index signature
-    pub const TypeParameter: SymbolFlags = SymbolFlags(1 << 18); // Type parameter
-    pub const TypeAlias: SymbolFlags = SymbolFlags(1 << 19); // Type alias
-    pub const ExportValue: SymbolFlags = SymbolFlags(1 << 20); // Exported value marker (see comment in declareModuleMember in binder)
-    pub const Alias: SymbolFlags = SymbolFlags(1 << 21); // An alias for another symbol (see comment in isAliasSymbolDeclaration in checker)
-    pub const Prototype: SymbolFlags = SymbolFlags(1 << 22); // Prototype property (no source representation)
-    pub const ExportStar: SymbolFlags = SymbolFlags(1 << 23); // Export * declaration
-    pub const Optional: SymbolFlags = SymbolFlags(1 << 24); // Optional property
-    pub const Transient: SymbolFlags = SymbolFlags(1 << 25); // Transient symbol (created during type check)
-    pub const Assignment: SymbolFlags = SymbolFlags(1 << 26); // Assignment treated as declaration (eg `this.prop = 1`)
-    pub const ModuleExports: SymbolFlags = SymbolFlags(1 << 27); // Symbol for CommonJS `module` of `module.exports`
-    pub const All: SymbolFlags = SymbolFlags(-1);
-
-    pub const Enum: SymbolFlags = SymbolFlags(Self::RegularEnum.0 | Self::ConstEnum.0);
-    pub const Variable: SymbolFlags = SymbolFlags(Self::FunctionScopedVariable.0 | Self::BlockScopedVariable.0);
-    pub const Value: SymbolFlags = SymbolFlags(Self::Variable.0 | Self::Property.0 | Self::EnumMember.0 | Self::ObjectLiteral.0 | Self::Function.0 | Self::Class.0 | Self::Enum.0 | Self::ValueModule.0 | Self::Method.0 | Self::GetAccessor.0 | Self::SetAccessor.0);
-    pub const Type: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Interface.0 | Self::Enum.0 | Self::EnumMember.0 | Self::TypeLiteral.0 | Self::TypeParameter.0 | Self::TypeAlias.0);
-    pub const Namespace: SymbolFlags = SymbolFlags(Self::ValueModule.0 | Self::NamespaceModule.0 | Self::Enum.0);
-    pub const Module: SymbolFlags = SymbolFlags(Self::ValueModule.0 | Self::NamespaceModule.0);
-    pub const Accessor: SymbolFlags = SymbolFlags(Self::GetAccessor.0 | Self::SetAccessor.0);
+    Enum = Self::RegularEnum.0 | Self::ConstEnum.0,
+    Variable = Self::FunctionScopedVariable.0 | Self::BlockScopedVariable.0,
+    Value = Self::Variable.0 | Self::Property.0 | Self::EnumMember.0 | Self::ObjectLiteral.0 | Self::Function.0 | Self::Class.0 | Self::Enum.0 | Self::ValueModule.0 | Self::Method.0 | Self::GetAccessor.0 | Self::SetAccessor.0,
+    Type = Self::Class.0 | Self::Interface.0 | Self::Enum.0 | Self::EnumMember.0 | Self::TypeLiteral.0 | Self::TypeParameter.0 | Self::TypeAlias.0,
+    Namespace = Self::ValueModule.0 | Self::NamespaceModule.0 | Self::Enum.0,
+    Module = Self::ValueModule.0 | Self::NamespaceModule.0,
+    Accessor = Self::GetAccessor.0 | Self::SetAccessor.0,
 
     // Variables can be redeclared, but can not redeclare a block-scoped declaration with the
     // same name, or any other value that is not a variable, e.g. ValueModule or Class
-    pub const FunctionScopedVariableExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::FunctionScopedVariable.0);
+    FunctionScopedVariableExcludes = Self::Value.0 & !Self::FunctionScopedVariable.0,
 
     // Block-scoped declarations are not allowed to be re-declared
     // they can not merge with anything in the value space
-    pub const BlockScopedVariableExcludes: SymbolFlags = Self::Value;
+    BlockScopedVariableExcludes = Self::Value.0,
 
-    pub const ParameterExcludes: SymbolFlags = Self::Value;
-    pub const PropertyExcludes: SymbolFlags = Self::None;
-    pub const EnumMemberExcludes: SymbolFlags = SymbolFlags(Self::Value.0 | Self::Type.0);
-    pub const FunctionExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !(Self::Function.0 | Self::ValueModule.0 | Self::Class.0));
-    pub const ClassExcludes: SymbolFlags = SymbolFlags((Self::Value.0 | Self::Type.0) & !(Self::ValueModule.0 | Self::Interface.0 | Self::Function.0)); // class-interface mergability done in checker.ts
-    pub const InterfaceExcludes: SymbolFlags = SymbolFlags(Self::Type.0 & !(Self::Interface.0 | Self::Class.0));
-    pub const RegularEnumExcludes: SymbolFlags = SymbolFlags((Self::Value.0 | Self::Type.0) & !(Self::RegularEnum.0 | Self::ValueModule.0)); // regular enums merge only with regular enums and modules
-    pub const ConstEnumExcludes: SymbolFlags = SymbolFlags((Self::Value.0 | Self::Type.0) & !Self::ConstEnum.0); // const enums merge only with const enums
-    pub const ValueModuleExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !(Self::Function.0 | Self::Class.0 | Self::RegularEnum.0 | Self::ValueModule.0));
-    pub const NamespaceModuleExcludes: SymbolFlags = Self::None;
-    pub const MethodExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::Method.0);
-    pub const GetAccessorExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::SetAccessor.0);
-    pub const SetAccessorExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::GetAccessor.0);
-    pub const AccessorExcludes: SymbolFlags = SymbolFlags(Self::Value.0 & !Self::Accessor.0);
-    pub const TypeParameterExcludes: SymbolFlags = SymbolFlags(Self::Type.0 & !Self::TypeParameter.0);
-    pub const TypeAliasExcludes: SymbolFlags = Self::Type;
-    pub const AliasExcludes: SymbolFlags = Self::Alias;
+    ParameterExcludes = Self::Value.0,
+    PropertyExcludes = Self::None.0,
+    EnumMemberExcludes = Self::Value.0 | Self::Type.0,
+    FunctionExcludes = Self::Value.0 & !(Self::Function.0 | Self::ValueModule.0 | Self::Class.0),
+    ClassExcludes = (Self::Value.0 | Self::Type.0) & !(Self::ValueModule.0 | Self::Interface.0 | Self::Function.0), // class-interface mergability done in checker.ts
+    InterfaceExcludes = Self::Type.0 & !(Self::Interface.0 | Self::Class.0),
+    RegularEnumExcludes = (Self::Value.0 | Self::Type.0) & !(Self::RegularEnum.0 | Self::ValueModule.0), // regular enums merge only with regular enums and modules
+    ConstEnumExcludes = (Self::Value.0 | Self::Type.0) & !Self::ConstEnum.0, // const enums merge only with const enums
+    ValueModuleExcludes = Self::Value.0 & !(Self::Function.0 | Self::Class.0 | Self::RegularEnum.0 | Self::ValueModule.0),
+    NamespaceModuleExcludes = Self::None.0,
+    MethodExcludes = Self::Value.0 & !Self::Method.0,
+    GetAccessorExcludes = Self::Value.0 & !Self::SetAccessor.0,
+    SetAccessorExcludes = Self::Value.0 & !Self::GetAccessor.0,
+    AccessorExcludes = Self::Value.0 & !Self::Accessor.0,
+    TypeParameterExcludes = Self::Type.0 & !Self::TypeParameter.0,
+    TypeAliasExcludes = Self::Type.0,
+    AliasExcludes = Self::Alias.0,
 
-    pub const ModuleMember: SymbolFlags = SymbolFlags(Self::Variable.0 | Self::Function.0 | Self::Class.0 | Self::Interface.0 | Self::Enum.0 | Self::Module.0 | Self::TypeAlias.0 | Self::Alias.0);
+    ModuleMember = Self::Variable.0 | Self::Function.0 | Self::Class.0 | Self::Interface.0 | Self::Enum.0 | Self::Module.0 | Self::TypeAlias.0 | Self::Alias.0,
 
-    pub const ExportHasLocal: SymbolFlags = SymbolFlags(Self::Function.0 | Self::Class.0 | Self::Enum.0 | Self::ValueModule.0);
+    ExportHasLocal = Self::Function.0 | Self::Class.0 | Self::Enum.0 | Self::ValueModule.0,
 
-    pub const BlockScoped: SymbolFlags = SymbolFlags(Self::BlockScopedVariable.0 | Self::Class.0 | Self::Enum.0);
+    BlockScoped = Self::BlockScopedVariable.0 | Self::Class.0 | Self::Enum.0,
 
-    pub const PropertyOrAccessor: SymbolFlags = SymbolFlags(Self::Property.0 | Self::Accessor.0);
+    PropertyOrAccessor = Self::Property.0 | Self::Accessor.0,
 
-    pub const ClassMember: SymbolFlags = SymbolFlags(Self::Method.0 | Self::Accessor.0 | Self::Property.0);
+    ClassMember = Self::Method.0 | Self::Accessor.0 | Self::Property.0,
 
-    /** @internal */
-    pub const ExportSupportsDefaultModifier: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Function.0 | Self::Interface.0);
+    // @internal
+    ExportSupportsDefaultModifier = Self::Class.0 | Self::Function.0 | Self::Interface.0,
 
-    /** @internal */
-    pub const ExportDoesNotSupportDefaultModifier: SymbolFlags = SymbolFlags(!Self::ExportSupportsDefaultModifier.0);
+    // @internal
+    ExportDoesNotSupportDefaultModifier = !Self::ExportSupportsDefaultModifier.0,
 
-    /** @internal */
+    // @internal
     // The set of things we consider semantically classifiable.  Used to speed up the LS during
     // classification.
-    pub const Classifiable: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Enum.0 | Self::TypeAlias.0 | Self::Interface.0 | Self::TypeParameter.0 | Self::Module.0 | Self::Alias.0);
+    Classifiable = Self::Class.0 | Self::Enum.0 | Self::TypeAlias.0 | Self::Interface.0 | Self::TypeParameter.0 | Self::Module.0 | Self::Alias.0,
 
-    /** @internal */
-    pub const LateBindingContainer: SymbolFlags = SymbolFlags(Self::Class.0 | Self::Interface.0 | Self::TypeLiteral.0 | Self::ObjectLiteral.0 | Self::Function.0);
+    // @internal
+    LateBindingContainer = Self::Class.0 | Self::Interface.0 | Self::TypeLiteral.0 | Self::ObjectLiteral.0 | Self::Function.0,
 
-    pub fn contains(&self, flags: SymbolFlags) -> bool { (self.0 & flags.0) == flags.0 }
-
-    fn flag_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        flag_names_impl!(self, &mut names,
-            Self::FunctionScopedVariable => "FunctionScopedVariable",
-            Self::BlockScopedVariable => "BlockScopedVariable",
-            Self::Property => "Property",
-            Self::EnumMember => "EnumMember",
-            Self::Function => "Function",
-            Self::Class => "Class",
-            Self::Interface => "Interface",
-            Self::ConstEnum => "ConstEnum",
-            Self::RegularEnum => "RegularEnum",
-            Self::ValueModule => "ValueModule",
-            Self::NamespaceModule => "NamespaceModule",
-            Self::TypeLiteral => "TypeLiteral",
-            Self::ObjectLiteral => "ObjectLiteral",
-            Self::Method => "Method",
-            Self::Constructor => "Constructor",
-            Self::GetAccessor => "GetAccessor",
-            Self::SetAccessor => "SetAccessor",
-            Self::Signature => "Signature",
-            Self::TypeParameter => "TypeParameter",
-            Self::TypeAlias => "TypeAlias",
-            Self::ExportValue => "ExportValue",
-            Self::Alias => "Alias",
-            Self::Prototype => "Prototype",
-            Self::ExportStar => "ExportStar",
-            Self::Optional => "Optional",
-            Self::Transient => "Transient",
-            Self::Assignment => "Assignment",
-            Self::ModuleExports => "ModuleExports"
-        );
-        names
-    }
-}
-
-impl std::fmt::Debug for SymbolFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let names = self.flag_names();
-        if names.is_empty() {
-            write!(f, "SymbolFlags(None)")
-        } else {
-            write!(f, "SymbolFlags({})", names.join(" | "))
-        }
-    }
-}
-
-impl std::ops::BitOr for SymbolFlags {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self { SymbolFlags(self.0 | rhs.0) }
-}
-
-impl std::ops::BitAnd for SymbolFlags {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self { SymbolFlags(self.0 & rhs.0) }
-}
+});
 
 /** @internal */
 pub type SymbolId = usize;
@@ -900,175 +802,137 @@ pub struct Symbol {
 }
 // endregion: 5976
 
+// region: 6089
+define_string_enum! {
+    InternalSymbolName {
+        Call => "__call",          // Call signatures
+        Constructor => "__constructor", // Constructor implementations
+        New => "__new",            // Constructor signatures
+        Index => "__index",        // Index signatures
+        ExportStar => "__export",  // Module export * declarations
+        Global => "__global",      // Global self-reference
+        Missing => "__missing",    // Indicates missing symbol
+        Type => "__type",          // Anonymous type literal symbol
+        Object => "__object",      // Anonymous object literal declaration
+        JSXAttributes => "__jsxAttributes", // Anonymous JSX attributes object literal declaration
+        Class => "__class",        // Unnamed class expression
+        Function => "__function",  // Unnamed function expression
+        Computed => "__computed",  // Computed property name declaration with dynamic name
+        Resolving => "__resolving__", // Indicator symbol used to mark partially resolved type aliases
+        ExportEquals => "export=", // Export assignment symbol
+        Default => "default",      // Default export symbol (technically not wholly internal, but included here for usability)
+        This => "this",
+        InstantiationExpression => "__instantiationExpression", // Instantiation expressions
+        ImportAttributes => "__importAttributes",
+    }
+}
+// endregion: 6109
+
+// region: 6127
+pub type SymbolTable = HashMap<String, Symbol>;
+// endregion: 6128
+
 // region: 6246
-#[derive(Clone, Copy)]
-pub struct TypeFlags(pub isize);
+define_flags!(TypeFlags {
+    Any = 1 << 0,
+    Unknown = 1 << 1,
+    String = 1 << 2,
+    Number = 1 << 3,
+    Boolean = 1 << 4,
+    Enum = 1 << 5, // Numeric computed enum member value
+    BigInt = 1 << 6,
+    StringLiteral = 1 << 7,
+    NumberLiteral = 1 << 8,
+    BooleanLiteral = 1 << 9,
+    EnumLiteral = 1 << 10, // Always combined with StringLiteral, NumberLiteral, or Union
+    BigIntLiteral = 1 << 11,
+    ESSymbol = 1 << 12, // Type of symbol primitive introduced in ES6
+    UniqueESSymbol = 1 << 13, // unique symbol
+    Void = 1 << 14,
+    Undefined = 1 << 15,
+    Null = 1 << 16,
+    Never = 1 << 17, // Never type
+    TypeParameter = 1 << 18, // Type parameter
+    Object = 1 << 19, // Object type
+    Union = 1 << 20, // Union (T | U)
+    Intersection = 1 << 21, // Intersection (T & U)
+    Index = 1 << 22, // keyof T
+    IndexedAccess = 1 << 23, // T[K]
+    Conditional = 1 << 24, // T extends U ? X : Y
+    Substitution = 1 << 25, // Type parameter substitution
+    NonPrimitive = 1 << 26, // intrinsic object type
+    TemplateLiteral = 1 << 27, // Template literal type
+    StringMapping = 1 << 28, // Uppercase/Lowercase type
+    // @internal
+    Reserved1 = 1 << 29, // Used by union/intersection type construction
+    // @internal
+    Reserved2 = 1 << 30, // Used by union/intersection type construction
 
-impl TypeFlags {
-    pub const Any: TypeFlags = TypeFlags(1 << 0);
-    pub const Unknown: TypeFlags = TypeFlags(1 << 1);
-    pub const String: TypeFlags = TypeFlags(1 << 2);
-    pub const Number: TypeFlags = TypeFlags(1 << 3);
-    pub const Boolean: TypeFlags = TypeFlags(1 << 4);
-    pub const Enum: TypeFlags = TypeFlags(1 << 5); // Numeric computed enum member value
-    pub const BigInt: TypeFlags = TypeFlags(1 << 6);
-    pub const StringLiteral: TypeFlags = TypeFlags(1 << 7);
-    pub const NumberLiteral: TypeFlags = TypeFlags(1 << 8);
-    pub const BooleanLiteral: TypeFlags = TypeFlags(1 << 9);
-    pub const EnumLiteral: TypeFlags = TypeFlags(1 << 10); // Always combined with StringLiteral, NumberLiteral, or Union
-    pub const BigIntLiteral: TypeFlags = TypeFlags(1 << 11);
-    pub const ESSymbol: TypeFlags = TypeFlags(1 << 12); // Type of symbol primitive introduced in ES6
-    pub const UniqueESSymbol: TypeFlags = TypeFlags(1 << 13); // unique symbol
-    pub const Void: TypeFlags = TypeFlags(1 << 14);
-    pub const Undefined: TypeFlags = TypeFlags(1 << 15);
-    pub const Null: TypeFlags = TypeFlags(1 << 16);
-    pub const Never: TypeFlags = TypeFlags(1 << 17); // Never type
-    pub const TypeParameter: TypeFlags = TypeFlags(1 << 18); // Type parameter
-    pub const Object: TypeFlags = TypeFlags(1 << 19); // Object type
-    pub const Union: TypeFlags = TypeFlags(1 << 20); // Union (T | U)
-    pub const Intersection: TypeFlags = TypeFlags(1 << 21); // Intersection (T & U)
-    pub const Index: TypeFlags = TypeFlags(1 << 22); // keyof T
-    pub const IndexedAccess: TypeFlags = TypeFlags(1 << 23); // T[K]
-    pub const Conditional: TypeFlags = TypeFlags(1 << 24); // T extends U ? X : Y
-    pub const Substitution: TypeFlags = TypeFlags(1 << 25); // Type parameter substitution
-    pub const NonPrimitive: TypeFlags = TypeFlags(1 << 26); // intrinsic object type
-    pub const TemplateLiteral: TypeFlags = TypeFlags(1 << 27); // Template literal type
-    pub const StringMapping: TypeFlags = TypeFlags(1 << 28); // Uppercase/Lowercase type
-    /** @internal */
-    pub const Reserved1: TypeFlags = TypeFlags(1 << 29); // Used by union/intersection type construction
-    /** @internal */
-    pub const Reserved2: TypeFlags = TypeFlags(1 << 30); // Used by union/intersection type construction
-
-    /** @internal */
-    pub const AnyOrUnknown: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0);
-    /** @internal */
-    pub const Nullable: TypeFlags = TypeFlags(Self::Undefined.0 | Self::Null.0);
-    pub const Literal: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0 | Self::BigIntLiteral.0 | Self::BooleanLiteral.0);
-    pub const Unit: TypeFlags = TypeFlags(Self::Enum.0 | Self::Literal.0 | Self::UniqueESSymbol.0 | Self::Nullable.0);
-    pub const Freshable: TypeFlags = TypeFlags(Self::Enum.0 | Self::Literal.0);
-    pub const StringOrNumberLiteral: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0);
-    /** @internal */
-    pub const StringOrNumberLiteralOrUnique: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0 | Self::UniqueESSymbol.0);
-    /** @internal */
-    pub const DefinitelyFalsy: TypeFlags = TypeFlags(Self::StringLiteral.0 | Self::NumberLiteral.0 | Self::BigIntLiteral.0 | Self::BooleanLiteral.0 | Self::Void.0 | Self::Undefined.0 | Self::Null.0);
-    pub const PossiblyFalsy: TypeFlags = TypeFlags(Self::DefinitelyFalsy.0 | Self::String.0 | Self::Number.0 | Self::BigInt.0 | Self::Boolean.0);
-    /** @internal */
-    pub const Intrinsic: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::String.0 | Self::Number.0 | Self::BigInt.0 | Self::Boolean.0 | Self::BooleanLiteral.0 | Self::ESSymbol.0 | Self::Void.0 | Self::Undefined.0 | Self::Null.0 | Self::Never.0 | Self::NonPrimitive.0);
-    pub const StringLike: TypeFlags = TypeFlags(Self::String.0 | Self::StringLiteral.0 | Self::TemplateLiteral.0 | Self::StringMapping.0);
-    pub const NumberLike: TypeFlags = TypeFlags(Self::Number.0 | Self::NumberLiteral.0 | Self::Enum.0);
-    pub const BigIntLiteralLike: TypeFlags = TypeFlags(Self::BigInt.0 | Self::BigIntLiteral.0);
-    pub const BooleanLike: TypeFlags = TypeFlags(Self::Boolean.0 | Self::BooleanLiteral.0);
-    pub const EnumLike: TypeFlags = TypeFlags(Self::Enum.0 | Self::EnumLiteral.0);
-    pub const ESSymbolLike: TypeFlags = TypeFlags(Self::ESSymbol.0 | Self::UniqueESSymbol.0);
-    pub const VoidLike: TypeFlags = TypeFlags(Self::Void.0 | Self::Undefined.0);
-    /** @internal */
-    pub const Primitive: TypeFlags = TypeFlags(Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::EnumLike.0 | Self::ESSymbolLike.0 | Self::VoidLike.0 | Self::Null.0);
-    /** @internal */
-    pub const DefinitelyNonNullable: TypeFlags = TypeFlags(Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::EnumLike.0 | Self::ESSymbolLike.0 | Self::Object.0 | Self::NonPrimitive.0);
-    /** @internal */
-    pub const DisjointDomains: TypeFlags = TypeFlags(Self::NonPrimitive.0 | Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::ESSymbolLike.0 | Self::VoidLike.0 | Self::Null.0);
-    pub const UnionOrIntersection: TypeFlags = TypeFlags(Self::Union.0 | Self::Intersection.0);
-    pub const StructuredType: TypeFlags = TypeFlags(Self::Object.0 | Self::Union.0 | Self::Intersection.0);
-    pub const TypeVariable: TypeFlags = TypeFlags(Self::TypeParameter.0 | Self::IndexedAccess.0);
-    pub const InstantiableNonPrimitive: TypeFlags = TypeFlags(Self::TypeVariable.0 | Self::Conditional.0 | Self::Substitution.0);
-    pub const InstantiablePrimitive: TypeFlags = TypeFlags(Self::Index.0 | Self::TemplateLiteral.0 | Self::StringMapping.0);
-    pub const Instantiable: TypeFlags = TypeFlags(Self::InstantiableNonPrimitive.0 | Self::InstantiablePrimitive.0);
-    pub const StructuredOrInstantiable: TypeFlags = TypeFlags(Self::StructuredType.0 | Self::Instantiable.0);
-    /** @internal */
-    pub const ObjectFlagsType: TypeFlags = TypeFlags(Self::Any.0 | Self::Nullable.0 | Self::Never.0 | Self::Object.0 | Self::Union.0 | Self::Intersection.0);
-    /** @internal */
-    pub const Simplifiable: TypeFlags = TypeFlags(Self::IndexedAccess.0 | Self::Conditional.0);
-    /** @internal */
-    pub const Singleton: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::String.0 | Self::Number.0 | Self::Boolean.0 | Self::BigInt.0 | Self::ESSymbol.0 | Self::Void.0 | Self::Undefined.0 | Self::Null.0 | Self::Never.0 | Self::NonPrimitive.0);
+    // @internal
+    AnyOrUnknown = TypeFlags::Any.0 | TypeFlags::Unknown.0,
+    // @internal
+    Nullable = TypeFlags::Undefined.0 | TypeFlags::Null.0,
+    Literal = TypeFlags::StringLiteral.0 | TypeFlags::NumberLiteral.0 | TypeFlags::BigIntLiteral.0 | TypeFlags::BooleanLiteral.0,
+    Unit = TypeFlags::Enum.0 | TypeFlags::Literal.0 | TypeFlags::UniqueESSymbol.0 | TypeFlags::Nullable.0,
+    Freshable = TypeFlags::Enum.0 | TypeFlags::Literal.0,
+    StringOrNumberLiteral = TypeFlags::StringLiteral.0 | TypeFlags::NumberLiteral.0,
+    // @internal
+    StringOrNumberLiteralOrUnique = TypeFlags::StringLiteral.0 | TypeFlags::NumberLiteral.0 | TypeFlags::UniqueESSymbol.0,
+    // @internal
+    DefinitelyFalsy = TypeFlags::StringLiteral.0 | TypeFlags::NumberLiteral.0 | TypeFlags::BigIntLiteral.0 | TypeFlags::BooleanLiteral.0 | TypeFlags::Void.0 | TypeFlags::Undefined.0 | TypeFlags::Null.0,
+    PossiblyFalsy = TypeFlags::DefinitelyFalsy.0 | TypeFlags::String.0 | TypeFlags::Number.0 | TypeFlags::BigInt.0 | TypeFlags::Boolean.0,
+    // @internal
+    Intrinsic = TypeFlags::Any.0 | TypeFlags::Unknown.0 | TypeFlags::String.0 | TypeFlags::Number.0 | TypeFlags::BigInt.0 | TypeFlags::Boolean.0 | TypeFlags::BooleanLiteral.0 | TypeFlags::ESSymbol.0 | TypeFlags::Void.0 | TypeFlags::Undefined.0 | TypeFlags::Null.0 | TypeFlags::Never.0 | TypeFlags::NonPrimitive.0,
+    StringLike = TypeFlags::String.0 | TypeFlags::StringLiteral.0 | TypeFlags::TemplateLiteral.0 | TypeFlags::StringMapping.0,
+    NumberLike = TypeFlags::Number.0 | TypeFlags::NumberLiteral.0 | TypeFlags::Enum.0,
+    BigIntLiteralLike = TypeFlags::BigInt.0 | TypeFlags::BigIntLiteral.0,
+    BooleanLike = TypeFlags::Boolean.0 | TypeFlags::BooleanLiteral.0,
+    EnumLike = TypeFlags::Enum.0 | TypeFlags::EnumLiteral.0,
+    ESSymbolLike = TypeFlags::ESSymbol.0 | TypeFlags::UniqueESSymbol.0,
+    VoidLike = TypeFlags::Void.0 | TypeFlags::Undefined.0,
+    // @internal
+    Primitive = TypeFlags::StringLike.0 | TypeFlags::NumberLike.0 | TypeFlags::BigIntLiteralLike.0 | TypeFlags::BooleanLike.0 | TypeFlags::EnumLike.0 | TypeFlags::ESSymbolLike.0 | TypeFlags::VoidLike.0 | TypeFlags::Null.0,
+    // @internal
+    DefinitelyNonNullable = TypeFlags::StringLike.0 | TypeFlags::NumberLike.0 | TypeFlags::BigIntLiteralLike.0 | TypeFlags::BooleanLike.0 | TypeFlags::EnumLike.0 | TypeFlags::ESSymbolLike.0 | TypeFlags::Object.0 | TypeFlags::NonPrimitive.0,
+    // @internal
+    DisjointDomains = TypeFlags::NonPrimitive.0 | TypeFlags::StringLike.0 | TypeFlags::NumberLike.0 | TypeFlags::BigIntLiteralLike.0 | TypeFlags::BooleanLike.0 | TypeFlags::ESSymbolLike.0 | TypeFlags::VoidLike.0 | TypeFlags::Null.0,
+    UnionOrIntersection = TypeFlags::Union.0 | TypeFlags::Intersection.0,
+    StructuredType = TypeFlags::Object.0 | TypeFlags::Union.0 | TypeFlags::Intersection.0,
+    TypeVariable = TypeFlags::TypeParameter.0 | TypeFlags::IndexedAccess.0,
+    InstantiableNonPrimitive = TypeFlags::TypeVariable.0 | TypeFlags::Conditional.0 | TypeFlags::Substitution.0,
+    InstantiablePrimitive = TypeFlags::IndexedAccess.0 | TypeFlags::TemplateLiteral.0 | TypeFlags::StringMapping.0,
+    Instantiable = TypeFlags::InstantiableNonPrimitive.0 | TypeFlags::InstantiablePrimitive.0,
+    StructuredOrInstantiable = TypeFlags::StructuredType.0 | TypeFlags::Instantiable.0,
+    // @internal
+    ObjectFlagsType = TypeFlags::Any.0 | TypeFlags::Nullable.0 | TypeFlags::Never.0 | TypeFlags::Object.0 | TypeFlags::Union.0 | TypeFlags::Intersection.0,
+    // @internal
+    Simplifiable = TypeFlags::IndexedAccess.0 | TypeFlags::Conditional.0,
+    // @internal
+    Singleton = TypeFlags::Any.0 | TypeFlags::Unknown.0 | TypeFlags::String.0 | TypeFlags::Number.0 | TypeFlags::Boolean.0 | TypeFlags::BigInt.0 | TypeFlags::ESSymbol.0 | TypeFlags::Void.0 | TypeFlags::Undefined.0 | TypeFlags::Null.0 | TypeFlags::Never.0 | TypeFlags::NonPrimitive.0,
     // 'Narrowable' types are types where narrowing actually narrows.
     // This *should* be every type other than null, undefined, void, and never
-    pub const Narrowable: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::StructuredOrInstantiable.0 | Self::StringLike.0 | Self::NumberLike.0 | Self::BigIntLiteralLike.0 | Self::BooleanLike.0 | Self::ESSymbol.0 | Self::UniqueESSymbol.0 | Self::NonPrimitive.0);
+    Narrowable = TypeFlags::Any.0 | TypeFlags::Unknown.0 | TypeFlags::StructuredOrInstantiable.0 | TypeFlags::StringLike.0 | TypeFlags::NumberLike.0 | TypeFlags::BigIntLiteralLike.0 | TypeFlags::BooleanLike.0 | TypeFlags::ESSymbol.0 | TypeFlags::UniqueESSymbol.0 | TypeFlags::NonPrimitive.0,
     // The following flags are aggregated during union and intersection type construction
-    /** @internal */
-    pub const IncludesMask: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::Primitive.0 | Self::Never.0 | Self::Object.0 | Self::Union.0 | Self::Intersection.0 | Self::NonPrimitive.0 | Self::TemplateLiteral.0 | Self::StringMapping.0);
+    // @internal
+    IncludesMask = TypeFlags::Any.0 | TypeFlags::Unknown.0 | TypeFlags::Primitive.0 | TypeFlags::Never.0 | TypeFlags::Object.0 | TypeFlags::Union.0 | TypeFlags::Intersection.0 | TypeFlags::NonPrimitive.0 | TypeFlags::TemplateLiteral.0 | TypeFlags::StringMapping.0,
     // The following flags are used for different purposes during union and intersection type construction
-    /** @internal */
-    pub const IncludesMissingType: TypeFlags = TypeFlags(Self::TypeParameter.0);
-    /** @internal */
-    pub const IncludesNonWidenningType: TypeFlags = TypeFlags(Self::Index.0);
-    /** @internal */
-    pub const IncludesWildcard: TypeFlags = TypeFlags(Self::IndexedAccess.0);
-    /** @internal */
-    pub const IncludesEmptyObject: TypeFlags = TypeFlags(Self::Conditional.0);
-    /** @internal */
-    pub const IncludesInstantiable: TypeFlags = TypeFlags(Self::Substitution.0);
-    /** @internal */
-    pub const IncludesConstrainedTypeVariable: TypeFlags = TypeFlags(Self::Reserved1.0);
-    /** @internal */
-    pub const IncludesError: TypeFlags = TypeFlags(Self::Reserved2.0);
-    /** @internal */
-    pub const NotPrimitiveUnion: TypeFlags = TypeFlags(Self::Any.0 | Self::Unknown.0 | Self::Void.0 | Self::Never.0 | Self::Object.0 | Self::Intersection.0 | Self::IncludesInstantiable.0);
-
-    pub fn contains(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) == flags.0 }
-
-    pub fn intersects(&self, flags: TypeFlags) -> bool { (self.0 & flags.0) != 0 }
-
-    fn flag_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        flag_names_impl!(self, &mut names,
-            Self::Any => "Any",
-            Self::Unknown => "Unknown",
-            Self::String => "String",
-            Self::Number => "Number",
-            Self::Boolean => "Boolean",
-            Self::Enum => "Enum",
-            Self::BigInt => "BigInt",
-            Self::StringLiteral => "StringLiteral",
-            Self::NumberLiteral => "NumberLiteral",
-            Self::BooleanLiteral => "BooleanLiteral",
-            Self::EnumLiteral => "EnumLiteral",
-            Self::BigIntLiteral => "BigIntLiteral",
-            Self::ESSymbol => "ESSymbol",
-            Self::UniqueESSymbol => "UniqueESSymbol",
-            Self::Void => "Void",
-            Self::Undefined => "Undefined",
-            Self::Null => "Null",
-            Self::Never => "Never",
-            Self::TypeParameter => "TypeParameter",
-            Self::Object => "Object",
-            Self::Union => "Union",
-            Self::Intersection => "Intersection",
-            Self::Index => "Index",
-            Self::IndexedAccess => "IndexedAccess",
-            Self::Conditional => "Conditional",
-            Self::Substitution => "Substitution",
-            Self::NonPrimitive => "NonPrimitive",
-            Self::TemplateLiteral => "TemplateLiteral",
-            Self::StringMapping => "StringMapping",
-            Self::Reserved1 => "Reserved1",
-            Self::Reserved2 => "Reserved2",
-        );
-        names
-    }
-}
-
-impl std::fmt::Debug for TypeFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let names = self.flag_names();
-        if names.is_empty() {
-            write!(f, "TypeFlags(None)")
-        } else {
-            write!(f, "TypeFlags({})", names.join(" | "))
-        }
-    }
-}
-
-impl std::ops::BitOr for TypeFlags {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self { TypeFlags(self.0 | rhs.0) }
-}
-
-impl std::ops::BitAnd for TypeFlags {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self { TypeFlags(self.0 & rhs.0) }
-}
+    // @internal
+    IncludesMissingType = TypeFlags::TypeParameter.0,
+    // @internal
+    IncludesNonWidenningType = TypeFlags::IndexedAccess.0,
+    // @internal
+    IncludesWildcard = TypeFlags::IndexedAccess.0,
+    // @internal
+    IncludesEmptyObject = TypeFlags::Conditional.0,
+    // @internal
+    IncludesInstantiable = TypeFlags::Substitution.0,
+    // @internal
+    IncludesConstrainedTypeVariable = TypeFlags::Reserved1.0,
+    // @internal
+    IncludesError = TypeFlags::Reserved2.0,
+    // @internal
+    NotPrimitiveUnion = TypeFlags::Any.0 | TypeFlags::Unknown.0 | TypeFlags::Void.0 | TypeFlags::Never.0 | TypeFlags::Object.0 | TypeFlags::Intersection.0 | TypeFlags::IncludesInstantiable.0,
+});
 
 #[derive(Debug)]
 pub enum DestructuringPattern<'a> {
@@ -1166,129 +1030,89 @@ pub trait FreshableIntrinsicType: FreshableType + IntrinsicType {}
 // endregion: 6392
 
 // region: 6423
-#[derive(Clone, Copy)]
-pub struct ObjectFlags(pub isize);
-
 // Types included in TypeFlags.ObjectFlagsType have an objectFlags property. Some ObjectFlags
 // are specific to certain types and reuse the same bit position. Those ObjectFlags require a check
 // for a certain TypeFlags value to determine their meaning.
-impl ObjectFlags {
-    pub const None: ObjectFlags = ObjectFlags(0);
-    pub const Class: ObjectFlags = ObjectFlags(1 << 0);
-    pub const Interface: ObjectFlags = ObjectFlags(1 << 1);
-    pub const Reference: ObjectFlags = ObjectFlags(1 << 2);
-    pub const Tuple: ObjectFlags = ObjectFlags(1 << 3);
-    pub const Anonymous: ObjectFlags = ObjectFlags(1 << 4);
-    pub const Mapped: ObjectFlags = ObjectFlags(1 << 5);
-    pub const Instantiated: ObjectFlags = ObjectFlags(1 << 6);
-    pub const ObjectLiteral: ObjectFlags = ObjectFlags(1 << 7);
-    pub const EvolvingArray: ObjectFlags = ObjectFlags(1 << 8);
-    pub const ObjectLiteralPatternWithComputedProperties: ObjectFlags = ObjectFlags(1 << 9);
-    pub const ReverseMapped: ObjectFlags = ObjectFlags(1 << 10);
-    pub const JSXAttributes: ObjectFlags = ObjectFlags(1 << 11);
-    pub const JSLiteral: ObjectFlags = ObjectFlags(1 << 12);
-    pub const FreshLiteral: ObjectFlags = ObjectFlags(1 << 13);
-    pub const ArrayLiteral: ObjectFlags = ObjectFlags(1 << 14);
-    pub const PrimitiveUnion: ObjectFlags = ObjectFlags(1 << 15);
-    pub const ContainsWideningType: ObjectFlags = ObjectFlags(1 << 16);
-    pub const ContainsObjectOrArrayLiteral: ObjectFlags = ObjectFlags(1 << 17);
-    pub const NonInferrableType: ObjectFlags = ObjectFlags(1 << 18);
-    pub const CouldContainTypeVariablesComputed: ObjectFlags = ObjectFlags(1 << 19);
-    pub const CouldContainTypeVariables: ObjectFlags = ObjectFlags(1 << 20);
-    pub const ContainsSpread: ObjectFlags = ObjectFlags(1 << 21);
-    pub const ObjectRestType: ObjectFlags = ObjectFlags(1 << 22);
-    pub const InstantiationExpressionType: ObjectFlags = ObjectFlags(1 << 23);
-    pub const IsClassInstanceClone: ObjectFlags = ObjectFlags(1 << 24);
-    pub const IdenticalBaseTypeCalculated: ObjectFlags = ObjectFlags(1 << 25);
-    pub const IdenticalBaseTypeExists: ObjectFlags = ObjectFlags(1 << 26);
-    pub const SingleSignatureType: ObjectFlags = ObjectFlags(1 << 27);
+define_flags!(ObjectFlags {
+    None = 0,
+    Class = 1 << 0,  // Class
+    Interface = 1 << 1,  // Interface
+    Reference = 1 << 2,  // Generic type reference
+    Tuple = 1 << 3,  // Synthesized generic tuple type
+    Anonymous = 1 << 4,  // Anonymous
+    Mapped = 1 << 5,  // Mapped
+    Instantiated = 1 << 6,  // Instantiated anonymous or mapped type
+    ObjectLiteral = 1 << 7,  // Originates in an object literal
+    EvolvingArray = 1 << 8,  // Evolving array type
+    ObjectLiteralPatternWithComputedProperties = 1 << 9,  // Object literal pattern with computed properties
+    ReverseMapped = 1 << 10, // Object contains a property from a reverse-mapped type
+    JsxAttributes = 1 << 11, // Jsx attributes type
+    JSLiteral = 1 << 12, // Object type declared in JS - disables errors on read/write of nonexisting members
+    FreshLiteral = 1 << 13, // Fresh object literal
+    ArrayLiteral = 1 << 14, // Originates in an array literal
+    // @internal
+    PrimitiveUnion = 1 << 15, // Union of only primitive types
+    // @internal
+    ContainsWideningType = 1 << 16, // Type is or contains undefined or null widening type
+    // @internal
+    ContainsObjectOrArrayLiteral = 1 << 17, // Type is or contains object literal type
+    // @internal
+    NonInferrableType = 1 << 18, // Type is or contains anyFunctionType or silentNeverType
+    // @internal
+    CouldContainTypeVariablesComputed = 1 << 19, // CouldContainTypeVariables flag has been computed
+    // @internal
+    CouldContainTypeVariables = 1 << 20, // Type could contain a type variable
 
-    pub const ClassOrInterface: ObjectFlags = ObjectFlags(Self::Class.0 | Self::Interface.0);
-    pub const RequiresWidening: ObjectFlags = ObjectFlags(Self::ContainsWideningType.0 | Self::ContainsObjectOrArrayLiteral.0);
-    pub const PropagatingFlags: ObjectFlags = ObjectFlags(Self::ContainsWideningType.0 | Self::ContainsObjectOrArrayLiteral.0 | Self::NonInferrableType.0);
-    pub const InstantiatedMapped: ObjectFlags = ObjectFlags(Self::Mapped.0 | Self::Instantiated.0);
-    pub const ObjectTypeKindMask: ObjectFlags = ObjectFlags(Self::ClassOrInterface.0 | Self::Reference.0 | Self::Tuple.0 | Self::Anonymous.0 | Self::Mapped.0 | Self::ReverseMapped.0 | Self::EvolvingArray.0);
+    ClassOrInterface = Self::Class.0 | Self::Interface.0,
+    // @internal
+    RequiresWidening = Self::ContainsWideningType.0 | Self::ContainsObjectOrArrayLiteral.0,
+    // @internal
+    PropagatingFlags = Self::ContainsWideningType.0 | Self::ContainsObjectOrArrayLiteral.0 | Self::NonInferrableType.0,
+    // @internal
+    InstantiatedMapped = Self::Mapped.0 | Self::Instantiated.0,
+    // Object flags that uniquely identify the kind of ObjectType
+    // @internal
+    ObjectTypeKindMask = Self::ClassOrInterface.0 | Self::Reference.0 | Self::Tuple.0 | Self::Anonymous.0 | Self::Mapped.0 | Self::ReverseMapped.0 | Self::EvolvingArray.0,
 
-    pub const IsGenericTypeComputed: ObjectFlags = ObjectFlags(1 << 21);
-    pub const IsGenericObjectType: ObjectFlags = ObjectFlags(1 << 22);
-    pub const IsGenericIndexType: ObjectFlags = ObjectFlags(1 << 23);
-    pub const IsGenericType: ObjectFlags = ObjectFlags(Self::IsGenericObjectType.0 | Self::IsGenericIndexType.0);
+    // Flags that require TypeFlags.Object
+    ContainsSpread = 1 << 21,  // Object literal contains spread operation
+    ObjectRestType = 1 << 22,  // Originates in object rest declaration
+    InstantiationExpressionType = 1 << 23,  // Originates in instantiation expression
+    SingleSignatureType = 1 << 27,  // A single signature type extracted from a potentially broader type
+    // @internal
+    IsClassInstanceClone = 1 << 24, // Type is a clone of a class instance type
+    // Flags that require TypeFlags.Object and ObjectFlags.Reference
+    // @internal
+    IdenticalBaseTypeCalculated = 1 << 25, // has had `getSingleBaseForNonAugmentingSubtype` invoked on it already
+    // @internal
+    IdenticalBaseTypeExists = 1 << 26, // has a defined cachedEquivalentBaseType member
 
-    pub const ContainsIntersections: ObjectFlags = ObjectFlags(1 << 24);
-    pub const IsUnknownLikeUnionComputed: ObjectFlags = ObjectFlags(1 << 25);
-    pub const IsUnknownLikeUnion: ObjectFlags = ObjectFlags(1 << 26);
+    // Flags that require TypeFlags.UnionOrIntersection or TypeFlags.Substitution
+    // @internal
+    IsGenericTypeComputed = 1 << 21, // IsGenericObjectType flag has been computed
+    // @internal
+    IsGenericObjectType = 1 << 22, // Union or intersection contains generic object type
+    // @internal
+    IsGenericIndexType = 1 << 23, // Union or intersection contains generic index type
+    // @internal
+    IsGenericType = Self::IsGenericObjectType.0 | Self::IsGenericIndexType.0,
 
-    pub const IsNeverIntersectionComputed: ObjectFlags = ObjectFlags(1 << 24);
-    pub const IsNeverIntersection: ObjectFlags = ObjectFlags(1 << 25);
-    pub const IsConstrainedTypeVariable: ObjectFlags = ObjectFlags(1 << 26);
+    // Flags that require TypeFlags.Union
+    // @internal
+    ContainsIntersections = 1 << 24, // Union contains intersections
+    // @internal
+    IsUnknownLikeUnionComputed = 1 << 25, // IsUnknownLikeUnion flag has been computed
+    // @internal
+    IsUnknownLikeUnion = 1 << 26, // Union of null, undefined, and empty object type
 
-    pub fn contains(&self, other: ObjectFlags) -> bool { (self.0 & other.0) == other.0 }
-
-    fn flag_names(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        flag_names_impl!(self, &mut names,
-            Self::Class => "Class",
-            Self::Interface => "Interface",
-            Self::Reference => "Reference",
-            Self::Tuple => "Tuple",
-            Self::Anonymous => "Anonymous",
-            Self::Mapped => "Mapped",
-            Self::Instantiated => "Instantiated",
-            Self::ObjectLiteral => "ObjectLiteral",
-            Self::EvolvingArray => "EvolvingArray",
-            Self::ObjectLiteralPatternWithComputedProperties => "ObjectLiteralPatternWithComputedProperties",
-            Self::ReverseMapped => "ReverseMapped",
-            Self::JSXAttributes => "JSXAttributes",
-            Self::JSLiteral => "JSLiteral",
-            Self::FreshLiteral => "FreshLiteral",
-            Self::ArrayLiteral => "ArrayLiteral",
-            Self::PrimitiveUnion => "PrimitiveUnion",
-            Self::ContainsWideningType => "ContainsWideningType",
-            Self::ContainsObjectOrArrayLiteral => "ContainsObjectOrArrayLiteral",
-            Self::NonInferrableType => "NonInferrableType",
-            Self::CouldContainTypeVariablesComputed => "CouldContainTypeVariablesComputed",
-            Self::CouldContainTypeVariables => "CouldContainTypeVariables",
-            Self::ContainsSpread => "ContainsSpread",
-            Self::ObjectRestType => "ObjectRestType",
-            Self::InstantiationExpressionType => "InstantiationExpressionType",
-            Self::IsClassInstanceClone => "IsClassInstanceClone",
-            Self::IdenticalBaseTypeCalculated => "IdenticalBaseTypeCalculated",
-            Self::IdenticalBaseTypeExists => "IdenticalBaseTypeExists",
-            Self::SingleSignatureType => "SingleSignatureType",
-            Self::IsGenericTypeComputed => "IsGenericTypeComputed",
-            Self::IsGenericObjectType => "IsGenericObjectType",
-            Self::IsGenericIndexType => "IsGenericIndexType",
-            Self::ContainsIntersections => "ContainsIntersections",
-            Self::IsUnknownLikeUnionComputed => "IsUnknownLikeUnionComputed",
-            Self::IsUnknownLikeUnion => "IsUnknownLikeUnion",
-            Self::IsNeverIntersectionComputed => "IsNeverIntersectionComputed",
-            Self::IsNeverIntersection => "IsNeverIntersection",
-            Self::IsConstrainedTypeVariable => "IsConstrainedTypeVariable"
-        );
-        names
-    }
-}
-
-impl std::fmt::Debug for ObjectFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let names = self.flag_names();
-        if names.is_empty() {
-            write!(f, "ObjectFlags(None)")
-        } else {
-            write!(f, "ObjectFlags({})", names.join(" | "))
-        }
-    }
-}
-
-impl std::ops::BitOr for ObjectFlags {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self { ObjectFlags(self.0 | rhs.0) }
-}
-
-impl std::ops::BitAnd for ObjectFlags {
-    type Output = Self;
-    fn bitand(self, rhs: Self) -> Self { ObjectFlags(self.0 & rhs.0) }
-}
+    // Flags that require TypeFlags.Intersection
+    // @internal
+    IsNeverIntersectionComputed = 1 << 24, // IsNeverLike flag has been computed
+    // @internal
+    IsNeverIntersection = 1 << 25, // Intersection reduces to never
+    // @internal
+    IsConstrainedTypeVariable = 1 << 26, // T & C, where T's constraint and C are primitives, object, or {}
+});
 
 pub trait ObjectFlagsTrait: Type {
     fn get_object_flags(&self) -> ObjectFlags;

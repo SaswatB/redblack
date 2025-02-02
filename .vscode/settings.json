@@ -1,3 +1,4 @@
 {
-    "rust-analyzer.rustfmt.extraArgs": ["--config", "unstable_features=true", "--config", "fn_single_line=true"]
+    "rust-analyzer.rustfmt.extraArgs": ["--config", "unstable_features=true", "--config", "fn_single_line=true"],
+    "cSpell.words": ["bitflags"]
 }
