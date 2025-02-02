@@ -100,3 +100,40 @@ macro_rules! define_string_enum {
         }
     }
 }
+
+#[macro_export]
+macro_rules! flow_node_enum {
+    ($($variant:ident($inner:ty)),* $(,)?) => {
+        pub enum FlowNode<'a> {
+            $($variant($inner)),*
+        }
+
+        impl<'a> FlowNode<'a> {
+            pub fn get_flags(&self) -> FlowFlags {
+                match self {
+                    $(Self::$variant(f) => f.flags),*
+                }
+            }
+
+            pub fn get_id(&self) -> usize {
+                match self {
+                    $(Self::$variant(f) => f.id),*
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! rc_cell {
+    ($type:ty) => {
+        Rc<RefCell<$type>>
+    };
+}
+
+#[macro_export]
+macro_rules! opt_rc_cell {
+    ($type:ty) => {
+        Option<Rc<RefCell<$type>>>
+    };
+}

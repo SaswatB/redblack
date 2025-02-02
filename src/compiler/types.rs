@@ -1,10 +1,10 @@
 use oxc_ast::{
-    ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, TaggedTemplateExpression},
+    ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Declaration, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, SwitchStatement, TaggedTemplateExpression, VariableDeclaration},
     AstKind,
 };
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{define_flags, define_string_enum, flag_names_impl};
+use crate::{define_flags, define_string_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
 use super::moduleNameResolver::PackageJsonInfoCache;
 
@@ -121,9 +121,6 @@ pub struct ClassElement;
 #[derive(Debug)]
 pub struct AnyImportSyntax;
 
-#[derive(Debug, Clone)]
-pub struct Declaration;
-
 #[derive(Debug)]
 pub struct StringLiteralType;
 
@@ -186,6 +183,170 @@ pub struct SymbolTracker;
 
 #[derive(Debug)]
 pub struct JSDocSignature;
+
+// region: 4120
+// NOTE: Ensure this is up-to-date with src/debug/debug.ts
+// @internal
+define_flags!(FlowFlags {
+    Unreachable    = 1 << 0,  // Unreachable code
+    Start          = 1 << 1,  // Start of flow graph
+    BranchLabel    = 1 << 2,  // Non-looping junction
+    LoopLabel      = 1 << 3,  // Looping junction
+    Assignment     = 1 << 4,  // Assignment
+    TrueCondition  = 1 << 5,  // Condition known to be true
+    FalseCondition = 1 << 6,  // Condition known to be false
+    SwitchClause   = 1 << 7,  // Switch statement clause
+    ArrayMutation  = 1 << 8,  // Potential array mutation
+    Call           = 1 << 9,  // Potential assertion call
+    ReduceLabel    = 1 << 10, // Temporarily reduce antecedents of label
+    Referenced     = 1 << 11, // Referenced as antecedent once
+    Shared         = 1 << 12, // Referenced as antecedent more than once
+
+    Label = Self::BranchLabel.0 | Self::LoopLabel.0,
+    Condition = Self::TrueCondition.0 | Self::FalseCondition.0,
+});
+
+// @internal
+flow_node_enum! {
+    Unreachable(FlowUnreachable),
+    Start(FlowStart<'a>),
+    Label(FlowLabel<'a>),
+    Assignment(FlowAssignment<'a>),
+    Condition(FlowCondition<'a>),
+    SwitchClause(FlowSwitchClause<'a>),
+    ArrayMutation(FlowArrayMutation<'a>),
+    Call(FlowCall<'a>),
+    ReduceLabel(FlowReduceLabel<'a>),
+}
+
+/** @internal */
+// pub struct FlowNodeBase<'a> {
+//     pub flags: FlowFlags,
+//     pub id: usize, // Node id used by flow type cache in checker
+//     // pub node: Option<AstKind<'a>>, // Node or other data
+//     // pub antecedent: Option<FlowNodeAntecedent<'a>>,
+// }
+
+// pub enum FlowNodeAntecedent<'a> {
+//     Single(Box<FlowNode<'a>>),
+//     Multiple(Vec<FlowNode<'a>>),
+// }
+
+/** @internal */
+pub struct FlowUnreachable {
+    pub flags: FlowFlags,
+    pub id: usize,
+}
+
+// FlowStart represents the start of a control flow. For a function expression or arrow
+// function, the node property references the function (which in turn has a flowNode
+// property for the containing control flow).
+/** @internal */
+pub struct FlowStart<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: Option<&'a AstKind<'a>>, // FunctionExpression | ArrowFunction | MethodDeclaration | GetAccessorDeclaration | SetAccessorDeclaration | undefined;
+}
+
+// FlowLabel represents a junction with multiple possible preceding control flows.
+/** @internal */
+pub struct FlowLabel<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub antecedent: Option<Vec<FlowNode<'a>>>,
+}
+
+// FlowAssignment represents a node that assigns a value to a narrowable reference,
+// i.e. an identifier or a dotted name that starts with an identifier or 'this'.
+/** @internal */
+pub struct FlowAssignment<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: FlowAssignmentNode<'a>,
+    pub antecedent: Box<FlowNode<'a>>,
+}
+
+pub enum FlowAssignmentNode<'a> {
+    Expression(&'a Expression<'a>),
+    VariableDeclaration(&'a VariableDeclaration<'a>),
+    // BindingElement(&'a BindingElement<'a>), // todo(RB) figure out BindingElement
+}
+
+/** @internal */
+pub struct FlowCall<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: &'a CallExpression<'a>,
+    pub antecedent: Box<FlowNode<'a>>,
+}
+
+// FlowCondition represents a condition that is known to be true or false at the
+// node's location in the control flow.
+/** @internal */
+pub struct FlowCondition<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: &'a Expression<'a>,
+    pub antecedent: Box<FlowNode<'a>>,
+}
+
+/** @internal */
+pub struct FlowSwitchClause<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: FlowSwitchClauseData<'a>,
+    pub antecedents: Box<FlowNode<'a>>,
+}
+
+/** @internal */
+pub struct FlowSwitchClauseData<'a> {
+    pub switchStatement: &'a SwitchStatement<'a>,
+    pub clauseStart: usize, // Start index of case/default clause range
+    pub clauseEnd: usize,   // End index of case/default clause range
+}
+
+// FlowArrayMutation represents a node potentially mutates an array, i.e. an
+// operation of the form 'x.push(value)', 'x.unshift(value)' or 'x[n] = value'.
+/** @internal */
+pub struct FlowArrayMutation<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: FlowArrayMutationNode<'a>,
+    pub antecedent: Box<FlowNode<'a>>,
+}
+
+pub enum FlowArrayMutationNode<'a> {
+    CallExpression(&'a CallExpression<'a>),
+    BinaryExpression(&'a BinaryExpression<'a>),
+}
+
+/** @internal */
+pub struct FlowReduceLabel<'a> {
+    pub flags: FlowFlags,
+    pub id: usize,
+    pub node: FlowReduceLabelData<'a>,
+    pub antecedents: Box<FlowNode<'a>>,
+}
+
+/** @internal */
+pub struct FlowReduceLabelData<'a> {
+    pub target: FlowLabel<'a>,
+    pub antecedents: Vec<FlowNode<'a>>,
+}
+
+pub enum FlowType<'a> {
+    Complete(&'a dyn Type),
+    Incomplete(IncompleteType<'a>),
+}
+
+// Incomplete types occur during control flow analysis of loops. An IncompleteType
+// is distinguished from a regular type by a flags value of zero. Incomplete type
+// objects are internal to the getFlowTypeOfReference function and never escape it.
+pub struct IncompleteType<'a> {
+    pub flags: TypeFlags,    // No flags set
+    pub type_: &'a dyn Type, // The type marked incomplete
+}
+// endregion: 4250
 
 // region: 4291
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -629,15 +790,15 @@ define_flags!(SignatureFlags {
 });
 
 #[derive(Debug)]
-pub struct Signature {
+pub struct Signature<'a> {
     /** @internal */
     pub flags: SignatureFlags,
     /** @internal */
     pub checker: Option<Box<dyn TypeCheckerTrait>>,
     pub declaration: Option<SignatureDeclaration>,  // Originating declaration
     pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
-    pub parameters: Vec<Symbol>,                    // Parameters
-    pub thisParameter: Option<Symbol>,              // symbol of this-type parameter
+    pub parameters: Vec<rc_cell!(Symbol<'a>)>,      // Parameters
+    pub thisParameter: opt_rc_cell!(Symbol<'a>),    // symbol of this-type parameter
     /** @internal */
     pub resolvedReturnType: Option<Box<dyn Type>>, // Lazily set by `getReturnTypeOfSignature`
     /** @internal */
@@ -647,33 +808,33 @@ pub struct Signature {
     /** @internal */
     pub resolvedMinArgumentCount: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
     /** @internal */
-    pub target: Option<Box<Signature>>, // Instantiation target
+    pub target: opt_rc_cell!(Signature<'a>), // Instantiation target
     /** @internal */
     pub mapper: Option<TypeMapper>, // Instantiation mapper
     /** @internal */
-    pub compositeSignatures: Option<Vec<Signature>>, // Underlying signatures of a union/intersection signature
+    pub compositeSignatures: Option<Vec<Signature<'a>>>, // Underlying signatures of a union/intersection signature
     /** @internal */
     pub compositeKind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
     /** @internal */
-    pub erasedSignatureCache: Option<Box<Signature>>, // Erased version of signature (deferred)
+    pub erasedSignatureCache: opt_rc_cell!(Signature<'a>), // Erased version of signature (deferred)
     /** @internal */
-    pub canonicalSignatureCache: Option<Box<Signature>>, // Canonical version of signature (deferred)
+    pub canonicalSignatureCache: opt_rc_cell!(Signature<'a>), // Canonical version of signature (deferred)
     /** @internal */
-    pub baseSignatureCache: Option<Box<Signature>>, // Base version of signature (deferred)
+    pub baseSignatureCache: opt_rc_cell!(Signature<'a>), // Base version of signature (deferred)
     /** @internal */
-    pub optionalCallSignatureCache: Option<OptionalCallSignatureCache>, // Optional chained call version of signature (deferred)
+    pub optionalCallSignatureCache: Option<OptionalCallSignatureCache<'a>>, // Optional chained call version of signature (deferred)
     /** @internal */
     pub isolatedSignatureType: Option<Box<dyn ObjectType>>, // A manufactured type that just contains the signature for purposes of signature comparison
     /** @internal */
-    pub instantiations: Option<HashMap<String, Signature>>, // Generic signature instantiation cache
+    pub instantiations: Option<HashMap<String, rc_cell!(Signature<'a>)>>, // Generic signature instantiation cache
     /** @internal */
-    pub implementationSignatureCache: Option<Box<Signature>>, // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
+    pub implementationSignatureCache: opt_rc_cell!(Signature<'a>), // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
 }
 
 #[derive(Debug)]
-pub struct OptionalCallSignatureCache {
-    pub inner: Option<Box<Signature>>,
-    pub outer: Option<Box<Signature>>,
+pub struct OptionalCallSignatureCache<'a> {
+    pub inner: opt_rc_cell!(Signature<'a>),
+    pub outer: opt_rc_cell!(Signature<'a>),
 }
 
 // region: 5864
@@ -774,23 +935,23 @@ pub type SymbolId = usize;
 
 #[derive(Debug, Clone)]
 #[rustfmt::skip]
-pub struct Symbol {
+pub struct Symbol<'a> {
     pub flags: SymbolFlags,                     // Symbol flags
     pub escapedName: __String,                  // Name of symbol
-    pub declarations: Option<Vec<Declaration>>, // Declarations associated with this symbol
-    pub valueDeclaration: Option<Declaration>,  // First value declaration of the symbol
-    pub members: Option<SymbolTable>,           // Class, interface or object literal instance members
-    pub exports: Option<SymbolTable>,           // Module exports
-    pub globalExports: Option<SymbolTable>,     // Conditional global UMD exports
+    pub declarations: Option<Vec<&'a Declaration<'a>>>, // Declarations associated with this symbol
+    pub valueDeclaration: Option<&'a Declaration<'a>>,  // First value declaration of the symbol
+    pub members: Option<SymbolTable<'a>>,           // Class, interface or object literal instance members
+    pub exports: Option<SymbolTable<'a>>,           // Module exports
+    pub globalExports: Option<SymbolTable<'a>>,     // Conditional global UMD exports
     /** @internal */ pub id: SymbolId,          // Unique id (used to look up SymbolLinks)
     /** @internal */ pub mergeId: usize,        // Merge id (used to look up merged symbol)
-    /** @internal */ pub parent: Option<Box<Symbol>>,         // Parent symbol
-    /** @internal */ pub exportSymbol: Option<Box<Symbol>>,   // Exported symbol associated with this symbol
+    /** @internal */ pub parent: opt_rc_cell!(Symbol<'a>),         // Parent symbol
+    /** @internal */ pub exportSymbol: opt_rc_cell!(Symbol<'a>),   // Exported symbol associated with this symbol
     /** @internal */ pub constEnumOnlyModule: Option<bool>,   // True if module contains only const enums or other modules with only const enums
     /** @internal */ pub isReferenced: Option<SymbolFlags>,   // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
     /** @internal */ pub lastAssignmentPos: Option<usize>,    // Source position of last node that assigns value to symbol
     /** @internal */ pub isReplaceableByMethod: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
-    /** @internal */ pub assignmentDeclarationMembers: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
+    /** @internal */ pub assignmentDeclarationMembers: Option<HashMap<usize, &'a Declaration<'a>>>, // detected late-bound assignment declarations associated with the symbol
 }
 // endregion: 5976
 
@@ -837,7 +998,7 @@ pub type __String = String;
 // export type UnderscoreEscapedMap<T> = Map<__String, T>;
 
 /** SymbolTable based on ES6 Map interface. */
-pub type SymbolTable = HashMap<__String, Symbol>;
+pub type SymbolTable<'a> = HashMap<__String, rc_cell!(Symbol<'a>)>;
 // endregion: 6128
 
 // region: 6246
@@ -959,9 +1120,9 @@ pub struct TypeObject<'a> {
     pub id: TypeId, // Unique ID
     /** @internal */
     // pub checker: Arc<Mutex<dyn TypeCheckerTrait>>, //Arc<&'a dyn TypeCheckerTrait>,
-    pub symbol: Symbol, // Symbol associated with type (if any)
+    pub symbol: rc_cell!(Symbol<'a>), // Symbol associated with type (if any)
     pub pattern: Option<DestructuringPattern<'a>>, // Destructuring pattern represented by type (if any)
-    pub aliasSymbol: Option<Symbol>, // Alias associated with type
+    pub aliasSymbol: opt_rc_cell!(Symbol<'a>), // Alias associated with type
     pub aliasTypeArguments: Option<Vec<Box<dyn Type>>>, // Alias type arguments (if any)
     /** @internal */
     pub permissiveInstantiation: Option<Box<dyn Type>>, // Instantiation with type parameters mapped to wildcard type
@@ -975,7 +1136,7 @@ pub struct TypeObject<'a> {
     pub object_flags: Option<ObjectFlags>,               // ObjectFlagsType
     pub intrinsic_props: Option<IntrinsicTypeProps>,     // IntrinsicType
     pub freshable_props: Option<FreshableTypeProps<'a>>, // FreshableType
-    pub object_props: Option<ObjectTypeProps>,           // ObjectType
+    pub object_props: Option<ObjectTypeProps<'a>>,       // ObjectType
     pub interface_props: Option<InterfaceTypeProps>,     // InterfaceType
 }
 pub trait Type: std::fmt::Debug {
@@ -1134,15 +1295,15 @@ enum ObjectFlagsType {
 }
 
 #[derive(Debug)]
-pub struct ObjectTypeProps {
+pub struct ObjectTypeProps<'a> {
     /** @internal */
-    pub members: Option<SymbolTable>, // Properties by name
+    pub members: Option<SymbolTable<'a>>, // Properties by name
     /** @internal */
-    pub properties: Option<Vec<Symbol>>, // Properties
+    pub properties: Option<Vec<rc_cell!(Symbol<'a>)>>, // Properties
     /** @internal */
-    pub callSignatures: Option<Vec<Signature>>, // Call signatures of type
+    pub callSignatures: Option<Vec<rc_cell!(Signature<'a>)>>, // Call signatures of type
     /** @internal */
-    pub constructSignatures: Option<Vec<Signature>>, // Construct signatures of type
+    pub constructSignatures: Option<Vec<rc_cell!(Signature<'a>)>>, // Construct signatures of type
     /** @internal */
     pub indexInfos: Option<Vec<IndexInfo>>, // Index signatures
     /** @internal */
