@@ -773,32 +773,24 @@ define_flags!(SymbolFlags {
 pub type SymbolId = usize;
 
 #[derive(Debug, Clone)]
+#[rustfmt::skip]
 pub struct Symbol {
     pub flags: SymbolFlags,                     // Symbol flags
-    pub escapedName: String,                    // Name of symbol
+    pub escapedName: __String,                  // Name of symbol
     pub declarations: Option<Vec<Declaration>>, // Declarations associated with this symbol
     pub valueDeclaration: Option<Declaration>,  // First value declaration of the symbol
     pub members: Option<SymbolTable>,           // Class, interface or object literal instance members
     pub exports: Option<SymbolTable>,           // Module exports
     pub globalExports: Option<SymbolTable>,     // Conditional global UMD exports
-    /** @internal */
-    pub id: SymbolId,       // Unique id (used to look up SymbolLinks)
-    /** @internal */
-    pub mergeId: usize,     // Merge id (used to look up merged symbol)
-    /** @internal */
-    pub parent: Option<Box<Symbol>>, // Parent symbol
-    /** @internal */
-    pub exportSymbol: Option<Box<Symbol>>, // Exported symbol associated with this symbol
-    /** @internal */
-    pub constEnumOnlyModule: Option<bool>, // True if module contains only const enums or other modules with only const enums
-    /** @internal */
-    pub isReferenced: Option<SymbolFlags>, // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
-    /** @internal */
-    pub lastAssignmentPos: Option<usize>, // Source position of last node that assigns value to symbol
-    /** @internal */
-    pub isReplaceableByMethod: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
-    /** @internal */
-    pub assignmentDeclarationMembers: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
+    /** @internal */ pub id: SymbolId,          // Unique id (used to look up SymbolLinks)
+    /** @internal */ pub mergeId: usize,        // Merge id (used to look up merged symbol)
+    /** @internal */ pub parent: Option<Box<Symbol>>,         // Parent symbol
+    /** @internal */ pub exportSymbol: Option<Box<Symbol>>,   // Exported symbol associated with this symbol
+    /** @internal */ pub constEnumOnlyModule: Option<bool>,   // True if module contains only const enums or other modules with only const enums
+    /** @internal */ pub isReferenced: Option<SymbolFlags>,   // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
+    /** @internal */ pub lastAssignmentPos: Option<usize>,    // Source position of last node that assigns value to symbol
+    /** @internal */ pub isReplaceableByMethod: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
+    /** @internal */ pub assignmentDeclarationMembers: Option<HashMap<usize, Declaration>>, // detected late-bound assignment declarations associated with the symbol
 }
 // endregion: 5976
 
@@ -826,10 +818,26 @@ define_string_enum! {
         ImportAttributes => "__importAttributes",
     }
 }
-// endregion: 6109
 
-// region: 6127
-pub type SymbolTable = HashMap<String, Symbol>;
+// /**
+//  * This represents a string whose leading underscore have been escaped by adding extra leading underscores.
+//  * The shape of this brand is rather unique compared to others we've used.
+//  * Instead of just an intersection of a string and an object, it is that union-ed
+//  * with an intersection of void and an object. This makes it wholly incompatible
+//  * with a normal string (which is good, it cannot be misused on assignment or on usage),
+//  * while still being comparable with a normal string via === (also good) and castable from a string.
+//  */
+// export type __String = (string & { __escapedIdentifier: void; }) | (void & { __escapedIdentifier: void; }) | InternalSymbolName;
+pub type __String = String;
+
+// /** @deprecated Use ReadonlyMap<__String, T> instead. */
+// export type ReadonlyUnderscoreEscapedMap<T> = ReadonlyMap<__String, T>;
+
+// /** @deprecated Use Map<__String, T> instead. */
+// export type UnderscoreEscapedMap<T> = Map<__String, T>;
+
+/** SymbolTable based on ES6 Map interface. */
+pub type SymbolTable = HashMap<__String, Symbol>;
 // endregion: 6128
 
 // region: 6246

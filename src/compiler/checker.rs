@@ -371,8 +371,8 @@ impl<'a> TypeChecker<'a> {
 
     // region: 49169
     fn getTypeOfNode(&self, node: &AstKind) -> &dyn Type {
-        if let Some(program) = node.as_program() {
-            if !isExternalModule(program) {
+        if let Some(source_file) = node.as_source_file() {
+            if !isExternalModule(source_file) {
                 return self.errorType.as_type();
             }
         }

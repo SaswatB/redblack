@@ -1,6 +1,6 @@
 use oxc_allocator::Allocator;
 use oxc_ast::{
-    ast::{MetaProperty, Program, Statement},
+    ast::{MetaProperty, SourceFile, Statement},
     match_module_declaration, Visit,
 };
 use oxc_parser::{ParseOptions, Parser};
@@ -11,7 +11,7 @@ use std::sync::LazyLock;
 use super::{
     moduleNameResolver::PackageJsonInfo,
     program::getImpliedNodeFormatForFile,
-    rb_extra::{ProgramExt, RB_CTX},
+    rb_extra::{SourceFileExt, RB_CTX},
     types::{ResolutionMode, ScriptTarget, TypeCheckerHost},
 };
 
@@ -22,7 +22,7 @@ static ALLOCATOR: LazyLock<Allocator> = LazyLock::new(|| Allocator::default());
 pub fn isJSDocLikeText(text: &str, start: usize) -> bool { text.chars().nth(start + 1) == Some('*') && text.chars().nth(start + 2) == Some('*') && text.chars().nth(start + 3) != Some('/') }
 
 /** @internal */
-pub fn isFileProbablyExternalModule(source_file: &Program) -> bool {
+pub fn isFileProbablyExternalModule(source_file: &SourceFile) -> bool {
     // Try to use the first top-level import/export when available, then
     // fall back to looking for an 'import.meta' somewhere in the tree if necessary.
     source_file.body.iter().find(|s| isAnExternalModuleIndicatorNode(s)).is_some() || getImportMetaIfNecessary(source_file)
@@ -38,9 +38,9 @@ fn isAnExternalModuleIndicatorNode(node: &Statement) -> bool {
     }
 }
 
-fn getImportMetaIfNecessary(source_file: &Program) -> bool {
+fn getImportMetaIfNecessary(source_file: &SourceFile) -> bool {
     let mut finder = FindImportMeta { has_import_meta: false };
-    finder.visit_program(source_file);
+    finder.visit_source_file(source_file);
     return finder.has_import_meta;
 }
 
@@ -79,7 +79,7 @@ pub struct CreateSourceFileOptions {
      * `getSetExternalModuleIndicator` on a valid `CompilerOptions` object. If not present, the default
      * check specified by `isFileProbablyExternalModule` will be used to set the field.
      */
-    // pub setExternalModuleIndicator: Option<Box<dyn Fn(&Program)>>,
+    // pub setExternalModuleIndicator: Option<Box<dyn Fn(&SourceFile)>>,
     /** @internal */
     pub packageJsonLocations: Option<Vec<String>>,
     /** @internal */
@@ -91,13 +91,13 @@ impl Default for CreateSourceFileOptions {
     fn default() -> Self { Self { languageVersion: ScriptTarget::ESNext, impliedNodeFormat: None, packageJsonLocations: None, packageJsonScope: None } }
 }
 
-// pub fn setExternalModuleIndicator(source_file: &mut Program) { source_file.externalModuleIndicator = isFileProbablyExternalModule(source_file); }
+// pub fn setExternalModuleIndicator(source_file: &mut SourceFile) { source_file.externalModuleIndicator = isFileProbablyExternalModule(source_file); }
 
-// pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str, language_version_or_options: CreateSourceFileOptions, set_parent_nodes: bool, script_kind: Option<ScriptKind>) -> Program<'a> {
-pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> Program<'a> {
+// pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str, language_version_or_options: CreateSourceFileOptions, set_parent_nodes: bool, script_kind: Option<ScriptKind>) -> SourceFile<'a> {
+pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> SourceFile<'a> {
     // tracing.as_mut().map(|t| t.push(Phase::Parse, "createSourceFile", json!({ "path": file_name }), true));
     // performance::mark("beforeParse");
-    let result: Program;
+    let result: SourceFile;
 
     // let (language_version, override_set_external_module_indicator, format, js_doc_parsing_mode) = match language_version_or_options {
     //     ScriptTargetOrCreateSourceFileOptions::Options(opts) => (opts.language_version, opts.setExternalModuleIndicator, opts.impliedNodeFormat, opts.jsDocParsingMode),
@@ -143,7 +143,7 @@ pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> Program
     let path = Path::new(file_name);
     let source_type = SourceType::from_path(&path).unwrap(); // todo merge with params?
     let ret = Parser::new(&ALLOCATOR, &source_text, source_type).with_options(ParseOptions { parse_regular_expression: true, ..ParseOptions::default() }).parse();
-    result = ret.program;
+    result = ret.source_file;
     result.set_filepath(path.to_path_buf());
     result.set_package_json_scope(None); // todo
     result.set_external_module_indicator(isFileProbablyExternalModule(&result));
@@ -159,5 +159,5 @@ pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> Program
 
 // region: 1384
 // See also `isExternalOrCommonJsModule` in utilities.ts
-pub fn isExternalModule(file: &Program) -> bool { file.external_module_indicator() }
+pub fn isExternalModule(file: &SourceFile) -> bool { file.external_module_indicator() }
 // endregion: 1387

@@ -4,9 +4,9 @@ use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
 use crate::compiler::types::*;
-use oxc_ast::{ast::Program, AstKind, Visit};
+use oxc_ast::{ast::SourceFile, AstKind, Visit};
 
-use super::rb_extra::ProgramExt;
+use super::rb_extra::SourceFileExt;
 
 // region: 8737
 /**
@@ -28,12 +28,12 @@ impl<'a> Visit<'a> for FindJSX {
     }
 }
 
-pub fn isFileModuleFromUsingJSXTag(file: &Program) -> bool {
+pub fn isFileModuleFromUsingJSXTag(file: &SourceFile) -> bool {
     // Excludes declaration files - they still require an explicit `export {}` or the like
     // for back compat purposes. (not that declaration files should contain JSX tags!)
     if !file.source_type.is_typescript_definition() {
         let mut finder = FindJSX { has_jsx: false };
-        finder.visit_program(file);
+        finder.visit_source_file(file);
         return finder.has_jsx;
     }
     false
@@ -43,7 +43,7 @@ pub fn isFileModuleFromUsingJSXTag(file: &Program) -> bool {
 * Note that this requires file.impliedNodeFormat be set already; meaning it must be set very early on
 * in SourceFile construction.
 */
-pub fn isFileForcedToBeModuleByFormat(file: &Program, options: &CompilerOptions) -> bool {
+pub fn isFileForcedToBeModuleByFormat(file: &SourceFile, options: &CompilerOptions) -> bool {
     // Excludes declaration files - they still require an explicit `export {}` or the like
     // for back compat purposes. The only non-declaration files _not_ forced to be a module are `.js` files
     // that aren't esm-mode (meaning not in a `type: module` scope).
@@ -58,7 +58,7 @@ pub fn isFileForcedToBeModuleByFormat(file: &Program, options: &CompilerOptions)
 
 // getSetExternalModuleIndicator
 /** @internal */
-pub fn getExternalModuleIndicator(options: &CompilerOptions, file: &Program) -> bool {
+pub fn getExternalModuleIndicator(options: &CompilerOptions, file: &SourceFile) -> bool {
     match getEmitModuleDetectionKind(options) {
         ModuleDetectionKind::Force => {
             // All non-declaration files are modules, declaration files still do the usual isFileProbablyExternalModule
@@ -285,7 +285,7 @@ pub fn getEmitStandardClassFields(compiler_options: &CompilerOptions) -> bool { 
 pub fn getJSXTransformEnabled(options: &CompilerOptions) -> bool { matches!(options.jsx, Some(JsxEmit::React | JsxEmit::ReactJSX | JsxEmit::ReactJSXDev)) }
 
 // /** @internal */
-// export function getJSXImplicitImportBase(compilerOptions: CompilerOptions, file?: Program): string | undefined {
+// export function getJSXImplicitImportBase(compilerOptions: CompilerOptions, file?: SourceFile): string | undefined {
 //   const jsxImportSourcePragmas = file?.pragmas.get("jsximportsource");
 //   const jsxImportSourcePragma = isArray(jsxImportSourcePragmas) ? jsxImportSourcePragmas[jsxImportSourcePragmas.length - 1] : jsxImportSourcePragmas;
 //   const jsxRuntimePragmas = file?.pragmas.get("jsxruntime");

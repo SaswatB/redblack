@@ -1,10 +1,10 @@
 use super::parser::CreateSourceFileOptions;
-use super::rb_extra::ProgramExt;
+use super::rb_extra::SourceFileExt;
 use crate::compiler::moduleNameResolver::*;
 use crate::compiler::path::*;
 use crate::compiler::types::*;
 use crate::compiler::utilities::*;
-use oxc_ast::ast::Program;
+use oxc_ast::ast::SourceFile;
 
 // region: 1372
 /**
@@ -61,7 +61,7 @@ fn lookupFromPackageJson(file_name: &str, host: &dyn ModuleResolutionHost, optio
 
 // region: 5190
 /** @internal Prefer `program.getImpliedNodeFormatForEmit` when possible. */
-pub fn getImpliedNodeFormatForEmitWorker(sourceFile: &Program, options: &CompilerOptions) -> ResolutionMode {
+pub fn getImpliedNodeFormatForEmitWorker(sourceFile: &SourceFile, options: &CompilerOptions) -> ResolutionMode {
     let moduleKind = getEmitModuleKind(options);
     if ModuleKind::Node16 <= moduleKind && moduleKind <= ModuleKind::NodeNext {
         return sourceFile.implied_node_format();

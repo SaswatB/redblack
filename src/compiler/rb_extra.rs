@@ -1,111 +1,18 @@
-use oxc_ast::ast::Program;
+use oxc_ast::ast::SourceFile;
 use oxc_ast::AstKind;
 use oxc_ast::GetChildren;
-// use std::cell::RefCell;
-// use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-// use std::thread_local;
 
 use super::moduleNameResolver::PackageJsonInfo;
 use super::rb_host::RbTypeCheckerHost;
 use super::types::{CompilerOptions, ResolutionMode};
-
-// #[derive(Clone)]
-// struct ProgramInfo {
-//     path: PathBuf,
-//     package_json_scope: Option<PackageJsonInfo>,
-//     external_module_indicator: bool,
-//     implied_node_format: ResolutionMode,
-// }
-
-// impl ProgramInfo {
-//     fn default() -> Self { Self { path: PathBuf::new(), package_json_scope: None, external_module_indicator: false, implied_node_format: ResolutionMode::Undefined } }
-// }
-
-// thread_local! {
-//     static PROGRAM_INFO_MAP: RefCell<HashMap<usize, ProgramInfo>> = RefCell::new(HashMap::new());
-// }
-
-// pub trait ProgramExt {
-//     fn set_filepath(&self, filepath: String);
-//     fn filepath(&self) -> Option<String>;
-//     fn set_package_json_scope(&self, scope: Option<PackageJsonInfo>);
-//     fn package_json_scope(&self) -> Option<PackageJsonInfo>;
-//     fn set_external_module_indicator(&self, indicator: bool);
-//     fn external_module_indicator(&self) -> bool;
-//     fn set_implied_node_format(&self, implied_node_format: ResolutionMode);
-//     fn implied_node_format(&self) -> ResolutionMode;
-//     fn cleanup_thread_local(&self);
-// }
-
-// impl<'a> ProgramExt for Program<'a> {
-//     fn set_filepath(&self, filepath: String) {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| {
-//             let mut map = map.borrow_mut();
-//             map.entry(ptr).or_insert_with(|| ProgramInfo::default()).path = PathBuf::from(filepath);
-//         });
-//     }
-
-//     fn filepath(&self) -> Option<String> {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow().get(&ptr).map(|info| info.path.to_string_lossy().into_owned()))
-//     }
-
-//     fn set_package_json_scope(&self, scope: Option<PackageJsonInfo>) {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| {
-//             let mut map = map.borrow_mut();
-//             map.entry(ptr).or_insert_with(|| ProgramInfo::default()).package_json_scope = scope;
-//         });
-//     }
-
-//     fn package_json_scope(&self) -> Option<PackageJsonInfo> {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow().get(&ptr).and_then(|info| info.package_json_scope.clone()))
-//     }
-
-//     fn set_external_module_indicator(&self, indicator: bool) {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow_mut().entry(ptr).or_insert_with(|| ProgramInfo::default()).external_module_indicator = indicator);
-//     }
-
-//     fn external_module_indicator(&self) -> bool {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow().get(&ptr).map(|info| info.external_module_indicator).unwrap_or(false))
-//     }
-
-//     fn set_implied_node_format(&self, implied_node_format: ResolutionMode) {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow_mut().entry(ptr).or_insert_with(|| ProgramInfo::default()).implied_node_format = implied_node_format);
-//     }
-
-//     fn implied_node_format(&self) -> ResolutionMode {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow().get(&ptr).map(|info| info.implied_node_format).unwrap_or(ResolutionMode::Undefined))
-//     }
-
-//     fn cleanup_thread_local(&self) {
-//         let ptr = self as *const _ as usize;
-//         PROGRAM_INFO_MAP.with(|map| map.borrow_mut().remove(&ptr));
-//     }
-// }
 
 use paste::paste;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::thread_local;
-
-// macro_rules! replace_lifetime {
-//     (Option<AstKind<'_>>, $lifetime:lifetime) => {
-//         Option<AstKind<$lifetime>>
-//     };
-//     ($type:ty, $lifetime:lifetime) => {
-//         $type
-//     };
-// }
 
 /**
  * Add extra properties to the given struct, with getters and setters.
@@ -165,8 +72,8 @@ macro_rules! entity_properties {
     };
 }
 
-// Add extra properties to the Program struct.
-entity_properties!(Program, {
+// Add extra properties to the SourceFile struct.
+entity_properties!(SourceFile, {
     filepath: PathBuf = PathBuf::new(),
     package_json_scope: Option<PackageJsonInfo> = None,
     external_module_indicator: bool = false,

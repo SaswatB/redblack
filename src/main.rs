@@ -9,13 +9,13 @@ use std::{fs, path::Path};
 
 use compiler::checker::TypeChecker;
 use compiler::parser::createSourceFile;
-use compiler::rb_extra::{cleanup_PROGRAM_INFO_MAP, AstKindExt, RB_CTX};
+use compiler::rb_extra::{cleanup_SOURCEFILE_INFO_MAP, AstKindExt, RB_CTX};
 use compiler::rb_host::RbTypeCheckerHost;
 use compiler::types::{CompilerOptions, TypeCheckerTrait};
-use oxc_ast::ast::{Program, Statement};
+use oxc_ast::ast::{SourceFile, Statement};
 use oxc_ast::{AstKind, GetChildren};
 
-fn fill_parents(program: &mut Box<Program>) {
+fn fill_parents(source_file: &mut Box<SourceFile>) {
     fn dfs(node: AstKind) {
         let children = node.get_children();
         for child in children {
@@ -24,7 +24,7 @@ fn fill_parents(program: &mut Box<Program>) {
         }
     }
 
-    dfs(AstKind::Program(program.as_ref()));
+    dfs(AstKind::SourceFile(source_file.as_ref()));
 }
 
 fn main() {
@@ -46,24 +46,25 @@ fn main() {
 
     // let allocator = Allocator::default();
     // let ret = Parser::new(&allocator, &source_text, source_type).with_options(ParseOptions { parse_regular_expression: true, ..ParseOptions::default() }).parse();
-    // let program = ret.program;
-    // program.set_filepath(path.to_path_buf());
-    // program.set_package_json_scope(None); // todo
-    let mut program = Box::new(createSourceFile(name, &source_text));
+    // let source_file = ret.source_file;
+    // source_file.set_filepath(path.to_path_buf());
+    // source_file.set_package_json_scope(None); // todo
+    let mut source_file = Box::new(createSourceFile(name, &source_text));
     let type_checker = TypeChecker::new(type_checker_host);
-    fill_parents(&mut program);
+    fill_parents(&mut source_file);
 
     println!("AST:");
-    println!("{program:#?}");
+    println!("{source_file:#?}");
 
-    if let Statement::VariableDeclaration(node) = &program.body[0] {
+    if let Statement::VariableDeclaration(node) = &source_file.body[0] {
         println!("Node: {:?}", node);
         println!("Parent: {:?}", node.to_ast_kind().parent());
-        let id = node.declarations[0].id.kind.get_binding_identifier().unwrap();
+        let declarator = &node.declarations[0];
+        let id = declarator.id.kind.get_binding_identifier().unwrap();
         println!("Id: {:?}", id);
 
         let tc = type_checker.borrow();
-        let type_ = tc.getTypeAtLocation(id.to_ast_kind());
+        let type_ = tc.getTypeAtLocation(declarator.to_ast_kind());
         println!("Type: {:?}", type_);
     }
 
@@ -77,6 +78,6 @@ fn main() {
     //     }
     // }
 
-    cleanup_PROGRAM_INFO_MAP();
+    cleanup_SOURCEFILE_INFO_MAP();
     RB_CTX.cleanup();
 }
