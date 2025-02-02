@@ -1,5 +1,5 @@
 use oxc_ast::{
-    ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Declaration, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, SwitchStatement, TaggedTemplateExpression, VariableDeclaration},
+    ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Declaration, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, SourceFile, SwitchStatement, TaggedTemplateExpression, VariableDeclaration},
     AstKind,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -41,6 +41,7 @@ pub struct AssignmentPattern;
 #[derive(Debug)]
 pub struct EmitTextWriter;
 
+// #region: 3123
 /// Represents an expression that can be called or constructed, including function calls,
 /// constructor calls, template literals, decorators, JSX elements, and instanceof checks.
 #[derive(Debug)]
@@ -60,6 +61,7 @@ pub enum CallLikeExpression<'a> {
     ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
     BinaryExpression(Box<BinaryExpression<'a>>),
 }
+// #endregion: 3129
 
 #[derive(Debug)]
 pub struct ObjectLiteralElementLike;
@@ -93,9 +95,6 @@ pub struct MemberName;
 
 #[derive(Debug)]
 pub struct JsxAttributes;
-
-#[derive(Debug)]
-pub struct SourceFile;
 
 #[derive(Debug)]
 pub struct CancellationToken;
@@ -335,7 +334,7 @@ pub struct FlowReduceLabelData<'a> {
 }
 
 pub enum FlowType<'a> {
-    Complete(&'a dyn Type),
+    Complete(&'a dyn Type<'a>),
     Incomplete(IncompleteType<'a>),
 }
 
@@ -343,8 +342,8 @@ pub enum FlowType<'a> {
 // is distinguished from a regular type by a flags value of zero. Incomplete type
 // objects are internal to the getFlowTypeOfReference function and never escape it.
 pub struct IncompleteType<'a> {
-    pub flags: TypeFlags,    // No flags set
-    pub type_: &'a dyn Type, // The type marked incomplete
+    pub flags: TypeFlags,        // No flags set
+    pub type_: &'a dyn Type<'a>, // The type marked incomplete
 }
 // endregion: 4250
 
@@ -377,29 +376,29 @@ pub trait TypeCheckerHost: ModuleSpecifierResolutionHost + std::fmt::Debug {
     fn packageBundlesTypes(&self, package_name: &str) -> bool;
 }
 
-pub trait TypeCheckerTrait: std::fmt::Debug {
-    fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol, node: &AstKind) -> &dyn Type;
-    fn getTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type;
-    fn getDeclaredTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type;
-    fn getPropertiesOfType(&self, type_: &dyn Type) -> Vec<&Symbol>;
-    fn getPropertyOfType(&self, type_: &dyn Type, property_name: &str) -> Option<&Symbol>;
-    fn getPrivateIdentifierPropertyOfType(&self, left_type: &dyn Type, name: &str, location: &AstKind) -> Option<&Symbol>;
+pub trait TypeCheckerTrait<'a>: std::fmt::Debug {
+    fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol<'a>, node: &AstKind) -> &dyn Type<'a>;
+    fn getTypeOfSymbol(&self, symbol: &Symbol<'a>) -> &dyn Type<'a>;
+    fn getDeclaredTypeOfSymbol(&self, symbol: &Symbol<'a>) -> &dyn Type<'a>;
+    fn getPropertiesOfType(&self, type_: &dyn Type<'a>) -> Vec<&Symbol<'a>>;
+    fn getPropertyOfType(&self, type_: &dyn Type<'a>, property_name: &str) -> Option<&Symbol<'a>>;
+    fn getPrivateIdentifierPropertyOfType(&self, left_type: &dyn Type<'a>, name: &str, location: &AstKind) -> Option<&Symbol<'a>>;
     /** @internal */
-    fn getTypeOfPropertyOfType(&self, type_: &dyn Type, propertyName: &str) -> Option<&dyn Type>;
-    fn getIndexInfoOfType(&self, type_: &dyn Type, kind: IndexKind) -> Option<IndexInfo>;
-    fn getIndexInfosOfType(&self, type_: &dyn Type) -> Vec<IndexInfo>;
-    fn getIndexInfosOfIndexSymbol(&self, indexSymbol: Symbol) -> Vec<IndexInfo>;
-    fn getSignaturesOfType(&self, type_: &dyn Type, kind: SignatureKind) -> Vec<&Signature>;
-    fn getIndexTypeOfType(&self, type_: &dyn Type, kind: IndexKind) -> Option<&dyn Type>;
+    fn getTypeOfPropertyOfType(&self, type_: &dyn Type<'a>, propertyName: &str) -> Option<&dyn Type<'a>>;
+    fn getIndexInfoOfType(&self, type_: &dyn Type<'a>, kind: IndexKind) -> Option<IndexInfo>;
+    fn getIndexInfosOfType(&self, type_: &dyn Type<'a>) -> Vec<IndexInfo>;
+    fn getIndexInfosOfIndexSymbol(&self, indexSymbol: Symbol<'a>) -> Vec<IndexInfo>;
+    fn getSignaturesOfType(&self, type_: &dyn Type<'a>, kind: SignatureKind) -> Vec<&Signature<'a>>;
+    fn getIndexTypeOfType(&self, type_: &dyn Type<'a>, kind: IndexKind) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getIndexType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getIndexType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     fn getBaseTypes(&self, type_: &dyn InterfaceType) -> Vec<BaseType>;
-    fn getBaseTypeOfLiteralType(&self, type_: &dyn Type) -> &dyn Type;
-    fn getWidenedType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getBaseTypeOfLiteralType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
+    fn getWidenedType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn getWidenedLiteralType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getWidenedLiteralType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn getPromisedTypeOfPromise(&self, promise: &dyn Type, errorNode: Option<AstKind>) -> Option<&dyn Type>;
+    fn getPromisedTypeOfPromise(&self, promise: &dyn Type<'a>, errorNode: Option<AstKind>) -> Option<&dyn Type<'a>>;
     /// Gets the "awaited type" of a type.
     ///
     /// If an expression has a Promise-like type, the "awaited type" of the expression is
@@ -418,24 +417,24 @@ pub trait TypeCheckerTrait: std::fmt::Debug {
     /// and the value undefined will be returned.
     ///
     /// This is used to reflect the runtime behavior of the await keyword.
-    fn getAwaitedType(&self, type_: &dyn Type) -> Option<&dyn Type>;
+    fn getAwaitedType(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn isEmptyAnonymousObjectType(&self, type_: &dyn Type) -> bool;
-    fn getReturnTypeOfSignature(&self, signature: Signature) -> &dyn Type;
+    fn isEmptyAnonymousObjectType(&self, type_: &dyn Type<'a>) -> bool;
+    fn getReturnTypeOfSignature(&self, signature: Signature<'a>) -> &dyn Type<'a>;
     /// Gets the type of a parameter at a given position in a signature.
     /// Returns any if the index is not valid.
     ///
     /** @internal */
-    fn getParameterType(&self, signature: Signature, parameter_index: usize) -> &dyn Type;
+    fn getParameterType(&self, signature: Signature<'a>, parameter_index: usize) -> &dyn Type<'a>;
     /** @internal */
-    fn getParameterIdentifierInfoAtPosition(&self, signature: Signature, parameter_index: usize) -> Option<(Identifier, &str, bool)>;
-    fn getNullableType(&self, type_: &dyn Type, flags: TypeFlags) -> &dyn Type;
-    fn getNonNullableType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getParameterIdentifierInfoAtPosition(&self, signature: Signature<'a>, parameter_index: usize) -> Option<(Identifier, &str, bool)>;
+    fn getNullableType(&self, type_: &dyn Type<'a>, flags: TypeFlags) -> &dyn Type<'a>;
+    fn getNonNullableType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn getNonOptionalType(&self, type_: &dyn Type) -> &dyn Type;
+    fn getNonOptionalType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn isNullableType(&self, type_: &dyn Type) -> bool;
-    fn getTypeArguments(&self, type_: TypeReference) -> Vec<&dyn Type>;
+    fn isNullableType(&self, type_: &dyn Type<'a>) -> bool;
+    fn getTypeArguments(&self, type_: TypeReference) -> Vec<&dyn Type<'a>>;
 
     // TODO: GH#18217 `xToDeclaration` calls are frequently asserted as defined.
     /// Note that the resulting nodes cannot be checked.
@@ -483,185 +482,185 @@ pub trait TypeCheckerTrait: std::fmt::Debug {
     ///     - `get_symbol_at_location` at the location `T` will return the exported symbol for `T`.
     ///     - But the result of `get_symbols_in_scope` will contain the *local* symbol for `T`, not the exported symbol.
     ///     - Calling `get_export_symbol_of_symbol` on that local symbol will return the exported symbol.
-    fn getExportSymbolOfSymbol(&self, symbol: Symbol) -> Symbol;
+    fn getExportSymbolOfSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a>;
     fn getPropertySymbolOfDestructuringAssignment(&self, location: Identifier) -> Option<Symbol>;
-    fn getTypeOfAssignmentPattern(&self, pattern: AssignmentPattern) -> &dyn Type;
-    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type;
-    fn getTypeFromTypeNode(&self, node: TypeNode) -> &dyn Type;
+    fn getTypeOfAssignmentPattern(&self, pattern: AssignmentPattern) -> &dyn Type<'a>;
+    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type<'a>;
+    fn getTypeFromTypeNode(&self, node: TypeNode) -> &dyn Type<'a>;
 
-    fn signatureToString(&self, signature: Signature, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String;
-    fn typeToString(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
-    fn symbolToString(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String;
+    fn signatureToString(&self, signature: Signature<'a>, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String;
+    fn typeToString(&self, type_: &dyn Type<'a>, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
+    fn symbolToString(&self, symbol: Symbol<'a>, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String;
     fn typePredicateToString(&self, predicate: TypePredicate, enclosing_declaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String;
 
     /** @internal */
-    fn writeSignature(&self, signature: Signature, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>, writer: Option<EmitTextWriter>) -> String;
+    fn writeSignature(&self, signature: Signature<'a>, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>, writer: Option<EmitTextWriter>) -> String;
     /** @internal */
-    fn writeType(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    fn writeType(&self, type_: &dyn Type<'a>, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
     /** @internal */
-    fn writeSymbol(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String;
+    fn writeSymbol(&self, symbol: Symbol<'a>, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String;
     /** @internal */
     fn writeTypePredicate(&self, predicate: TypePredicate, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String;
 
-    fn getFullyQualifiedName(&self, symbol: Symbol) -> String;
-    fn getAugmentedPropertiesOfType(&self, type_: &dyn Type) -> Vec<&Symbol>;
+    fn getFullyQualifiedName(&self, symbol: Symbol<'a>) -> String;
+    fn getAugmentedPropertiesOfType(&self, type_: &dyn Type<'a>) -> Vec<&Symbol<'a>>;
 
-    fn getRootSymbols(&self, symbol: Symbol) -> Vec<Symbol>;
-    fn getSymbolOfExpando(&self, node: AstKind, allowDeclaration: bool) -> Option<Symbol>;
-    fn getContextualType(&self, node: Expression) -> Option<&dyn Type>;
+    fn getRootSymbols(&self, symbol: Symbol<'a>) -> Vec<Symbol<'a>>;
+    fn getSymbolOfExpando(&self, node: AstKind, allowDeclaration: bool) -> Option<Symbol<'a>>;
+    fn getContextualType(&self, node: Expression<'a>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getContextualTypeWithFlags(&self, node: Expression, contextFlags: Option<ContextFlags>) -> Option<&dyn Type>;
+    fn getContextualTypeWithFlags(&self, node: Expression<'a>, contextFlags: Option<ContextFlags>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type>;
+    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression, argIndex: usize) -> Option<&dyn Type>;
+    fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression<'a>, argIndex: usize) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type>;
+    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn isContextSensitive(&self, node: Expression) -> bool;
+    fn isContextSensitive(&self, node: Expression<'a>) -> bool;
     /** @internal */
-    fn getTypeOfPropertyOfContextualType(&self, type_: &dyn Type, name: &str) -> Option<&dyn Type>;
+    fn getTypeOfPropertyOfContextualType(&self, type_: &dyn Type<'a>, name: &str) -> Option<&dyn Type<'a>>;
 
     /// returns unknownSignature in the case of an error.
     /// returns undefined if the node is not valid.
     /// @param argument_count Apparent number of arguments, passed in case of a possibly incomplete call. This should come from an ArgumentListInfo. See `signatureHelp.ts`.
-    fn getResolvedSignature(&self, node: CallLikeExpression, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature>;
+    fn getResolvedSignature(&self, node: CallLikeExpression<'a>, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature<'a>>;
     /** @internal */
-    fn getResolvedSignatureForSignatureHelp(&self, node: CallLikeExpression, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature>;
+    fn getResolvedSignatureForSignatureHelp(&self, node: CallLikeExpression<'a>, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature<'a>>;
     /** @internal */
-    fn getCandidateSignaturesForStringLiteralCompletions(&self, call: CallLikeExpression, editingArgument: AstKind) -> Vec<Signature>;
+    fn getCandidateSignaturesForStringLiteralCompletions(&self, call: CallLikeExpression<'a>, editingArgument: AstKind) -> Vec<Signature<'a>>;
     /** @internal */
-    fn getExpandedParameters(&self, sig: Signature) -> Vec<Vec<Symbol>>;
+    fn getExpandedParameters(&self, sig: Signature<'a>) -> Vec<Vec<Symbol<'a>>>;
     /** @internal */
-    fn hasEffectiveRestParameter(&self, sig: Signature) -> bool;
+    fn hasEffectiveRestParameter(&self, sig: Signature<'a>) -> bool;
     /** @internal */
     fn containsArgumentsReference(&self, declaration: SignatureDeclaration) -> bool;
 
-    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration) -> Option<Signature>;
+    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration) -> Option<Signature<'a>>;
     fn isImplementationOfOverload(&self, node: SignatureDeclaration) -> Option<bool>;
-    fn isUndefinedSymbol(&self, symbol: Symbol) -> bool;
-    fn isArgumentsSymbol(&self, symbol: Symbol) -> bool;
-    fn isUnknownSymbol(&self, symbol: Symbol) -> bool;
-    fn getMergedSymbol(&self, symbol: Symbol) -> Symbol;
+    fn isUndefinedSymbol(&self, symbol: Symbol<'a>) -> bool;
+    fn isArgumentsSymbol(&self, symbol: Symbol<'a>) -> bool;
+    fn isUnknownSymbol(&self, symbol: Symbol<'a>) -> bool;
+    fn getMergedSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a>;
     /** @internal */
-    fn symbolIsValue(&self, symbol: Symbol, includeTypeOnlyMembers: Option<bool>) -> bool;
+    fn symbolIsValue(&self, symbol: Symbol<'a>, includeTypeOnlyMembers: Option<bool>) -> bool;
 
     fn getConstantValue(&self, node: EnumMember) -> Option<String>;
     fn isValidPropertyAccess(&self, node: PropertyAccessExpression, propertyName: &str) -> bool;
     /// Exclude accesses to private properties.
     ///
     /** @internal */
-    fn isValidPropertyAccessForCompletions(&self, node: PropertyAccessExpression, type_: &dyn Type, property: Symbol) -> bool;
+    fn isValidPropertyAccessForCompletions(&self, node: PropertyAccessExpression, type_: &dyn Type<'a>, property: Symbol) -> bool;
     /// Follow all aliases to get the original symbol.
-    fn getAliasedSymbol(&self, symbol: Symbol) -> Symbol;
+    fn getAliasedSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a>;
     /// Follow a *single* alias to get the immediately aliased symbol.
-    fn getImmediateAliasedSymbol(&self, symbol: Symbol) -> Option<Symbol>;
-    fn getExportsOfModule(&self, moduleSymbol: Symbol) -> Vec<Symbol>;
+    fn getImmediateAliasedSymbol(&self, symbol: Symbol<'a>) -> Option<Symbol<'a>>;
+    fn getExportsOfModule(&self, moduleSymbol: Symbol<'a>) -> Vec<Symbol<'a>>;
     /// Unlike `get_exports_of_module`, this includes properties of an `export =` value.
     ///
     /** @internal */
-    fn getExportsAndPropertiesOfModule(&self, moduleSymbol: Symbol) -> Vec<Symbol>;
+    fn getExportsAndPropertiesOfModule(&self, moduleSymbol: Symbol<'a>) -> Vec<Symbol<'a>>;
     /** @internal */
     // fn forEachExportAndPropertyOfModule(&self, moduleSymbol: Symbol, cb: impl Fn(Symbol, &str));
-    fn getJsxIntrinsicTagNamesAt(&self, location: AstKind) -> Vec<Symbol>;
+    fn getJsxIntrinsicTagNamesAt(&self, location: AstKind) -> Vec<Symbol<'a>>;
     fn isOptionalParameter(&self, node: Argument) -> bool;
-    fn getAmbientModules(&self) -> Vec<Symbol>;
+    fn getAmbientModules(&self) -> Vec<Symbol<'a>>;
 
-    fn tryGetMemberInModuleExports(&self, memberName: &str, moduleSymbol: Symbol) -> Option<Symbol>;
+    fn tryGetMemberInModuleExports(&self, memberName: &str, moduleSymbol: Symbol<'a>) -> Option<Symbol<'a>>;
     /// Unlike `try_get_member_in_module_exports`, this includes properties of an `export =` value.
     /// Does *not* return properties of primitive types.
     ///
     /** @internal */
-    fn tryGetMemberInModuleExportsAndProperties(&self, memberName: &str, moduleSymbol: Symbol) -> Option<Symbol>;
-    fn getApparentType(&self, type_: &dyn Type) -> &dyn Type;
+    fn tryGetMemberInModuleExportsAndProperties(&self, memberName: &str, moduleSymbol: Symbol<'a>) -> Option<Symbol<'a>>;
+    fn getApparentType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn getSuggestedSymbolForNonexistentProperty(&self, name: MemberName, containingType: &dyn Type) -> Option<Symbol>;
+    fn getSuggestedSymbolForNonexistentProperty(&self, name: MemberName, containingType: &dyn Type<'a>) -> Option<Symbol<'a>>;
     /** @internal */
-    fn getSuggestedSymbolForNonexistentJsxAttribute(&self, name: Identifier, containingType: &dyn Type) -> Option<Symbol>;
+    fn getSuggestedSymbolForNonexistentJsxAttribute(&self, name: Identifier, containingType: &dyn Type<'a>) -> Option<Symbol<'a>>;
     /** @internal */
-    fn getSuggestedSymbolForNonexistentSymbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol>;
+    fn getSuggestedSymbolForNonexistentSymbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol<'a>>;
     /** @internal */
-    fn getSuggestedSymbolForNonexistentModule(&self, node: Identifier, target: Symbol) -> Option<Symbol>;
+    fn getSuggestedSymbolForNonexistentModule(&self, node: Identifier, target: Symbol<'a>) -> Option<Symbol<'a>>;
     /** @internal */
-    fn getSuggestedSymbolForNonexistentClassMember(&self, name: &str, baseType: &dyn Type) -> Option<Symbol>;
-    fn getBaseConstraintOfType(&self, type_: &dyn Type) -> Option<&dyn Type>;
-    fn getDefaultFromTypeParameter(&self, type_: &dyn Type) -> Option<&dyn Type>;
+    fn getSuggestedSymbolForNonexistentClassMember(&self, name: &str, baseType: &dyn Type<'a>) -> Option<Symbol<'a>>;
+    fn getBaseConstraintOfType(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>>;
+    fn getDefaultFromTypeParameter(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>>;
 
     /// Gets the intrinsic `any` type. There are multiple types that act as `any` used internally in the compiler,
     /// so the type returned by this function should not be used in equality checks to determine if another type
     /// is `any`. Instead, use `type.flags & TypeFlags.Any`.
-    fn getAnyType(&self) -> &dyn Type;
-    fn getStringType(&self) -> &dyn Type;
+    fn getAnyType(&self) -> &dyn Type<'a>;
+    fn getStringType(&self) -> &dyn Type<'a>;
     fn getStringLiteralType(&self, value: &str) -> StringLiteralType;
-    fn getNumberType(&self) -> &dyn Type;
+    fn getNumberType(&self) -> &dyn Type<'a>;
     fn getNumberLiteralType(&self, value: f64) -> NumberLiteralType;
-    fn getBigIntType(&self) -> &dyn Type;
+    fn getBigIntType(&self) -> &dyn Type<'a>;
     fn getBigIntLiteralType(&self, value: PseudoBigInt) -> BigIntLiteralType;
-    fn getBooleanType(&self) -> &dyn Type;
+    fn getBooleanType(&self) -> &dyn Type<'a>;
     /** @internal */
-    fn getFalseType(&self, fresh: Option<bool>) -> &dyn Type;
+    fn getFalseType(&self, fresh: Option<bool>) -> &dyn Type<'a>;
     /** @internal */
-    fn getTrueType(&self, fresh: Option<bool>) -> &dyn Type;
-    fn getVoidType(&self) -> &dyn Type;
+    fn getTrueType(&self, fresh: Option<bool>) -> &dyn Type<'a>;
+    fn getVoidType(&self) -> &dyn Type<'a>;
     /// Gets the intrinsic `undefined` type. There are multiple types that act as `undefined` used internally in the compiler
     /// depending on compiler options, so the type returned by this function should not be used in equality checks to determine
     /// if another type is `undefined`. Instead, use `type.flags & TypeFlags.Undefined`.
-    fn getUndefinedType(&self) -> &dyn Type;
+    fn getUndefinedType(&self) -> &dyn Type<'a>;
     /// Gets the intrinsic `null` type. There are multiple types that act as `null` used internally in the compiler,
     /// so the type returned by this function should not be used in equality checks to determine if another type
     /// is `null`. Instead, use `type.flags & TypeFlags.Null`.
-    fn getNullType(&self) -> &dyn Type;
-    fn getESSymbolType(&self) -> &dyn Type;
+    fn getNullType(&self) -> &dyn Type<'a>;
+    fn getESSymbolType(&self) -> &dyn Type<'a>;
     /// Gets the intrinsic `never` type. There are multiple types that act as `never` used internally in the compiler,
     /// so the type returned by this function should not be used in equality checks to determine if another type
     /// is `never`. Instead, use `type.flags & TypeFlags.Never`.
-    fn getNeverType(&self) -> &dyn Type;
+    fn getNeverType(&self) -> &dyn Type<'a>;
     /** @internal */
-    fn getOptionalType(&self) -> &dyn Type;
+    fn getOptionalType(&self) -> &dyn Type<'a>;
     /** @internal */
-    fn getUnionType(&self, types: Vec<&dyn Type>, subtypeReduction: Option<UnionReduction>) -> &dyn Type;
+    fn getUnionType(&self, types: Vec<&dyn Type<'a>>, subtypeReduction: Option<UnionReduction>) -> &dyn Type<'a>;
     /** @internal */
-    fn createArrayType(&self, elementType: &dyn Type) -> &dyn Type;
+    fn createArrayType(&self, elementType: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn getElementTypeOfArrayType(&self, arrayType: &dyn Type) -> Option<&dyn Type>;
+    fn getElementTypeOfArrayType(&self, arrayType: &dyn Type<'a>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn createPromiseType(&self, type_: &dyn Type) -> &dyn Type;
+    fn createPromiseType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a>;
     /** @internal */
-    fn getPromiseType(&self) -> &dyn Type;
+    fn getPromiseType(&self) -> &dyn Type<'a>;
     /** @internal */
-    fn getPromiseLikeType(&self) -> &dyn Type;
+    fn getPromiseLikeType(&self) -> &dyn Type<'a>;
     /** @internal */
-    fn getAnyAsyncIterableType(&self) -> Option<&dyn Type>;
+    fn getAnyAsyncIterableType(&self) -> Option<&dyn Type<'a>>;
 
     /// Returns true if the "source" type is assignable to the "target" type.
-    fn isTypeAssignableTo(&self, source: &dyn Type, target: &dyn Type) -> bool;
+    fn isTypeAssignableTo(&self, source: &dyn Type<'a>, target: &dyn Type<'a>) -> bool;
     /** @internal */
-    fn createAnonymousType(&self, symbol: Option<Symbol>, members: SymbolTable, callSignatures: Vec<Signature>, constructSignatures: Vec<Signature>, indexInfos: Vec<IndexInfo>) -> &dyn Type;
+    fn createAnonymousType(&self, symbol: Option<Symbol<'a>>, members: SymbolTable, callSignatures: Vec<Signature<'a>>, constructSignatures: Vec<Signature<'a>>, indexInfos: Vec<IndexInfo>) -> &dyn Type<'a>;
     /** @internal */
     fn createSignature(
         &self, declaration: Option<SignatureDeclaration>, typeParameters: Option<Vec<TypeParameter>>, thisParameter: Option<Symbol>, parameters: Vec<Symbol>, resolvedReturnType: &dyn Type, typePredicate: Option<TypePredicate>, minArgumentCount: usize, flags: SignatureFlags,
-    ) -> Signature;
+    ) -> Signature<'a>;
     /** @internal */
     fn createSymbol(&self, flags: SymbolFlags, name: &str) -> TransientSymbol;
     /** @internal */
-    fn createIndexInfo(&self, keyType: &dyn Type, type_: &dyn Type, isReadonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
+    fn createIndexInfo(&self, keyType: &dyn Type<'a>, type_: &dyn Type<'a>, isReadonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
     /** @internal */
-    fn isSymbolAccessible(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, shouldComputeAliasToMarkVisible: bool) -> SymbolAccessibilityResult;
+    fn isSymbolAccessible(&self, symbol: Symbol<'a>, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, shouldComputeAliasToMarkVisible: bool) -> SymbolAccessibilityResult;
     /** @internal */
-    fn tryFindAmbientModule(&self, moduleName: &str) -> Option<Symbol>;
+    fn tryFindAmbientModule(&self, moduleName: &str) -> Option<Symbol<'a>>;
 
     /** @internal */
-    fn getSymbolWalker(&self, accept: Option<fn(Symbol) -> bool>) -> SymbolWalker;
+    fn getSymbolWalker(&self, accept: Option<fn(Symbol<'a>) -> bool>) -> SymbolWalker;
 
     // Should not be called directly.  Should only be accessed through the Program instance.
     /** @internal */
-    fn getDiagnostics(&self, sourceFile: Option<SourceFile>, cancellationToken: Option<CancellationToken>, nodesToCheck: Option<Vec<AstKind>>) -> Vec<Diagnostic>;
+    fn getDiagnostics(&self, sourceFile: Option<&SourceFile<'a>>, cancellationToken: Option<CancellationToken>, nodesToCheck: Option<Vec<AstKind>>) -> Vec<Diagnostic>;
     /** @internal */
     fn getGlobalDiagnostics(&self) -> Vec<Diagnostic>;
     /** @internal */
-    fn getEmitResolver(&self, sourceFile: Option<SourceFile>, cancellationToken: Option<CancellationToken>, forceDts: Option<bool>) -> EmitResolver;
+    fn getEmitResolver(&self, sourceFile: Option<&SourceFile<'a>>, cancellationToken: Option<CancellationToken>, forceDts: Option<bool>) -> EmitResolver;
     /** @internal */
-    fn requiresAddingImplicitUndefined(&self, parameter: Argument, enclosingDeclaration: Option<AstKind>) -> bool;
+    fn requiresAddingImplicitUndefined(&self, parameter: Argument<'a>, enclosingDeclaration: Option<AstKind>) -> bool;
 
     /** @internal */
     fn getNodeCount(&self) -> usize;
@@ -676,34 +675,34 @@ pub trait TypeCheckerTrait: std::fmt::Debug {
     /** @internal */
     fn getRelationCacheSizes(&self) -> (usize, usize, usize, usize);
     /** @internal */
-    fn getRecursionIdentity(&self, type_: &dyn Type) -> Option<&dyn Type>;
+    fn getRecursionIdentity(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getUnmatchedProperties(&self, source: &dyn Type, target: &dyn Type, requireOptionalProperties: bool, matchDiscriminantProperties: bool) -> Box<dyn Iterator<Item = Symbol>>;
+    fn getUnmatchedProperties(&self, source: &dyn Type<'a>, target: &dyn Type<'a>, requireOptionalProperties: bool, matchDiscriminantProperties: bool) -> Box<dyn Iterator<Item = Symbol<'a>>>;
 
     /// True if this type is the `Array` or `ReadonlyArray` type from lib.d.ts.
     /// This function will _not_ return true if passed a type which
     /// extends `Array` (for example, the TypeScript AST's `NodeArray` type).
-    fn isArrayType(&self, type_: &dyn Type) -> bool;
+    fn isArrayType(&self, type_: &dyn Type<'a>) -> bool;
     /// True if this type is a tuple type. This function will _not_ return true if
     /// passed a type which extends from a tuple.
-    fn isTupleType(&self, type_: &dyn Type) -> bool;
+    fn isTupleType(&self, type_: &dyn Type<'a>) -> bool;
     /// True if this type is assignable to `ReadonlyArray<any>`.
-    fn isArrayLikeType(&self, type_: &dyn Type) -> bool;
+    fn isArrayLikeType(&self, type_: &dyn Type<'a>) -> bool;
 
     /// True if `contextualType` should not be considered for completions because
     /// e.g. it specifies `kind: "a"` and obj has `kind: "b"`.
     ///
     /** @internal */
-    fn isTypeInvalidDueToUnionDiscriminant(&self, contextualType: &dyn Type, obj: ObjectExpression) -> bool;
+    fn isTypeInvalidDueToUnionDiscriminant(&self, contextualType: &dyn Type<'a>, obj: ObjectExpression<'a>) -> bool;
     /** @internal */
-    fn getExactOptionalProperties(&self, type_: &dyn Type) -> Vec<Symbol>;
+    fn getExactOptionalProperties(&self, type_: &dyn Type<'a>) -> Vec<Symbol<'a>>;
     /// For a union, will include a property if it's defined in *any* of the member types.
     /// So for `{ a } | { b }`, this will include both `a` and `b`.
     /// Does not include properties of primitive types.
     ///
     /** @internal */
-    fn getAllPossiblePropertiesOfTypes(&self, types: Vec<&dyn Type>) -> Vec<Symbol>;
-    fn resolveName(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, excludeGlobals: bool) -> Option<Symbol>;
+    fn getAllPossiblePropertiesOfTypes(&self, types: Vec<&dyn Type<'a>>) -> Vec<Symbol<'a>>;
+    fn resolveName(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, excludeGlobals: bool) -> Option<Symbol<'a>>;
     /** @internal */
     fn getJsxNamespace(&self, location: Option<AstKind>) -> String;
     /** @internal */
@@ -718,21 +717,21 @@ pub trait TypeCheckerTrait: std::fmt::Debug {
     /// This should be called in a loop climbing parents of the symbol, so we'll get `N`.
     ///
     /** @internal */
-    fn getAccessibleSymbolChain(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, useOnlyExternalAliasing: bool) -> Option<Vec<Symbol>>;
-    fn getTypePredicateOfSignature(&self, signature: Signature) -> Option<TypePredicate>;
+    fn getAccessibleSymbolChain(&self, symbol: Symbol<'a>, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, useOnlyExternalAliasing: bool) -> Option<Vec<Symbol<'a>>>;
+    fn getTypePredicateOfSignature(&self, signature: Signature<'a>) -> Option<TypePredicate>;
     /** @internal */
-    fn resolveExternalModuleName(&self, moduleSpecifier: Expression) -> Option<Symbol>;
+    fn resolveExternalModuleName(&self, moduleSpecifier: Expression<'a>) -> Option<Symbol<'a>>;
     /// An external module with an 'export =' declaration resolves to the target of the 'export =' declaration,
     /// and an external module with no 'export =' declaration resolves to the module itself.
     ///
     /** @internal */
-    fn resolveExternalModuleSymbol(&self, symbol: Symbol) -> Symbol;
+    fn resolveExternalModuleSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a>;
     /// @param node A location where we might consider accessing `this`. Not necessarily a ThisExpression.
     ///
     /** @internal */
-    fn tryGetThisTypeAt(&self, node: AstKind, includeGlobalThis: Option<bool>, container: Option<ThisContainer>) -> Option<&dyn Type>;
+    fn tryGetThisTypeAt(&self, node: AstKind, includeGlobalThis: Option<bool>, container: Option<ThisContainer>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getTypeArgumentConstraint(&self, node: TypeNode) -> Option<&dyn Type>;
+    fn getTypeArgumentConstraint(&self, node: TypeNode) -> Option<&dyn Type<'a>>;
 
     /// Does *not* get *all* suggestion diagnostics, just the ones that were convenient to report in the checker.
     /// Others are added in computeSuggestionDiagnostics.
@@ -747,21 +746,21 @@ pub trait TypeCheckerTrait: std::fmt::Debug {
     // fn run_with_cancellationToken<T>(&self, token: Option<CancellationToken>, cb: impl Fn() -> T) -> T;
 
     /** @internal */
-    fn getLocalTypeParametersOfClassOrInterfaceOrTypeAlias(&self, symbol: Symbol) -> Option<Vec<TypeParameter>>;
+    fn getLocalTypeParametersOfClassOrInterfaceOrTypeAlias(&self, symbol: Symbol<'a>) -> Option<Vec<TypeParameter>>;
     /** @internal */
-    fn isDeclarationVisible(&self, node: Declaration) -> bool;
+    fn isDeclarationVisible(&self, node: Declaration<'a>) -> bool;
     /** @internal */
-    fn isPropertyAccessible(&self, node: AstKind, isSuper: bool, isWrite: bool, containingType: &dyn Type, property: Symbol) -> bool;
+    fn isPropertyAccessible(&self, node: AstKind, isSuper: bool, isWrite: bool, containingType: &dyn Type<'a>, property: Symbol<'a>) -> bool;
     /** @internal */
-    fn getTypeOnlyAliasDeclaration(&self, symbol: Symbol) -> Option<TypeOnlyAliasDeclaration>;
+    fn getTypeOnlyAliasDeclaration(&self, symbol: Symbol<'a>) -> Option<TypeOnlyAliasDeclaration>;
     /** @internal */
-    fn getMemberOverrideModifierStatus(&self, node: ClassLikeDeclaration, member: ClassElement, memberSymbol: Symbol) -> MemberOverrideStatus;
+    fn getMemberOverrideModifierStatus(&self, node: ClassLikeDeclaration, member: ClassElement, memberSymbol: Symbol<'a>) -> MemberOverrideStatus;
     /** @internal */
     fn isTypeParameterPossiblyReferenced(&self, tp: TypeParameter, node: AstKind) -> bool;
     /** @internal */
-    fn typeHasCallOrConstructSignatures(&self, type_: &dyn Type) -> bool;
+    fn typeHasCallOrConstructSignatures(&self, type_: &dyn Type<'a>) -> bool;
     /** @internal */
-    fn getSymbolFlags(&self, symbol: Symbol) -> SymbolFlags;
+    fn getSymbolFlags(&self, symbol: Symbol<'a>) -> SymbolFlags;
 }
 // endregion: 5416
 
@@ -794,13 +793,13 @@ pub struct Signature<'a> {
     /** @internal */
     pub flags: SignatureFlags,
     /** @internal */
-    pub checker: Option<Box<dyn TypeCheckerTrait>>,
+    pub checker: Option<Box<dyn TypeCheckerTrait<'a>>>,
     pub declaration: Option<SignatureDeclaration>,  // Originating declaration
     pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
     pub parameters: Vec<rc_cell!(Symbol<'a>)>,      // Parameters
     pub thisParameter: opt_rc_cell!(Symbol<'a>),    // symbol of this-type parameter
     /** @internal */
-    pub resolvedReturnType: Option<Box<dyn Type>>, // Lazily set by `getReturnTypeOfSignature`
+    pub resolvedReturnType: Option<Box<dyn Type<'a>>>, // Lazily set by `getReturnTypeOfSignature`
     /** @internal */
     pub resolvedTypePredicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
     /** @internal */
@@ -810,7 +809,7 @@ pub struct Signature<'a> {
     /** @internal */
     pub target: opt_rc_cell!(Signature<'a>), // Instantiation target
     /** @internal */
-    pub mapper: Option<TypeMapper>, // Instantiation mapper
+    pub mapper: Option<TypeMapper<'a>>, // Instantiation mapper
     /** @internal */
     pub compositeSignatures: Option<Vec<Signature<'a>>>, // Underlying signatures of a union/intersection signature
     /** @internal */
@@ -824,7 +823,7 @@ pub struct Signature<'a> {
     /** @internal */
     pub optionalCallSignatureCache: Option<OptionalCallSignatureCache<'a>>, // Optional chained call version of signature (deferred)
     /** @internal */
-    pub isolatedSignatureType: Option<Box<dyn ObjectType>>, // A manufactured type that just contains the signature for purposes of signature comparison
+    pub isolatedSignatureType: Option<Box<dyn ObjectType<'a>>>, // A manufactured type that just contains the signature for purposes of signature comparison
     /** @internal */
     pub instantiations: Option<HashMap<String, rc_cell!(Signature<'a>)>>, // Generic signature instantiation cache
     /** @internal */
@@ -1120,28 +1119,28 @@ pub struct TypeObject<'a> {
     pub id: TypeId, // Unique ID
     /** @internal */
     // pub checker: Arc<Mutex<dyn TypeCheckerTrait>>, //Arc<&'a dyn TypeCheckerTrait>,
-    pub symbol: rc_cell!(Symbol<'a>), // Symbol associated with type (if any)
+    pub symbol: opt_rc_cell!(Symbol<'a>), // Symbol associated with type (if any)
     pub pattern: Option<DestructuringPattern<'a>>, // Destructuring pattern represented by type (if any)
     pub aliasSymbol: opt_rc_cell!(Symbol<'a>), // Alias associated with type
-    pub aliasTypeArguments: Option<Vec<Box<dyn Type>>>, // Alias type arguments (if any)
+    pub aliasTypeArguments: Option<Vec<Box<dyn Type<'a>>>>, // Alias type arguments (if any)
     /** @internal */
-    pub permissiveInstantiation: Option<Box<dyn Type>>, // Instantiation with type parameters mapped to wildcard type
+    pub permissiveInstantiation: Option<Box<dyn Type<'a>>>, // Instantiation with type parameters mapped to wildcard type
     /** @internal */
-    pub restrictiveInstantiation: Option<Box<dyn Type>>, // Instantiation with type parameters mapped to unconstrained form
+    pub restrictiveInstantiation: Option<Box<dyn Type<'a>>>, // Instantiation with type parameters mapped to unconstrained form
     /** @internal */
-    pub immediateBaseConstraint: Option<Box<dyn Type>>, // Immediate base constraint cache
+    pub immediateBaseConstraint: Option<Box<dyn Type<'a>>>, // Immediate base constraint cache
     /** @internal */
-    pub widened: Option<Box<dyn Type>>, // Cached widened form of the type
+    pub widened: Option<Box<dyn Type<'a>>>, // Cached widened form of the type
 
     pub object_flags: Option<ObjectFlags>,               // ObjectFlagsType
     pub intrinsic_props: Option<IntrinsicTypeProps>,     // IntrinsicType
     pub freshable_props: Option<FreshableTypeProps<'a>>, // FreshableType
     pub object_props: Option<ObjectTypeProps<'a>>,       // ObjectType
-    pub interface_props: Option<InterfaceTypeProps>,     // InterfaceType
+    pub interface_props: Option<InterfaceTypeProps<'a>>, // InterfaceType
 }
-pub trait Type: std::fmt::Debug {
+pub trait Type<'a>: std::fmt::Debug {
     fn getFlags(&self) -> TypeFlags;
-    fn getSymbol(&self) -> Option<&Symbol>;
+    fn getSymbol(&self) -> opt_rc_cell!(Symbol<'a>);
     // fn getProperties(&self) -> Vec<&Symbol>;
     // fn getProperty(&self, property_name: &str) -> Option<&Symbol>;
     // fn getApparentProperties(&self) -> Vec<&Symbol>;
@@ -1166,7 +1165,7 @@ pub trait Type: std::fmt::Debug {
     fn isClass(&self) -> bool;
     fn isIndexType(&self) -> bool;
 
-    fn as_type(&self) -> &dyn Type;
+    fn as_type(&self) -> &dyn Type<'a>;
 }
 
 /** @internal */
@@ -1177,25 +1176,25 @@ pub struct IntrinsicTypeProps {
     pub debugIntrinsicName: Option<String>,
 }
 
-pub trait IntrinsicType: ObjectFlagsTrait {
+pub trait IntrinsicType<'a>: ObjectFlagsTrait<'a> {
     fn get_intrinsic_props(&self) -> &IntrinsicTypeProps;
 }
 
 /** @internal */
-pub trait NullableType: IntrinsicType {}
+pub trait NullableType<'a>: IntrinsicType<'a> {}
 
 #[derive(Debug, Clone)]
 pub struct FreshableTypeProps<'a> {
-    pub freshType: &'a dyn FreshableType,   // Fresh version of type
-    pub regularType: &'a dyn FreshableType, // Regular version of type
+    pub freshType: &'a dyn FreshableType<'a>,   // Fresh version of type
+    pub regularType: &'a dyn FreshableType<'a>, // Regular version of type
 }
 
-pub trait FreshableType: Type {
-    fn get_freshable_type_props(&self) -> &FreshableTypeProps;
+pub trait FreshableType<'a>: Type<'a> {
+    fn get_freshable_type_props(&self) -> &FreshableTypeProps<'a>;
 }
 
 /** @internal */
-pub trait FreshableIntrinsicType: FreshableType + IntrinsicType {}
+pub trait FreshableIntrinsicType<'a>: FreshableType<'a> + IntrinsicType<'a> {}
 // endregion: 6392
 
 // region: 6423
@@ -1283,13 +1282,13 @@ define_flags!(ObjectFlags {
     IsConstrainedTypeVariable = 1 << 26, // T & C, where T's constraint and C are primitives, object, or {}
 });
 
-pub trait ObjectFlagsTrait: Type {
+pub trait ObjectFlagsTrait<'a>: Type<'a> {
     fn get_object_flags(&self) -> ObjectFlags;
 }
 
-enum ObjectFlagsType {
-    NullableType(Box<dyn NullableType>),
-    ObjectType(Box<dyn ObjectType>),
+enum ObjectFlagsType<'a> {
+    NullableType(Box<dyn NullableType<'a>>),
+    ObjectType(Box<dyn ObjectType<'a>>),
     // UnionType(Box<dyn UnionType>),
     // IntersectionType(Box<dyn IntersectionType>),
 }
@@ -1307,29 +1306,29 @@ pub struct ObjectTypeProps<'a> {
     /** @internal */
     pub indexInfos: Option<Vec<IndexInfo>>, // Index signatures
     /** @internal */
-    pub objectTypeWithoutAbstractConstructSignatures: Option<Box<dyn ObjectType>>,
+    pub objectTypeWithoutAbstractConstructSignatures: Option<Box<dyn ObjectType<'a>>>,
 }
 
-pub trait ObjectType: ObjectFlagsTrait {
-    fn get_object_props(&self) -> &ObjectTypeProps;
+pub trait ObjectType<'a>: ObjectFlagsTrait<'a> {
+    fn get_object_props(&self) -> &ObjectTypeProps<'a>;
 }
 
 #[derive(Debug)]
-pub struct InterfaceTypeProps {
+pub struct InterfaceTypeProps<'a> {
     pub typeParameters: Option<Vec<TypeParameter>>,      // Type parameters (undefined if non-generic)
     pub outerTypeParameters: Option<Vec<TypeParameter>>, // Outer type parameters (undefined if none)
     pub localTypeParameters: Option<Vec<TypeParameter>>, // Local type parameters (undefined if none)
     pub thisType: Option<TypeParameter>,                 // The "this" type (undefined if none)
     /** @internal */
-    pub resolvedBaseConstructorType: Option<Box<dyn Type>>, // Resolved base constructor type of class
+    pub resolvedBaseConstructorType: Option<Box<dyn Type<'a>>>, // Resolved base constructor type of class
     /** @internal */
     pub resolvedBaseTypes: Vec<BaseType>, // Resolved base types
     /** @internal */
     pub baseTypesResolved: Option<bool>,
 }
 
-pub trait InterfaceType: ObjectType {
-    fn get_interface_props(&self) -> &InterfaceTypeProps;
+pub trait InterfaceType<'a>: ObjectType<'a> {
+    fn get_interface_props(&self) -> &InterfaceTypeProps<'a>;
 }
 // endregion: 6537
 
@@ -1344,16 +1343,16 @@ pub enum TypeMapKind {
     Merged,
 }
 
-pub enum TypeMapper {
-    Simple { source: Box<dyn Type>, target: Box<dyn Type> },
-    Array { sources: Vec<Box<dyn Type>>, targets: Option<Vec<Box<dyn Type>>> },
-    Deferred { sources: Vec<Box<dyn Type>>, targets: Vec<Box<dyn Fn() -> Box<dyn Type>>> },
-    Function { func: Box<dyn Fn(Box<dyn Type>) -> Box<dyn Type>>, debug_info: Option<Box<dyn Fn() -> String>> },
-    Composite { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
-    Merged { mapper1: Box<TypeMapper>, mapper2: Box<TypeMapper> },
+pub enum TypeMapper<'a> {
+    Simple { source: Box<dyn Type<'a>>, target: Box<dyn Type<'a>> },
+    Array { sources: Vec<Box<dyn Type<'a>>>, targets: Option<Vec<Box<dyn Type<'a>>>> },
+    Deferred { sources: Vec<Box<dyn Type<'a>>>, targets: Vec<Box<dyn Fn() -> Box<dyn Type<'a>>>> },
+    Function { func: Box<dyn Fn(Box<dyn Type<'a>>) -> Box<dyn Type<'a>>>, debug_info: Option<Box<dyn Fn() -> String>> },
+    Composite { mapper1: Box<TypeMapper<'a>>, mapper2: Box<TypeMapper<'a>> },
+    Merged { mapper1: Box<TypeMapper<'a>>, mapper2: Box<TypeMapper<'a>> },
 }
 
-impl std::fmt::Debug for TypeMapper {
+impl<'a> std::fmt::Debug for TypeMapper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Simple { source, target } => f.debug_struct("Simple").field("source", source).field("target", target).finish(),

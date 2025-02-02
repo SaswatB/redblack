@@ -1,13 +1,16 @@
 use crate::compiler::parser::*;
 use crate::compiler::types::*;
 use crate::flag_names_impl;
+use crate::opt_rc_cell;
+use oxc_ast::ast::Declaration;
+use oxc_ast::ast::SourceFile;
 use oxc_ast::{
     ast::{Argument, Expression, ObjectExpression},
     AstKind,
 };
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::rc::Rc;
 
 // region: 1311
 /** @internal */
@@ -71,66 +74,66 @@ impl std::ops::BitAnd for CheckMode {
 
 #[derive(Debug)]
 pub struct TypeChecker<'a> {
-    host: Arc<dyn TypeCheckerHost>,
+    host: Rc<dyn TypeCheckerHost>,
 
     typeCount: usize,
     seenIntrinsicNames: HashSet<String>,
-    anyType: Arc<dyn IntrinsicType + 'a>,
-    autoType: Arc<dyn IntrinsicType + 'a>,
-    wildcardType: Arc<dyn IntrinsicType + 'a>,
-    blockedStringType: Arc<dyn IntrinsicType + 'a>,
-    errorType: Arc<dyn IntrinsicType + 'a>,
-    unresolvedType: Arc<dyn IntrinsicType + 'a>,
-    nonInferrableAnyType: Arc<dyn IntrinsicType + 'a>,
-    intrinsicMarkerType: Arc<dyn IntrinsicType + 'a>,
-    unknownType: Arc<dyn IntrinsicType + 'a>,
-    undefinedType: Arc<dyn IntrinsicType + 'a>,
-    undefinedWideningType: Arc<dyn IntrinsicType + 'a>,
-    missingType: Arc<dyn IntrinsicType + 'a>,
-    undefinedOrMissingType: Arc<dyn IntrinsicType + 'a>,
-    optionalType: Arc<dyn IntrinsicType + 'a>,
-    nullType: Arc<dyn IntrinsicType + 'a>,
-    nullWideningType: Arc<dyn IntrinsicType + 'a>,
-    stringType: Arc<dyn IntrinsicType + 'a>,
-    numberType: Arc<dyn IntrinsicType + 'a>,
-    bigintType: Arc<dyn IntrinsicType + 'a>,
-    falseType: Arc<dyn FreshableIntrinsicType + 'a>,
-    regularFalseType: Arc<dyn FreshableIntrinsicType + 'a>,
-    trueType: Arc<dyn FreshableIntrinsicType + 'a>,
-    regularTrueType: Arc<dyn FreshableIntrinsicType + 'a>,
+    anyType: Rc<dyn IntrinsicType<'a> + 'a>,
+    autoType: Rc<dyn IntrinsicType<'a> + 'a>,
+    wildcardType: Rc<dyn IntrinsicType<'a> + 'a>,
+    blockedStringType: Rc<dyn IntrinsicType<'a> + 'a>,
+    errorType: Rc<dyn IntrinsicType<'a> + 'a>,
+    unresolvedType: Rc<dyn IntrinsicType<'a> + 'a>,
+    nonInferrableAnyType: Rc<dyn IntrinsicType<'a> + 'a>,
+    intrinsicMarkerType: Rc<dyn IntrinsicType<'a> + 'a>,
+    unknownType: Rc<dyn IntrinsicType<'a> + 'a>,
+    undefinedType: Rc<dyn IntrinsicType<'a> + 'a>,
+    undefinedWideningType: Rc<dyn IntrinsicType<'a> + 'a>,
+    missingType: Rc<dyn IntrinsicType<'a> + 'a>,
+    undefinedOrMissingType: Rc<dyn IntrinsicType<'a> + 'a>,
+    optionalType: Rc<dyn IntrinsicType<'a> + 'a>,
+    nullType: Rc<dyn IntrinsicType<'a> + 'a>,
+    nullWideningType: Rc<dyn IntrinsicType<'a> + 'a>,
+    stringType: Rc<dyn IntrinsicType<'a> + 'a>,
+    numberType: Rc<dyn IntrinsicType<'a> + 'a>,
+    bigintType: Rc<dyn IntrinsicType<'a> + 'a>,
+    falseType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
+    regularFalseType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
+    trueType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
+    regularTrueType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(host: Arc<dyn TypeCheckerHost>) -> Arc<RefCell<Self>> {
-        let checker = Arc::new(RefCell::new(Self {
+    pub fn new(host: Rc<dyn TypeCheckerHost>) -> Rc<RefCell<Self>> {
+        let checker = Rc::new(RefCell::new(Self {
             host,
             typeCount: 0,
             seenIntrinsicNames: HashSet::new(),
 
             // Initialize with empty types that will be properly set in init_intrinsic_types
-            anyType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            autoType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            wildcardType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            blockedStringType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            errorType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            unresolvedType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            nonInferrableAnyType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            intrinsicMarkerType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            unknownType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            undefinedType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            undefinedWideningType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            missingType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            undefinedOrMissingType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            optionalType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            nullType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            nullWideningType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            stringType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            numberType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            bigintType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            falseType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            regularFalseType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            trueType: Arc::new(TypeObject::new(TypeFlags::Any)),
-            regularTrueType: Arc::new(TypeObject::new(TypeFlags::Any)),
+            anyType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            autoType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            wildcardType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            blockedStringType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            errorType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            unresolvedType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            nonInferrableAnyType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            intrinsicMarkerType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            unknownType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            undefinedType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            undefinedWideningType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            missingType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            undefinedOrMissingType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            optionalType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            nullType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            nullWideningType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            stringType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            numberType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            bigintType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            falseType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            regularFalseType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            trueType: Rc::new(TypeObject::new(TypeFlags::Any)),
+            regularTrueType: Rc::new(TypeObject::new(TypeFlags::Any)),
         }));
 
         checker.borrow_mut().init_intrinsic_types();
@@ -142,39 +145,39 @@ impl<'a> TypeChecker<'a> {
         let strictNullChecks = self.host.getCompilerOptions().strictNullChecks.unwrap_or(false);
 
         // region: 2046
-        self.anyType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, None));
-        self.autoType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::NonInferrableType, Some("auto")));
-        self.wildcardType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("wildcard")));
-        self.blockedStringType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("blocked string")));
-        self.errorType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "error", ObjectFlags::None, None));
-        self.unresolvedType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "unresolved", ObjectFlags::None, None));
-        self.nonInferrableAnyType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::ContainsWideningType, Some("non-inferrable")));
-        self.intrinsicMarkerType = Arc::new(self.createIntrinsicType(TypeFlags::Any, "intrinsic", ObjectFlags::None, None));
-        self.unknownType = Arc::new(self.createIntrinsicType(TypeFlags::Unknown, "unknown", ObjectFlags::None, None));
-        self.undefinedType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, None));
-        self.undefinedWideningType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::ContainsWideningType, Some("widening")));
-        self.missingType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("missing")));
-        self.undefinedOrMissingType = if exactOptionalPropertyTypes { Arc::clone(&self.missingType) } else { Arc::clone(&self.undefinedType) };
-        self.optionalType = Arc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("optional")));
-        self.nullType = Arc::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::None, None));
-        self.nullWideningType = if strictNullChecks { Arc::clone(&self.nullType) } else { Arc::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::ContainsWideningType, Some("widening"))) };
-        self.stringType = Arc::new(self.createIntrinsicType(TypeFlags::String, "string", ObjectFlags::None, None));
-        self.numberType = Arc::new(self.createIntrinsicType(TypeFlags::Number, "number", ObjectFlags::None, None));
-        self.bigintType = Arc::new(self.createIntrinsicType(TypeFlags::BigInt, "bigint", ObjectFlags::None, None));
+        self.anyType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, None));
+        self.autoType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::NonInferrableType, Some("auto")));
+        self.wildcardType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("wildcard")));
+        self.blockedStringType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, Some("blocked string")));
+        self.errorType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "error", ObjectFlags::None, None));
+        self.unresolvedType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "unresolved", ObjectFlags::None, None));
+        self.nonInferrableAnyType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::ContainsWideningType, Some("non-inferrable")));
+        self.intrinsicMarkerType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "intrinsic", ObjectFlags::None, None));
+        self.unknownType = Rc::new(self.createIntrinsicType(TypeFlags::Unknown, "unknown", ObjectFlags::None, None));
+        self.undefinedType = Rc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, None));
+        self.undefinedWideningType = Rc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::ContainsWideningType, Some("widening")));
+        self.missingType = Rc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("missing")));
+        self.undefinedOrMissingType = if exactOptionalPropertyTypes { Rc::clone(&self.missingType) } else { Rc::clone(&self.undefinedType) };
+        self.optionalType = Rc::new(self.createIntrinsicType(TypeFlags::Undefined, "undefined", ObjectFlags::None, Some("optional")));
+        self.nullType = Rc::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::None, None));
+        self.nullWideningType = if strictNullChecks { Rc::clone(&self.nullType) } else { Rc::new(self.createIntrinsicType(TypeFlags::Null, "null", ObjectFlags::ContainsWideningType, Some("widening"))) };
+        self.stringType = Rc::new(self.createIntrinsicType(TypeFlags::String, "string", ObjectFlags::None, None));
+        self.numberType = Rc::new(self.createIntrinsicType(TypeFlags::Number, "number", ObjectFlags::None, None));
+        self.bigintType = Rc::new(self.createIntrinsicType(TypeFlags::BigInt, "bigint", ObjectFlags::None, None));
         let mut false_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "false", ObjectFlags::None, Some("fresh"));
         let mut regular_false_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "false", ObjectFlags::None, None);
         let false_type_freshable_props = FreshableTypeProps { freshType: unsafe { &*(&false_type as *const _ as *const dyn FreshableType) }, regularType: unsafe { &*(&regular_false_type as *const _ as *const dyn FreshableType) } };
         false_type.freshable_props = Some(false_type_freshable_props.clone());
         regular_false_type.freshable_props = Some(false_type_freshable_props.clone());
-        self.falseType = Arc::new(false_type);
-        self.regularFalseType = Arc::new(regular_false_type);
+        self.falseType = Rc::new(false_type);
+        self.regularFalseType = Rc::new(regular_false_type);
         let mut true_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "true", ObjectFlags::None, Some("fresh"));
         let mut regular_true_type = self.createIntrinsicType(TypeFlags::BooleanLiteral, "true", ObjectFlags::None, None);
         let true_type_freshable_props = FreshableTypeProps { freshType: unsafe { &*(&true_type as *const _ as *const dyn FreshableType) }, regularType: unsafe { &*(&regular_true_type as *const _ as *const dyn FreshableType) } };
         true_type.freshable_props = Some(true_type_freshable_props.clone());
         regular_true_type.freshable_props = Some(true_type_freshable_props.clone());
-        self.trueType = Arc::new(true_type);
-        self.regularTrueType = Arc::new(regular_true_type);
+        self.trueType = Rc::new(true_type);
+        self.regularTrueType = Rc::new(regular_true_type);
         // endregion: 2068
     }
 
@@ -187,7 +190,7 @@ impl<'a> TypeChecker<'a> {
         result
     }
 
-    fn createTypeWithSymbol(&mut self, flags: TypeFlags, symbol: Symbol) -> TypeObject<'a> {
+    fn createTypeWithSymbol(&mut self, flags: TypeFlags, symbol: opt_rc_cell!(Symbol<'a>)) -> TypeObject<'a> {
         let mut result = self.createType(flags);
         result.symbol = symbol;
         result
@@ -211,8 +214,8 @@ impl<'a> TypeChecker<'a> {
         self.seenIntrinsicNames.insert(key);
     }
 
-    fn createObjectType(&mut self, objectFlags: ObjectFlags, symbol: Option<Symbol>) -> TypeObject<'a> {
-        let mut result = self.createTypeWithSymbol(TypeFlags::Object, symbol.unwrap());
+    fn createObjectType(&mut self, objectFlags: ObjectFlags, symbol: opt_rc_cell!(Symbol<'a>)) -> TypeObject<'a> {
+        let mut result = self.createTypeWithSymbol(TypeFlags::Object, symbol);
         result.object_flags = Some(objectFlags);
         result.object_props = Some(ObjectTypeProps { members: None, properties: None, callSignatures: None, constructSignatures: None, indexInfos: None, objectTypeWithoutAbstractConstructSignatures: None });
         result
@@ -227,7 +230,7 @@ impl<'a> TypeChecker<'a> {
         declaration: &AstKind, // ParameterDeclaration | PropertyDeclaration | PropertySignature | VariableDeclaration | BindingElement | JSDocPropertyLikeTag,
         includeOptionality: bool,
         checkMode: CheckMode,
-    ) -> Option<&dyn Type> {
+    ) -> Option<&dyn Type<'a>> {
         // // A variable declared in a for..in statement is of type string, or of type keyof T when the
         // // right hand expression is of a type parameter type.
         // if let AstKind::VariableDeclaration(declaration) = declaration {
@@ -370,7 +373,7 @@ impl<'a> TypeChecker<'a> {
     // endregion: 11531
 
     // region: 49169
-    fn getTypeOfNode(&self, node: &AstKind) -> &dyn Type {
+    fn getTypeOfNode(&self, node: &AstKind) -> &dyn Type<'a> {
         if let Some(source_file) = node.as_source_file() {
             if !isExternalModule(source_file) {
                 return self.errorType.as_type();
@@ -455,46 +458,46 @@ impl<'a> TypeChecker<'a> {
 }
 
 #[allow(unused_variables)]
-impl<'a> TypeCheckerTrait for TypeChecker<'a> {
-    fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol, node: &AstKind) -> &dyn Type { todo!() }
-    fn getTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type { todo!() }
-    fn getDeclaredTypeOfSymbol(&self, symbol: &Symbol) -> &dyn Type { todo!() }
-    fn getPropertiesOfType(&self, type_: &dyn Type) -> Vec<&Symbol> { todo!() }
-    fn getPropertyOfType(&self, type_: &dyn Type, property_name: &str) -> Option<&Symbol> { todo!() }
-    fn getPrivateIdentifierPropertyOfType(&self, left_type: &dyn Type, name: &str, location: &AstKind) -> Option<&Symbol> { todo!() }
-    fn getTypeOfPropertyOfType(&self, type_: &dyn Type, propertyName: &str) -> Option<&dyn Type> { todo!() }
+impl<'a> TypeCheckerTrait<'a> for TypeChecker<'a> {
+    fn getTypeOfSymbolAtLocation(&self, symbol: &Symbol<'a>, node: &AstKind) -> &dyn Type<'a> { todo!() }
+    fn getTypeOfSymbol(&self, symbol: &Symbol<'a>) -> &dyn Type<'a> { todo!() }
+    fn getDeclaredTypeOfSymbol(&self, symbol: &Symbol<'a>) -> &dyn Type<'a> { todo!() }
+    fn getPropertiesOfType(&self, type_: &dyn Type<'a>) -> Vec<&Symbol<'a>> { todo!() }
+    fn getPropertyOfType(&self, type_: &dyn Type<'a>, property_name: &str) -> Option<&Symbol<'a>> { todo!() }
+    fn getPrivateIdentifierPropertyOfType(&self, left_type: &dyn Type<'a>, name: &str, location: &AstKind) -> Option<&Symbol<'a>> { todo!() }
+    fn getTypeOfPropertyOfType(&self, type_: &dyn Type<'a>, propertyName: &str) -> Option<&dyn Type<'a>> { todo!() }
     fn getIndexInfoOfType(&self, type_: &dyn Type, kind: IndexKind) -> Option<IndexInfo> { todo!() }
     fn getIndexInfosOfType(&self, type_: &dyn Type) -> Vec<IndexInfo> { todo!() }
     fn getIndexInfosOfIndexSymbol(&self, indexSymbol: Symbol) -> Vec<IndexInfo> { todo!() }
-    fn getSignaturesOfType(&self, type_: &dyn Type, kind: SignatureKind) -> Vec<&Signature> { todo!() }
-    fn getIndexTypeOfType(&self, type_: &dyn Type, kind: IndexKind) -> Option<&dyn Type> { todo!() }
-    fn getIndexType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
+    fn getSignaturesOfType(&self, type_: &dyn Type<'a>, kind: SignatureKind) -> Vec<&Signature<'a>> { todo!() }
+    fn getIndexTypeOfType(&self, type_: &dyn Type<'a>, kind: IndexKind) -> Option<&dyn Type<'a>> { todo!() }
+    fn getIndexType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
     fn getBaseTypes(&self, type_: &dyn InterfaceType) -> Vec<BaseType> { todo!() }
-    fn getBaseTypeOfLiteralType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn getWidenedType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn getWidenedLiteralType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn getPromisedTypeOfPromise(&self, promise: &dyn Type, errorNode: Option<AstKind>) -> Option<&dyn Type> { todo!() }
-    fn getAwaitedType(&self, type_: &dyn Type) -> Option<&dyn Type> { todo!() }
+    fn getBaseTypeOfLiteralType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getWidenedType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getWidenedLiteralType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getPromisedTypeOfPromise(&self, promise: &dyn Type<'a>, errorNode: Option<AstKind>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getAwaitedType(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>> { todo!() }
     fn isEmptyAnonymousObjectType(&self, type_: &dyn Type) -> bool { todo!() }
-    fn getReturnTypeOfSignature(&self, signature: Signature) -> &dyn Type { todo!() }
-    fn getParameterType(&self, signature: Signature, parameter_index: usize) -> &dyn Type { todo!() }
-    fn getParameterIdentifierInfoAtPosition(&self, signature: Signature, parameter_index: usize) -> Option<(Identifier, &str, bool)> { todo!() }
-    fn getNullableType(&self, type_: &dyn Type, flags: TypeFlags) -> &dyn Type { todo!() }
-    fn getNonNullableType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn getNonOptionalType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn isNullableType(&self, type_: &dyn Type) -> bool { todo!() }
-    fn getTypeArguments(&self, type_: TypeReference) -> Vec<&dyn Type> { todo!() }
+    fn getReturnTypeOfSignature(&self, signature: Signature<'a>) -> &dyn Type<'a> { todo!() }
+    fn getParameterType(&self, signature: Signature<'a>, parameter_index: usize) -> &dyn Type<'a> { todo!() }
+    fn getParameterIdentifierInfoAtPosition(&self, signature: Signature<'a>, parameter_index: usize) -> Option<(Identifier, &str, bool)> { todo!() }
+    fn getNullableType(&self, type_: &dyn Type<'a>, flags: TypeFlags) -> &dyn Type<'a> { todo!() }
+    fn getNonNullableType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getNonOptionalType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn isNullableType(&self, type_: &dyn Type<'a>) -> bool { todo!() }
+    fn getTypeArguments(&self, type_: TypeReference) -> Vec<&dyn Type<'a>> { todo!() }
     fn getSymbolsInScope(&self, location: AstKind, meaning: SymbolFlags) -> Vec<Symbol> { todo!() }
     fn getSymbolAtLocation(&self, node: AstKind) -> Option<Symbol> { todo!() }
     fn getIndexInfosAtLocation(&self, node: AstKind) -> Option<Vec<IndexInfo>> { todo!() }
     fn getSymbolsOfParameterPropertyDeclaration(&self, parameter: Argument, parameter_name: &str) -> Vec<Symbol> { todo!() }
     fn getShorthandAssignmentValueSymbol(&self, location: Option<AstKind>) -> Option<Symbol> { todo!() }
     fn getExportSpecifierLocalTargetSymbol(&self, location: ExportSpecifier) -> Option<Symbol> { todo!() }
-    fn getExportSymbolOfSymbol(&self, symbol: Symbol) -> Symbol { todo!() }
+    fn getExportSymbolOfSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a> { todo!() }
     fn getPropertySymbolOfDestructuringAssignment(&self, location: Identifier) -> Option<Symbol> { todo!() }
-    fn getTypeOfAssignmentPattern(&self, pattern: AssignmentPattern) -> &dyn Type { todo!() }
-    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type { self.getTypeOfNode(&node) }
-    fn getTypeFromTypeNode(&self, node: TypeNode) -> &dyn Type { todo!() }
+    fn getTypeOfAssignmentPattern(&self, pattern: AssignmentPattern) -> &dyn Type<'a> { todo!() }
+    fn getTypeAtLocation(&self, node: AstKind) -> &dyn Type<'a> { self.getTypeOfNode(&node) }
+    fn getTypeFromTypeNode(&self, node: TypeNode) -> &dyn Type<'a> { todo!() }
     fn signatureToString(&self, signature: Signature, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, kind: Option<SignatureKind>) -> String { todo!() }
     fn typeToString(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>) -> String { todo!() }
     fn symbolToString(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>) -> String { todo!() }
@@ -503,119 +506,119 @@ impl<'a> TypeCheckerTrait for TypeChecker<'a> {
     fn writeType(&self, type_: &dyn Type, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String { todo!() }
     fn writeSymbol(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: Option<SymbolFlags>, flags: Option<SymbolFormatFlags>, writer: Option<EmitTextWriter>) -> String { todo!() }
     fn writeTypePredicate(&self, predicate: TypePredicate, enclosingDeclaration: Option<AstKind>, flags: Option<TypeFormatFlags>, writer: Option<EmitTextWriter>) -> String { todo!() }
-    fn getFullyQualifiedName(&self, symbol: Symbol) -> String { todo!() }
-    fn getAugmentedPropertiesOfType(&self, type_: &dyn Type) -> Vec<&Symbol> { todo!() }
-    fn getRootSymbols(&self, symbol: Symbol) -> Vec<Symbol> { todo!() }
-    fn getSymbolOfExpando(&self, node: AstKind, allowDeclaration: bool) -> Option<Symbol> { todo!() }
-    fn getContextualType(&self, node: Expression) -> Option<&dyn Type> { todo!() }
-    fn getContextualTypeWithFlags(&self, node: Expression, contextFlags: Option<ContextFlags>) -> Option<&dyn Type> { todo!() }
-    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type> { todo!() }
-    fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression, argIndex: usize) -> Option<&dyn Type> { todo!() }
-    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type> { todo!() }
-    fn isContextSensitive(&self, node: Expression) -> bool { todo!() }
-    fn getTypeOfPropertyOfContextualType(&self, type_: &dyn Type, name: &str) -> Option<&dyn Type> { todo!() }
-    fn getResolvedSignature(&self, node: CallLikeExpression, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature> { todo!() }
-    fn getResolvedSignatureForSignatureHelp(&self, node: CallLikeExpression, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature> { todo!() }
-    fn getCandidateSignaturesForStringLiteralCompletions(&self, call: CallLikeExpression, editingArgument: AstKind) -> Vec<Signature> { todo!() }
-    fn getExpandedParameters(&self, sig: Signature) -> Vec<Vec<Symbol>> { todo!() }
+    fn getFullyQualifiedName(&self, symbol: Symbol<'a>) -> String { todo!() }
+    fn getAugmentedPropertiesOfType(&self, type_: &dyn Type<'a>) -> Vec<&Symbol<'a>> { todo!() }
+    fn getRootSymbols(&self, symbol: Symbol<'a>) -> Vec<Symbol<'a>> { todo!() }
+    fn getSymbolOfExpando(&self, node: AstKind, allowDeclaration: bool) -> Option<Symbol<'a>> { todo!() }
+    fn getContextualType(&self, node: Expression<'a>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getContextualTypeWithFlags(&self, node: Expression<'a>, contextFlags: Option<ContextFlags>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type<'a>> { todo!() }
+    fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression<'a>, argIndex: usize) -> Option<&dyn Type<'a>> { todo!() }
+    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type<'a>> { todo!() }
+    fn isContextSensitive(&self, node: Expression<'a>) -> bool { todo!() }
+    fn getTypeOfPropertyOfContextualType(&self, type_: &dyn Type<'a>, name: &str) -> Option<&dyn Type<'a>> { todo!() }
+    fn getResolvedSignature(&self, node: CallLikeExpression<'a>, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature<'a>> { todo!() }
+    fn getResolvedSignatureForSignatureHelp(&self, node: CallLikeExpression<'a>, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature<'a>> { todo!() }
+    fn getCandidateSignaturesForStringLiteralCompletions(&self, call: CallLikeExpression<'a>, editingArgument: AstKind) -> Vec<Signature<'a>> { todo!() }
+    fn getExpandedParameters(&self, sig: Signature<'a>) -> Vec<Vec<Symbol<'a>>> { todo!() }
     fn hasEffectiveRestParameter(&self, sig: Signature) -> bool { todo!() }
     fn containsArgumentsReference(&self, declaration: SignatureDeclaration) -> bool { todo!() }
-    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration) -> Option<Signature> { todo!() }
+    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration) -> Option<Signature<'a>> { todo!() }
     fn isImplementationOfOverload(&self, node: SignatureDeclaration) -> Option<bool> { todo!() }
-    fn isUndefinedSymbol(&self, symbol: Symbol) -> bool { todo!() }
-    fn isArgumentsSymbol(&self, symbol: Symbol) -> bool { todo!() }
-    fn isUnknownSymbol(&self, symbol: Symbol) -> bool { todo!() }
-    fn getMergedSymbol(&self, symbol: Symbol) -> Symbol { todo!() }
-    fn symbolIsValue(&self, symbol: Symbol, includeTypeOnlyMembers: Option<bool>) -> bool { todo!() }
+    fn isUndefinedSymbol(&self, symbol: Symbol<'a>) -> bool { todo!() }
+    fn isArgumentsSymbol(&self, symbol: Symbol<'a>) -> bool { todo!() }
+    fn isUnknownSymbol(&self, symbol: Symbol<'a>) -> bool { todo!() }
+    fn getMergedSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a> { todo!() }
+    fn symbolIsValue(&self, symbol: Symbol<'a>, includeTypeOnlyMembers: Option<bool>) -> bool { todo!() }
     fn getConstantValue(&self, node: EnumMember) -> Option<String> { todo!() }
     fn isValidPropertyAccess(&self, node: PropertyAccessExpression, propertyName: &str) -> bool { todo!() }
     fn isValidPropertyAccessForCompletions(&self, node: PropertyAccessExpression, type_: &dyn Type, property: Symbol) -> bool { todo!() }
-    fn getAliasedSymbol(&self, symbol: Symbol) -> Symbol { todo!() }
-    fn getImmediateAliasedSymbol(&self, symbol: Symbol) -> Option<Symbol> { todo!() }
-    fn getExportsOfModule(&self, moduleSymbol: Symbol) -> Vec<Symbol> { todo!() }
-    fn getExportsAndPropertiesOfModule(&self, moduleSymbol: Symbol) -> Vec<Symbol> { todo!() }
-    fn getJsxIntrinsicTagNamesAt(&self, location: AstKind) -> Vec<Symbol> { todo!() }
+    fn getAliasedSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a> { todo!() }
+    fn getImmediateAliasedSymbol(&self, symbol: Symbol<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn getExportsOfModule(&self, moduleSymbol: Symbol<'a>) -> Vec<Symbol<'a>> { todo!() }
+    fn getExportsAndPropertiesOfModule(&self, moduleSymbol: Symbol<'a>) -> Vec<Symbol<'a>> { todo!() }
+    fn getJsxIntrinsicTagNamesAt(&self, location: AstKind) -> Vec<Symbol<'a>> { todo!() }
     fn isOptionalParameter(&self, node: Argument) -> bool { todo!() }
-    fn getAmbientModules(&self) -> Vec<Symbol> { todo!() }
-    fn tryGetMemberInModuleExports(&self, memberName: &str, moduleSymbol: Symbol) -> Option<Symbol> { todo!() }
-    fn tryGetMemberInModuleExportsAndProperties(&self, memberName: &str, moduleSymbol: Symbol) -> Option<Symbol> { todo!() }
-    fn getApparentType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn getSuggestedSymbolForNonexistentProperty(&self, name: MemberName, containingType: &dyn Type) -> Option<Symbol> { todo!() }
-    fn getSuggestedSymbolForNonexistentJsxAttribute(&self, name: Identifier, containingType: &dyn Type) -> Option<Symbol> { todo!() }
-    fn getSuggestedSymbolForNonexistentSymbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol> { todo!() }
-    fn getSuggestedSymbolForNonexistentModule(&self, node: Identifier, target: Symbol) -> Option<Symbol> { todo!() }
-    fn getSuggestedSymbolForNonexistentClassMember(&self, name: &str, baseType: &dyn Type) -> Option<Symbol> { todo!() }
-    fn getBaseConstraintOfType(&self, type_: &dyn Type) -> Option<&dyn Type> { todo!() }
-    fn getDefaultFromTypeParameter(&self, type_: &dyn Type) -> Option<&dyn Type> { todo!() }
-    fn getAnyType(&self) -> &dyn Type { todo!() }
-    fn getStringType(&self) -> &dyn Type { todo!() }
+    fn getAmbientModules(&self) -> Vec<Symbol<'a>> { todo!() }
+    fn tryGetMemberInModuleExports(&self, memberName: &str, moduleSymbol: Symbol<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn tryGetMemberInModuleExportsAndProperties(&self, memberName: &str, moduleSymbol: Symbol<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn getApparentType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getSuggestedSymbolForNonexistentProperty(&self, name: MemberName, containingType: &dyn Type<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn getSuggestedSymbolForNonexistentJsxAttribute(&self, name: Identifier, containingType: &dyn Type<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn getSuggestedSymbolForNonexistentSymbol(&self, location: AstKind, name: &str, meaning: SymbolFlags) -> Option<Symbol<'a>> { todo!() }
+    fn getSuggestedSymbolForNonexistentModule(&self, node: Identifier, target: Symbol<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn getSuggestedSymbolForNonexistentClassMember(&self, name: &str, baseType: &dyn Type<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn getBaseConstraintOfType(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getDefaultFromTypeParameter(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getAnyType(&self) -> &dyn Type<'a> { todo!() }
+    fn getStringType(&self) -> &dyn Type<'a> { todo!() }
     fn getStringLiteralType(&self, value: &str) -> StringLiteralType { todo!() }
-    fn getNumberType(&self) -> &dyn Type { todo!() }
+    fn getNumberType(&self) -> &dyn Type<'a> { todo!() }
     fn getNumberLiteralType(&self, value: f64) -> NumberLiteralType { todo!() }
-    fn getBigIntType(&self) -> &dyn Type { todo!() }
+    fn getBigIntType(&self) -> &dyn Type<'a> { todo!() }
     fn getBigIntLiteralType(&self, value: PseudoBigInt) -> BigIntLiteralType { todo!() }
-    fn getBooleanType(&self) -> &dyn Type { todo!() }
-    fn getFalseType(&self, fresh: Option<bool>) -> &dyn Type { todo!() }
-    fn getTrueType(&self, fresh: Option<bool>) -> &dyn Type { todo!() }
-    fn getVoidType(&self) -> &dyn Type { todo!() }
-    fn getUndefinedType(&self) -> &dyn Type { todo!() }
-    fn getNullType(&self) -> &dyn Type { todo!() }
-    fn getESSymbolType(&self) -> &dyn Type { todo!() }
-    fn getNeverType(&self) -> &dyn Type { todo!() }
-    fn getOptionalType(&self) -> &dyn Type { todo!() }
-    fn getUnionType(&self, types: Vec<&dyn Type>, subtypeReduction: Option<UnionReduction>) -> &dyn Type { todo!() }
-    fn createArrayType(&self, elementType: &dyn Type) -> &dyn Type { todo!() }
-    fn getElementTypeOfArrayType(&self, arrayType: &dyn Type) -> Option<&dyn Type> { todo!() }
-    fn createPromiseType(&self, type_: &dyn Type) -> &dyn Type { todo!() }
-    fn getPromiseType(&self) -> &dyn Type { todo!() }
-    fn getPromiseLikeType(&self) -> &dyn Type { todo!() }
-    fn getAnyAsyncIterableType(&self) -> Option<&dyn Type> { todo!() }
-    fn isTypeAssignableTo(&self, source: &dyn Type, target: &dyn Type) -> bool { todo!() }
-    fn createAnonymousType(&self, symbol: Option<Symbol>, members: SymbolTable, callSignatures: Vec<Signature>, constructSignatures: Vec<Signature>, indexInfos: Vec<IndexInfo>) -> &dyn Type { todo!() }
+    fn getBooleanType(&self) -> &dyn Type<'a> { todo!() }
+    fn getFalseType(&self, fresh: Option<bool>) -> &dyn Type<'a> { todo!() }
+    fn getTrueType(&self, fresh: Option<bool>) -> &dyn Type<'a> { todo!() }
+    fn getVoidType(&self) -> &dyn Type<'a> { todo!() }
+    fn getUndefinedType(&self) -> &dyn Type<'a> { todo!() }
+    fn getNullType(&self) -> &dyn Type<'a> { todo!() }
+    fn getESSymbolType(&self) -> &dyn Type<'a> { todo!() }
+    fn getNeverType(&self) -> &dyn Type<'a> { todo!() }
+    fn getOptionalType(&self) -> &dyn Type<'a> { todo!() }
+    fn getUnionType(&self, types: Vec<&dyn Type<'a>>, subtypeReduction: Option<UnionReduction>) -> &dyn Type<'a> { todo!() }
+    fn createArrayType(&self, elementType: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getElementTypeOfArrayType(&self, arrayType: &dyn Type<'a>) -> Option<&dyn Type<'a>> { todo!() }
+    fn createPromiseType(&self, type_: &dyn Type<'a>) -> &dyn Type<'a> { todo!() }
+    fn getPromiseType(&self) -> &dyn Type<'a> { todo!() }
+    fn getPromiseLikeType(&self) -> &dyn Type<'a> { todo!() }
+    fn getAnyAsyncIterableType(&self) -> Option<&dyn Type<'a>> { todo!() }
+    fn isTypeAssignableTo(&self, source: &dyn Type<'a>, target: &dyn Type<'a>) -> bool { todo!() }
+    fn createAnonymousType(&self, symbol: Option<Symbol<'a>>, members: SymbolTable, callSignatures: Vec<Signature<'a>>, constructSignatures: Vec<Signature<'a>>, indexInfos: Vec<IndexInfo>) -> &dyn Type<'a> { todo!() }
     fn createSignature(
         &self, declaration: Option<SignatureDeclaration>, typeParameters: Option<Vec<TypeParameter>>, thisParameter: Option<Symbol>, parameters: Vec<Symbol>, resolvedReturnType: &dyn Type, typePredicate: Option<TypePredicate>, minArgumentCount: usize, flags: SignatureFlags,
-    ) -> Signature {
+    ) -> Signature<'a> {
         todo!()
     }
     fn createSymbol(&self, flags: SymbolFlags, name: &str) -> TransientSymbol { todo!() }
-    fn createIndexInfo(&self, keyType: &dyn Type, type_: &dyn Type, isReadonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo { todo!() }
+    fn createIndexInfo(&self, keyType: &dyn Type<'a>, type_: &dyn Type<'a>, isReadonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo { todo!() }
     fn isSymbolAccessible(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, shouldComputeAliasToMarkVisible: bool) -> SymbolAccessibilityResult { todo!() }
-    fn tryFindAmbientModule(&self, moduleName: &str) -> Option<Symbol> { todo!() }
-    fn getSymbolWalker(&self, accept: Option<fn(Symbol) -> bool>) -> SymbolWalker { todo!() }
-    fn getDiagnostics(&self, sourceFile: Option<SourceFile>, cancellationToken: Option<CancellationToken>, nodesToCheck: Option<Vec<AstKind>>) -> Vec<Diagnostic> { todo!() }
+    fn tryFindAmbientModule(&self, moduleName: &str) -> Option<Symbol<'a>> { todo!() }
+    fn getSymbolWalker(&self, accept: Option<fn(Symbol<'a>) -> bool>) -> SymbolWalker { todo!() }
+    fn getDiagnostics(&self, sourceFile: Option<&SourceFile<'a>>, cancellationToken: Option<CancellationToken>, nodesToCheck: Option<Vec<AstKind>>) -> Vec<Diagnostic> { todo!() }
     fn getGlobalDiagnostics(&self) -> Vec<Diagnostic> { todo!() }
-    fn getEmitResolver(&self, sourceFile: Option<SourceFile>, cancellationToken: Option<CancellationToken>, forceDts: Option<bool>) -> EmitResolver { todo!() }
-    fn requiresAddingImplicitUndefined(&self, parameter: Argument, enclosingDeclaration: Option<AstKind>) -> bool { todo!() }
+    fn getEmitResolver(&self, sourceFile: Option<&SourceFile<'a>>, cancellationToken: Option<CancellationToken>, forceDts: Option<bool>) -> EmitResolver { todo!() }
+    fn requiresAddingImplicitUndefined(&self, parameter: Argument<'a>, enclosingDeclaration: Option<AstKind>) -> bool { todo!() }
     fn getNodeCount(&self) -> usize { todo!() }
     fn getIdentifierCount(&self) -> usize { todo!() }
     fn getSymbolCount(&self) -> usize { todo!() }
     fn getTypeCount(&self) -> usize { todo!() }
     fn getInstantiationCount(&self) -> usize { todo!() }
     fn getRelationCacheSizes(&self) -> (usize, usize, usize, usize) { todo!() }
-    fn getRecursionIdentity(&self, type_: &dyn Type) -> Option<&dyn Type> { todo!() }
-    fn getUnmatchedProperties(&self, source: &dyn Type, target: &dyn Type, requireOptionalProperties: bool, matchDiscriminantProperties: bool) -> Box<dyn Iterator<Item = Symbol>> { todo!() }
+    fn getRecursionIdentity(&self, type_: &dyn Type<'a>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getUnmatchedProperties(&self, source: &dyn Type<'a>, target: &dyn Type<'a>, requireOptionalProperties: bool, matchDiscriminantProperties: bool) -> Box<dyn Iterator<Item = Symbol<'a>>> { todo!() }
     fn isArrayType(&self, type_: &dyn Type) -> bool { todo!() }
     fn isTupleType(&self, type_: &dyn Type) -> bool { todo!() }
     fn isArrayLikeType(&self, type_: &dyn Type) -> bool { todo!() }
     fn isTypeInvalidDueToUnionDiscriminant(&self, contextualType: &dyn Type, obj: ObjectExpression) -> bool { todo!() }
-    fn getExactOptionalProperties(&self, type_: &dyn Type) -> Vec<Symbol> { todo!() }
-    fn getAllPossiblePropertiesOfTypes(&self, types: Vec<&dyn Type>) -> Vec<Symbol> { todo!() }
-    fn resolveName(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, excludeGlobals: bool) -> Option<Symbol> { todo!() }
+    fn getExactOptionalProperties(&self, type_: &dyn Type<'a>) -> Vec<Symbol<'a>> { todo!() }
+    fn getAllPossiblePropertiesOfTypes(&self, types: Vec<&dyn Type<'a>>) -> Vec<Symbol<'a>> { todo!() }
+    fn resolveName(&self, name: &str, location: Option<AstKind>, meaning: SymbolFlags, excludeGlobals: bool) -> Option<Symbol<'a>> { todo!() }
     fn getJsxNamespace(&self, location: Option<AstKind>) -> String { todo!() }
     fn getJsxFragmentFactory(&self, location: AstKind) -> Option<String> { todo!() }
-    fn getAccessibleSymbolChain(&self, symbol: Symbol, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, useOnlyExternalAliasing: bool) -> Option<Vec<Symbol>> { todo!() }
-    fn getTypePredicateOfSignature(&self, signature: Signature) -> Option<TypePredicate> { todo!() }
-    fn resolveExternalModuleName(&self, moduleSpecifier: Expression) -> Option<Symbol> { todo!() }
-    fn resolveExternalModuleSymbol(&self, symbol: Symbol) -> Symbol { todo!() }
-    fn tryGetThisTypeAt(&self, node: AstKind, includeGlobalThis: Option<bool>, container: Option<ThisContainer>) -> Option<&dyn Type> { todo!() }
-    fn getTypeArgumentConstraint(&self, node: TypeNode) -> Option<&dyn Type> { todo!() }
+    fn getAccessibleSymbolChain(&self, symbol: Symbol<'a>, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, useOnlyExternalAliasing: bool) -> Option<Vec<Symbol<'a>>> { todo!() }
+    fn getTypePredicateOfSignature(&self, signature: Signature<'a>) -> Option<TypePredicate> { todo!() }
+    fn resolveExternalModuleName(&self, moduleSpecifier: Expression<'a>) -> Option<Symbol<'a>> { todo!() }
+    fn resolveExternalModuleSymbol(&self, symbol: Symbol<'a>) -> Symbol<'a> { todo!() }
+    fn tryGetThisTypeAt(&self, node: AstKind, includeGlobalThis: Option<bool>, container: Option<ThisContainer>) -> Option<&dyn Type<'a>> { todo!() }
+    fn getTypeArgumentConstraint(&self, node: TypeNode) -> Option<&dyn Type<'a>> { todo!() }
     fn getSuggestionDiagnostics(&self, file: SourceFile, cancellationToken: Option<CancellationToken>) -> Vec<DiagnosticWithLocation> { todo!() }
-    fn getLocalTypeParametersOfClassOrInterfaceOrTypeAlias(&self, symbol: Symbol) -> Option<Vec<TypeParameter>> { todo!() }
-    fn isDeclarationVisible(&self, node: Declaration) -> bool { todo!() }
-    fn isPropertyAccessible(&self, node: AstKind, isSuper: bool, isWrite: bool, containingType: &dyn Type, property: Symbol) -> bool { todo!() }
-    fn getTypeOnlyAliasDeclaration(&self, symbol: Symbol) -> Option<TypeOnlyAliasDeclaration> { todo!() }
-    fn getMemberOverrideModifierStatus(&self, node: ClassLikeDeclaration, member: ClassElement, memberSymbol: Symbol) -> MemberOverrideStatus { todo!() }
+    fn getLocalTypeParametersOfClassOrInterfaceOrTypeAlias(&self, symbol: Symbol<'a>) -> Option<Vec<TypeParameter>> { todo!() }
+    fn isDeclarationVisible(&self, node: Declaration<'a>) -> bool { todo!() }
+    fn isPropertyAccessible(&self, node: AstKind, isSuper: bool, isWrite: bool, containingType: &dyn Type<'a>, property: Symbol<'a>) -> bool { todo!() }
+    fn getTypeOnlyAliasDeclaration(&self, symbol: Symbol<'a>) -> Option<TypeOnlyAliasDeclaration> { todo!() }
+    fn getMemberOverrideModifierStatus(&self, node: ClassLikeDeclaration, member: ClassElement, memberSymbol: Symbol<'a>) -> MemberOverrideStatus { todo!() }
     fn isTypeParameterPossiblyReferenced(&self, tp: TypeParameter, node: AstKind) -> bool { todo!() }
-    fn typeHasCallOrConstructSignatures(&self, type_: &dyn Type) -> bool { todo!() }
-    fn getSymbolFlags(&self, symbol: Symbol) -> SymbolFlags { todo!() }
+    fn typeHasCallOrConstructSignatures(&self, type_: &dyn Type<'a>) -> bool { todo!() }
+    fn getSymbolFlags(&self, symbol: Symbol<'a>) -> SymbolFlags { todo!() }
 }

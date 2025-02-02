@@ -4,7 +4,7 @@
 mod compiler;
 mod services;
 use std::mem;
-use std::sync::Arc;
+use std::rc::Rc;
 use std::{fs, path::Path};
 
 use compiler::checker::TypeChecker;
@@ -36,7 +36,7 @@ fn main() {
     // println!("Message: {}", diag.message);
 
     let cwd = std::env::current_dir().unwrap().to_string_lossy().to_string();
-    let type_checker_host = Arc::new(RbTypeCheckerHost::new(cwd, CompilerOptions::default()));
+    let type_checker_host = Rc::new(RbTypeCheckerHost::new(cwd, CompilerOptions::default()));
     RB_CTX.set_type_checker_host(type_checker_host.clone());
 
     let name = "src/compiler/test.ts";

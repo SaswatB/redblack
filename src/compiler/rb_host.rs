@@ -1,3 +1,4 @@
+use oxc_ast::ast::SourceFile;
 use std::fs;
 use std::path::Path;
 
@@ -55,9 +56,9 @@ impl ModuleSpecifierResolutionHost for RbTypeCheckerHost {
 impl TypeCheckerHost for RbTypeCheckerHost {
     fn getCompilerOptions(&self) -> &CompilerOptions { &self.compiler_options }
 
-    fn getSourceFiles(&self) -> Vec<&super::types::SourceFile> { todo!() }
+    fn getSourceFiles(&self) -> Vec<&SourceFile> { todo!() }
 
-    fn getSourceFile(&self, file_name: &str) -> Option<&super::types::SourceFile> { todo!() }
+    fn getSourceFile(&self, file_name: &str) -> Option<&SourceFile> { todo!() }
 
     fn getProjectReferenceRedirect(&self, file_name: &str) -> Option<String> { todo!() }
 

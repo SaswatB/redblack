@@ -1,11 +1,14 @@
 use oxc_ast::ast::SourceFile;
 use oxc_ast::AstKind;
 use oxc_ast::GetChildren;
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::rc::Rc;
 
 use super::moduleNameResolver::PackageJsonInfo;
 use super::rb_host::RbTypeCheckerHost;
+use super::types::FlowNode;
+use super::types::SymbolTable;
 use super::types::{CompilerOptions, ResolutionMode};
 
 use paste::paste;
@@ -78,10 +81,14 @@ entity_properties!(SourceFile, {
     package_json_scope: Option<PackageJsonInfo> = None,
     external_module_indicator: bool = false,
     implied_node_format: ResolutionMode = ResolutionMode::Undefined,
+    locals: Option<SymbolTable<'static>> = None,
+    symbolCount: usize = 0,
+    classifiableNames: Option<HashSet<String>> = None,
 });
 
 entity_properties!(AstKind, {
     parent: Option<AstKind<'static>> = None,
+    flowNode: Option<Rc<RefCell<FlowNode<'static>>>> = None,
 });
 
 macro_rules! thread_local_store {
@@ -130,5 +137,5 @@ macro_rules! thread_local_store {
 }
 
 thread_local_store!(RB_CTX, {
-    type_checker_host: Arc<RbTypeCheckerHost> = Arc::new(RbTypeCheckerHost::new(String::new(), CompilerOptions::default())),
+    type_checker_host: Rc<RbTypeCheckerHost> = Rc::new(RbTypeCheckerHost::new(String::new(), CompilerOptions::default())),
 });

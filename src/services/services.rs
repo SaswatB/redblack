@@ -1,6 +1,8 @@
-use crate::compiler::types::*;
+use std::{cell::RefCell, rc::Rc};
 
-impl Symbol {
+use crate::{compiler::types::*, opt_rc_cell};
+
+impl<'a> Symbol<'a> {
     pub fn new(flags: SymbolFlags, name: &str) -> Self {
         Self {
             flags,
@@ -29,7 +31,7 @@ impl<'a> TypeObject<'a> {
             flags,
             id: 0,
             // checker,
-            symbol: Symbol::new(SymbolFlags::None, ""),
+            symbol: Some(Rc::new(RefCell::new(Symbol::new(SymbolFlags::None, "")))),
             pattern: None,
             aliasSymbol: None,
             aliasTypeArguments: None,
@@ -46,9 +48,9 @@ impl<'a> TypeObject<'a> {
     }
 }
 
-impl<'a> Type for TypeObject<'a> {
+impl<'a> Type<'a> for TypeObject<'a> {
     fn getFlags(&self) -> TypeFlags { self.flags }
-    fn getSymbol(&self) -> Option<&Symbol> { Some(&self.symbol) }
+    fn getSymbol(&self) -> opt_rc_cell!(Symbol<'a>) { self.symbol.clone() }
     // fn getProperties(&self) -> Vec<&Symbol> { self.checker.getPropertiesOfType(self) }
     // fn getProperty(&self, propertyName: &str) -> Option<&Symbol> { self.checker.getPropertyOfType(self, propertyName) }
     // fn getApparentProperties(&self) -> Vec<&Symbol> { self.checker.getAugmentedPropertiesOfType(self) }
@@ -79,29 +81,29 @@ impl<'a> Type for TypeObject<'a> {
     fn isClass(&self) -> bool { self.get_object_flags().contains(ObjectFlags::Class) }
     fn isIndexType(&self) -> bool { self.flags.contains(TypeFlags::Index) }
 
-    fn as_type(&self) -> &dyn Type { self }
+    fn as_type(&self) -> &dyn Type<'a> { self }
 }
 
-impl<'a> IntrinsicType for TypeObject<'a> {
+impl<'a> IntrinsicType<'a> for TypeObject<'a> {
     fn get_intrinsic_props(&self) -> &IntrinsicTypeProps { self.intrinsic_props.as_ref().unwrap() }
 }
 
-impl NullableType for TypeObject<'_> {}
+impl<'a> NullableType<'a> for TypeObject<'a> {}
 
-impl<'a> FreshableType for TypeObject<'a> {
-    fn get_freshable_type_props(&self) -> &FreshableTypeProps { self.freshable_props.as_ref().unwrap() }
+impl<'a> FreshableType<'a> for TypeObject<'a> {
+    fn get_freshable_type_props(&self) -> &FreshableTypeProps<'a> { self.freshable_props.as_ref().unwrap() }
 }
 
-impl<'a> FreshableIntrinsicType for TypeObject<'a> {}
+impl<'a> FreshableIntrinsicType<'a> for TypeObject<'a> {}
 
-impl<'a> ObjectFlagsTrait for TypeObject<'a> {
+impl<'a> ObjectFlagsTrait<'a> for TypeObject<'a> {
     fn get_object_flags(&self) -> ObjectFlags { self.object_flags.unwrap_or(ObjectFlags::None) }
 }
 
-impl<'a> ObjectType for TypeObject<'a> {
-    fn get_object_props(&self) -> &ObjectTypeProps { self.object_props.as_ref().unwrap() }
+impl<'a> ObjectType<'a> for TypeObject<'a> {
+    fn get_object_props(&self) -> &ObjectTypeProps<'a> { self.object_props.as_ref().unwrap() }
 }
 
-impl<'a> InterfaceType for TypeObject<'a> {
-    fn get_interface_props(&self) -> &InterfaceTypeProps { self.interface_props.as_ref().unwrap() }
+impl<'a> InterfaceType<'a> for TypeObject<'a> {
+    fn get_interface_props(&self) -> &InterfaceTypeProps<'a> { self.interface_props.as_ref().unwrap() }
 }
