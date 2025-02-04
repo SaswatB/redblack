@@ -12,6 +12,7 @@ use super::types::SymbolTable;
 use super::types::{CompilerOptions, ResolutionMode};
 
 use paste::paste;
+use rb_macros::replace_lifetime;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -44,26 +45,33 @@ macro_rules! entity_properties {
                 static [<$entity:upper _INFO_MAP>]: RefCell<HashMap<u32, [<$entity Info>]>> = RefCell::new(HashMap::new());
             }
 
-            pub trait [<$entity Ext>] {
+            pub trait [<$entity Ext>]<'a> {
                 $(
-                    fn [<set_ $name>](&self, value: $type);
-                    fn $name(&self) -> $type;
+                    fn [<set_ $name>](&self, value: replace_lifetime!($type, 'a));
+                    fn $name(&self) -> replace_lifetime!($type, 'a);
                 )*
             }
 
-            impl<'a> [<$entity Ext>] for $entity<'a> {
+            impl<'a> [<$entity Ext>]<'a> for $entity<'a> {
                 $(
-                    fn [<set_ $name>](&self, value: $type) {
+                    fn [<set_ $name>](&self, value: replace_lifetime!($type, 'a)) {
                         let ptr = self.get_node_id();
                         [<$entity:upper _INFO_MAP>].with(|map| {
                             let mut map = map.borrow_mut();
-                            map.entry(ptr).or_insert_with(|| [<$entity Info>]::default()).$name = value;
+                            map.entry(ptr).or_insert_with(|| [<$entity Info>]::default()).$name = unsafe { std::mem::transmute(value) };
                         });
                     }
 
-                    fn $name(&self) -> $type {
+                    fn $name(&self) -> replace_lifetime!($type, 'a) {
                         let ptr = self.get_node_id();
-                        [<$entity:upper _INFO_MAP>].with(|map| map.borrow().get(&ptr).map(|info| info.$name.clone()).unwrap_or($default))
+                        [<$entity:upper _INFO_MAP>].with(|map| {
+                            let map = map.borrow();
+                            let value = map.get(&ptr).map(|info| &info.$name);
+                            if value.is_none() {
+                                return $default;
+                            }
+                            unsafe { std::mem::transmute_copy(&value) }
+                        })
                     }
                 )*
             }
@@ -72,10 +80,12 @@ macro_rules! entity_properties {
                 [<$entity:upper _INFO_MAP>].with(|map| map.borrow_mut().clear());
             }
         }
+
     };
 }
 
-// Add extra properties to the SourceFile struct.
+// Add extra properties to various structs
+
 entity_properties!(SourceFile, {
     filepath: PathBuf = PathBuf::new(),
     package_json_scope: Option<PackageJsonInfo> = None,
@@ -91,6 +101,9 @@ entity_properties!(AstKind, {
     flowNode: Option<Rc<RefCell<FlowNode<'static>>>> = None,
 });
 
+/**
+ * Create a thread-local store.
+ */
 macro_rules! thread_local_store {
     ($store_name:ident, {
         $($field:ident: $type:ty = $default:expr),* $(,)?
