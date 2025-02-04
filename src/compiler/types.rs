@@ -1,5 +1,7 @@
 use oxc_ast::{
-    ast::{Argument, ArrayExpression, BinaryExpression, BindingPattern, CallExpression, Declaration, Decorator, Expression, JSXElement, NewExpression, ObjectExpression, SourceFile, SwitchStatement, TaggedTemplateExpression, VariableDeclaration},
+    ast::{
+        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingPattern, BlockStatement, CallExpression, Declaration, Decorator, Expression, FunctionBody, JSXElement, NewExpression, ObjectExpression, SourceFile, SwitchStatement, TaggedTemplateExpression, VariableDeclaration,
+    },
     AstKind,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -7,6 +9,51 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{define_flags, define_string_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
 use super::moduleNameResolver::PackageJsonInfoCache;
+
+// region: 1508
+/**
+ * Nodes that can have local symbols. Corresponds with `ContainerFlags.HasLocals`. Constituents should extend
+ * {@link LocalsContainer}.
+ *
+ * @internal
+ */
+pub enum HasLocals<'a> {
+    // ArrowFunction
+    ArrowFunctionExpression(&'a ArrowFunctionExpression<'a>),
+    // Block
+    BlockStatement(&'a BlockStatement<'a>),
+    FunctionBody(&'a FunctionBody<'a>),
+    // TODO(RB): Add the rest
+    CallSignatureDeclaration,
+    CaseBlock,
+    CatchClause,
+    ClassStaticBlockDeclaration,
+    ConditionalTypeNode,
+    ConstructorDeclaration,
+    ConstructorTypeNode,
+    ConstructSignatureDeclaration,
+    ForStatement,
+    ForInStatement,
+    ForOfStatement,
+    FunctionDeclaration,
+    FunctionExpression,
+    FunctionTypeNode,
+    GetAccessorDeclaration,
+    IndexSignatureDeclaration,
+    JSDocCallbackTag,
+    JSDocEnumTag,
+    JSDocFunctionType,
+    JSDocSignature,
+    JSDocTypedefTag,
+    MappedTypeNode,
+    MethodDeclaration,
+    MethodSignature,
+    ModuleDeclaration,
+    SetAccessorDeclaration,
+    SourceFile(&'a SourceFile<'a>),
+    TypeAliasDeclaration,
+}
+// endregion: 1508
 
 #[derive(Debug, Clone)]
 pub struct IndexInfo;
@@ -41,7 +88,7 @@ pub struct AssignmentPattern;
 #[derive(Debug)]
 pub struct EmitTextWriter;
 
-// #region: 3123
+// region: 3123
 /// Represents an expression that can be called or constructed, including function calls,
 /// constructor calls, template literals, decorators, JSX elements, and instanceof checks.
 #[derive(Debug)]
@@ -61,7 +108,7 @@ pub enum CallLikeExpression<'a> {
     ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
     BinaryExpression(Box<BinaryExpression<'a>>),
 }
-// #endregion: 3129
+// endregion: 3129
 
 #[derive(Debug)]
 pub struct ObjectLiteralElementLike;

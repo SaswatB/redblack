@@ -39,7 +39,7 @@ fn main() {
     let type_checker_host = Rc::new(RbTypeCheckerHost::new(cwd, CompilerOptions::default()));
     RB_CTX.set_type_checker_host(type_checker_host.clone());
 
-    let name = "src/snips/import_clause.ts";
+    let name = "src/snips/call_signature.ts";
     let path = Path::new(&name);
     let source_text = fs::read_to_string(path).unwrap();
     // let source_type = SourceType::from_path(path).unwrap();

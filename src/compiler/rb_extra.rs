@@ -65,12 +65,9 @@ macro_rules! entity_properties {
                     fn $name(&self) -> replace_lifetime!($type, 'a) {
                         let ptr = self.get_node_id();
                         [<$entity:upper _INFO_MAP>].with(|map| {
-                            let map = map.borrow();
-                            let value = map.get(&ptr).map(|info| &info.$name);
-                            if value.is_none() {
-                                return $default;
-                            }
-                            unsafe { std::mem::transmute_copy(&value) }
+                            let mut map = map.borrow_mut();
+                            let info = map.entry(ptr).or_insert_with(|| [<$entity Info>]::default());
+                            unsafe { std::mem::transmute_copy(&info.$name) }
                         })
                     }
                 )*
@@ -91,9 +88,9 @@ entity_properties!(SourceFile, {
     package_json_scope: Option<PackageJsonInfo> = None,
     external_module_indicator: bool = false,
     implied_node_format: ResolutionMode = ResolutionMode::Undefined,
-    locals: Option<SymbolTable<'static>> = None,
+    locals: Option<Rc<RefCell<SymbolTable<'static>>>> = None,
     symbolCount: usize = 0,
-    classifiableNames: Option<HashSet<String>> = None,
+    classifiableNames: Option<Rc<RefCell<HashSet<String>>>> = None,
 });
 
 entity_properties!(AstKind, {
