@@ -3,10 +3,26 @@ use std::fmt::Debug;
 use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
+use crate::compiler::rb_extra::AstKindExt;
 use crate::compiler::types::*;
 use oxc_ast::{ast::SourceFile, AstKind, Visit};
 
 use super::rb_extra::SourceFileExt;
+
+// region: 3608
+/** @internal */
+pub fn isPartOfTypeQuery(node: &AstKind) -> bool {
+    let mut current = node.clone();
+    while matches!(current, AstKind::TSQualifiedName(_) | AstKind::BindingIdentifier(_) | AstKind::IdentifierReference(_)) {
+        let newParent = current.parent();
+        if newParent.is_none() {
+            break;
+        }
+        current = newParent.unwrap();
+    }
+    matches!(current, AstKind::TSTypeQuery(_))
+}
+// endregion: 3614
 
 // region: 8737
 /**
