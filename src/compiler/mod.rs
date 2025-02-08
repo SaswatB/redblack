@@ -9,5 +9,6 @@ pub mod program;
 pub mod rb_extra;
 pub mod rb_host;
 pub mod rb_macros;
+pub mod rb_unions;
 pub mod types;
 pub mod utilities;

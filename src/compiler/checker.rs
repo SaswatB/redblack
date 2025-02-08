@@ -5,7 +5,7 @@ use crate::opt_rc_cell;
 use oxc_ast::ast::Declaration;
 use oxc_ast::ast::SourceFile;
 use oxc_ast::{
-    ast::{Argument, Expression, ObjectExpression},
+    ast::{Argument, Expression, JSXAttribute, ObjectExpression, PropertyAccessExpression},
     AstKind,
 };
 use std::cell::RefCell;
@@ -514,7 +514,7 @@ impl<'a> TypeCheckerTrait<'a> for TypeChecker<'a> {
     fn getContextualTypeWithFlags(&self, node: Expression<'a>, contextFlags: Option<ContextFlags>) -> Option<&dyn Type<'a>> { todo!() }
     fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type<'a>> { todo!() }
     fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression<'a>, argIndex: usize) -> Option<&dyn Type<'a>> { todo!() }
-    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type<'a>> { todo!() }
+    fn getContextualTypeForJsxAttribute(&self, attribute: JSXAttribute) -> Option<&dyn Type<'a>> { todo!() }
     fn isContextSensitive(&self, node: Expression<'a>) -> bool { todo!() }
     fn getTypeOfPropertyOfContextualType(&self, type_: &dyn Type<'a>, name: &str) -> Option<&dyn Type<'a>> { todo!() }
     fn getResolvedSignature(&self, node: CallLikeExpression<'a>, candidatesOutArray: Option<Vec<Signature>>, argumentCount: Option<usize>) -> Option<Signature<'a>> { todo!() }

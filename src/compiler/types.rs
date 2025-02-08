@@ -1,8 +1,8 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingPattern, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, JSXAttribute, JSXElement, MethodDefinition,
-        NewExpression, ObjectExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature,
-        TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, VariableDeclaration,
+        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingIdentifier, BindingPattern, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody,
+        IdentifierReference, JSXAttribute, JSXElement, MethodDefinition, NewExpression, ObjectExpression, PropertyAccessExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration,
+        TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, VariableDeclaration,
     },
     AstKind,
 };
@@ -37,9 +37,6 @@ pub struct TypeParameter;
 pub struct ExportSpecifier;
 
 #[derive(Debug)]
-pub struct Identifier;
-
-#[derive(Debug)]
 pub struct AssignmentPattern;
 
 #[derive(Debug)]
@@ -52,19 +49,10 @@ pub struct ObjectLiteralElementLike;
 pub struct JsxAttributeLike;
 
 #[derive(Debug)]
-pub struct JsxAttribute;
-
-#[derive(Debug)]
 pub struct JsxSpreadAttribute;
 
 #[derive(Debug)]
 pub struct EnumMember;
-
-#[derive(Debug)]
-pub struct PropertyAccessExpression;
-
-#[derive(Debug)]
-pub struct ElementAccessExpression;
 
 #[derive(Debug)]
 pub struct QualifiedName;
@@ -298,6 +286,67 @@ define_subset_enum!(HasLocals from AstKind {
     TSTypeAliasDeclaration,
 });
 // endregion: 1508
+
+// region: 1696
+define_subset_enum!(Identifier from AstKind {
+    BindingIdentifier,
+    IdentifierReference
+});
+// endregion: 1703
+
+// region: 1438
+/**
+ * Nodes that introduce a new block scope. Corresponds with `ContainerFlags.IsBlockScopedContainer` in binder.ts.
+ *
+ * @internal
+ */
+define_subset_enum!(IsBlockScopedContainer from AstKind {
+    // IsContainer
+    Sub(IsContainer),
+    // CatchClause
+    CatchClause,
+    // ForStatement
+    ForStatement,
+    // ForInStatement
+    ForInStatement,
+    // ForOfStatement
+    ForOfStatement,
+    // CaseBlock
+    SwitchStatement,
+    // Block
+    BlockStatement,
+});
+// endregion: 1450
+
+// region: 1724
+define_subset_enum!(EntityName from AstKind {
+    Sub(Identifier),
+    TSQualifiedName,
+});
+// endregion: 1728
+
+// region: 2956
+define_subset_enum!(EntityNameExpression from AstKind {
+    Sub(Identifier),
+    Sub(PropertyAccessEntityNameExpression),
+});
+
+define_subset_enum!(EntityNameOrEntityNameExpression from AstKind {
+    Sub(EntityName),
+    Sub(EntityNameExpression),
+});
+define_subset_enum!(AccessExpression from AstKind {
+    PropertyAccessExpression,
+    ElementAccessExpression,
+});
+// endregion: 2958
+
+// region: 2986
+// todo(RB): this is supposed to be branded, may need to change
+define_subset_enum!(PropertyAccessEntityNameExpression from AstKind {
+    PropertyAccessExpression,
+});
+// endregion: 2991
 
 // region: 3123
 /// Represents an expression that can be called or constructed, including function calls,
@@ -661,7 +710,7 @@ pub trait TypeCheckerTrait<'a>: std::fmt::Debug {
     /** @internal */
     fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression<'a>, argIndex: usize) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getContextualTypeForJsxAttribute(&self, attribute: JsxAttribute) -> Option<&dyn Type<'a>>;
+    fn getContextualTypeForJsxAttribute(&self, attribute: JSXAttribute) -> Option<&dyn Type<'a>>;
     /** @internal */
     fn isContextSensitive(&self, node: Expression<'a>) -> bool;
     /** @internal */
