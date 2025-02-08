@@ -2,7 +2,7 @@ use oxc_ast::{
     ast::{
         Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingIdentifier, BindingPattern, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody,
         IdentifierReference, JSXAttribute, JSXElement, MethodDefinition, NewExpression, ObjectExpression, PropertyAccessExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration,
-        TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, VariableDeclaration,
+        TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, VariableDeclaration,
     },
     AstKind,
 };
@@ -178,7 +178,7 @@ define_subset_enum!(IsContainer from AstKind {
     // InterfaceDeclaration
     TSInterfaceDeclaration,
     // ModuleDeclaration
-    Sub(ModuleDeclaration),
+    TSModuleDeclaration,
     // TypeAliasDeclaration
     TSTypeAliasDeclaration,
     // MappedTypeNode
@@ -277,7 +277,7 @@ define_subset_enum!(HasLocals from AstKind {
     // MethodSignature
     TSMethodSignature,
     // ModuleDeclaration
-    Sub(ModuleDeclaration),
+    TSModuleDeclaration,
     // SetAccessorDeclaration
     // * merged with MethodDefinition
     // SourceFile
@@ -369,14 +369,6 @@ pub enum CallLikeExpression<'a> {
     BinaryExpression(Box<BinaryExpression<'a>>),
 }
 // endregion: 3129
-
-// region: 3609
-
-define_subset_enum!(ModuleDeclaration from AstKind {
-    SourceFile
-});
-
-// endregion: 3615
 
 // region: 4120
 // NOTE: Ensure this is up-to-date with src/debug/debug.ts

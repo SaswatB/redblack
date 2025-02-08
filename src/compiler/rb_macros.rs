@@ -161,7 +161,7 @@ macro_rules! generate_extended_enum {
                         $(Self::$sub_ty(inner) => inner.[<to_ $master_name:snake>](),)*
                     }
                 }
-                pub fn [<from_ $master_name:snake>](value: $master_name<'a>) -> Option<Self> {
+                pub fn [<from_ $master_name:snake>](value: &$master_name<'a>) -> Option<Self> {
                     // match directs
                     let wrapped = match value {
                         $($master_name::$dir_var(inner) => Some(Self::$dir_var(inner)),)*
