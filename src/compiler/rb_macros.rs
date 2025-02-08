@@ -209,7 +209,7 @@ macro_rules! parse_variants {
         crate::parse_variants! {
             $new_name, $master_name,
             ($($directs),*),
-            ($($subs),* $sub_ty),
+            ($($subs,)* $sub_ty),
             =>
             $($rest)*
         }

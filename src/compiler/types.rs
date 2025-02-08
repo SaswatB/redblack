@@ -1,8 +1,8 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingPattern, BlockStatement, CallExpression, CatchClause, Declaration, Decorator, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, JSXElement, MethodDefinition, NewExpression,
-        ObjectExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSFunctionType, TSIndexSignature, TSMappedType, TSMethodSignature, TSTypeAliasDeclaration, TaggedTemplateExpression,
-        VariableDeclaration,
+        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingPattern, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, JSXAttribute, JSXElement, MethodDefinition,
+        NewExpression, ObjectExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature,
+        TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, VariableDeclaration,
     },
     AstKind,
 };
@@ -11,78 +11,6 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{define_flags, define_string_enum, define_subset_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
 use super::moduleNameResolver::PackageJsonInfoCache;
-
-// region: 1508
-/**
- * Nodes that can have local symbols. Corresponds with `ContainerFlags.HasLocals`. Constituents should extend
- * {@link LocalsContainer}.
- *
- * @internal
- */
-define_subset_enum!(HasLocals from AstKind {
-    ArrowFunctionExpression,
-    // Block
-    BlockStatement,
-    FunctionBody,
-    // CallSignatureDeclaration
-    TSCallSignatureDeclaration,
-    // CaseBlock
-    SwitchStatement,
-    // CatchClause
-    CatchClause,
-    // ClassStaticBlockDeclaration
-    StaticBlock,
-    // ConditionalTypeNode
-    TSConditionalType,
-    // ConstructorDeclaration
-    MethodDefinition,
-    // ConstructorTypeNode
-    TSConstructorType,
-    // ConstructSignatureDeclaration
-    TSConstructSignatureDeclaration,
-    // ForStatement
-    ForStatement,
-    // ForInStatement
-    ForInStatement,
-    // ForOfStatement
-    ForOfStatement,
-    // FunctionDeclaration
-    Function,
-    // FunctionExpression
-    // * merged with Function
-    // FunctionTypeNode
-    TSFunctionType,
-    // GetAccessorDeclaration
-    // * merged with MethodDefinition
-    // IndexSignatureDeclaration
-    TSIndexSignature,
-    // ! rb ignoring jsdoc
-    // // JSDocCallbackTag
-    // JSDocCallbackTag,
-    // // JSDocEnumTag
-    // JSDocEnumTag,
-    // // JSDocFunctionType
-    // JSDocFunctionType(&'a JSDocFunctionType<'a>),
-    // // JSDocSignature
-    // JSDocSignature(&'a JSDocSignature<'a>),
-    // // JSDocTypedefTag
-    // JSDocTypedefTag(&'a JSDocTypedefTag<'a>),
-    // MappedTypeNode
-    TSMappedType,
-    // MethodDeclaration
-    // * merged with MethodDefinition
-    // MethodSignature
-    TSMethodSignature,
-    // ModuleDeclaration
-    Sub(ModuleDeclaration),
-    // SetAccessorDeclaration
-    // * merged with MethodDefinition
-    // SourceFile
-    SourceFile,
-    // TypeAliasDeclaration
-    TSTypeAliasDeclaration,
-});
-// endregion: 1508
 
 #[derive(Debug, Clone)]
 pub struct IndexInfo;
@@ -116,28 +44,6 @@ pub struct AssignmentPattern;
 
 #[derive(Debug)]
 pub struct EmitTextWriter;
-
-// region: 3123
-/// Represents an expression that can be called or constructed, including function calls,
-/// constructor calls, template literals, decorators, JSX elements, and instanceof checks.
-#[derive(Debug)]
-pub enum CallLikeExpression<'a> {
-    /// Function call expression like `foo()`
-    CallExpression(Box<CallExpression<'a>>),
-    /// Constructor call with new like `new Foo()`
-    NewExpression(Box<NewExpression<'a>>),
-    /// Tagged template literal like `foo`bar``
-    TaggedTemplateExpression(Box<TaggedTemplateExpression<'a>>),
-    /// Class or method decorator like `@decorator`
-    Decorator(Box<Decorator<'a>>),
-    /// JSX opening element like `<div>`
-    ///! oxc doesn't have a separate JSXSelfClosingElement, so we can't explicitly model JSXOpeningElement | JSXSelfClosingElement
-    JsxElement(Box<JSXElement<'a>>),
-    /// instanceof check like `foo instanceof Bar`
-    ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
-    BinaryExpression(Box<BinaryExpression<'a>>),
-}
-// endregion: 3129
 
 #[derive(Debug)]
 pub struct ObjectLiteralElementLike;
@@ -258,6 +164,162 @@ pub struct SymbolTracker;
 
 #[derive(Debug)]
 pub struct JSDocSignature;
+
+// region: 1403
+
+/**
+ * Declarations that can contain other declarations. Corresponds with `ContainerFlags.IsContainer` in binder.ts.
+ *
+ * @internal
+ */
+define_subset_enum!(IsContainer from AstKind {
+    // ClassExpression
+    Class,
+    // ClassDeclaration
+    // * Part of Class
+    // EnumDeclaration
+    TSEnumDeclaration,
+    // ObjectLiteralExpression
+    ObjectExpression,
+    // TypeLiteralNode
+    TSTypeLiteral,
+    // ! rb ignoring jsdoc
+    // // JSDocTypeLiteral
+    // JsxAttributes
+    JSXAttribute,
+    // InterfaceDeclaration
+    TSInterfaceDeclaration,
+    // ModuleDeclaration
+    Sub(ModuleDeclaration),
+    // TypeAliasDeclaration
+    TSTypeAliasDeclaration,
+    // MappedTypeNode
+    TSMappedType,
+    // IndexSignatureDeclaration
+    TSIndexSignature,
+    // SourceFile
+    SourceFile,
+    // GetAccessorDeclaration
+    // * Part of MethodDefinition
+    // SetAccessorDeclaration
+    // * Part of MethodDefinition
+    // MethodDeclaration
+    MethodDefinition,
+    // ConstructorDeclaration
+    // * Part of MethodDefinition
+    // FunctionDeclaration
+    Function,
+    // MethodSignature
+    TSMethodSignature,
+    // CallSignatureDeclaration
+    TSCallSignatureDeclaration,
+    // ! rb ignoring jsdoc
+    // // JSDocSignature
+    // // JSDocFunctionType
+    // FunctionTypeNode
+    TSFunctionType,
+    // ConstructSignatureDeclaration
+    TSConstructSignatureDeclaration,
+    // ConstructorTypeNode
+    TSConstructorType,
+    // ClassStaticBlockDeclaration
+    StaticBlock,
+    // FunctionExpression
+    // * Part of Function
+    // ArrowFunction
+    ArrowFunctionExpression,
+});
+
+// endregion: 1436
+
+// region: 1508
+/**
+ * Nodes that can have local symbols. Corresponds with `ContainerFlags.HasLocals`. Constituents should extend
+ * {@link LocalsContainer}.
+ *
+ * @internal
+ */
+define_subset_enum!(HasLocals from AstKind {
+    ArrowFunctionExpression,
+    // Block
+    BlockStatement,
+    FunctionBody,
+    // CallSignatureDeclaration
+    TSCallSignatureDeclaration,
+    // CaseBlock
+    SwitchStatement,
+    // CatchClause
+    CatchClause,
+    // ClassStaticBlockDeclaration
+    StaticBlock,
+    // ConditionalTypeNode
+    TSConditionalType,
+    // ConstructorDeclaration
+    MethodDefinition,
+    // ConstructorTypeNode
+    TSConstructorType,
+    // ConstructSignatureDeclaration
+    TSConstructSignatureDeclaration,
+    // ForStatement
+    ForStatement,
+    // ForInStatement
+    ForInStatement,
+    // ForOfStatement
+    ForOfStatement,
+    // FunctionDeclaration
+    Function,
+    // FunctionExpression
+    // * merged with Function
+    // FunctionTypeNode
+    TSFunctionType,
+    // GetAccessorDeclaration
+    // * merged with MethodDefinition
+    // IndexSignatureDeclaration
+    TSIndexSignature,
+    // ! rb ignoring jsdoc
+    // // JSDocCallbackTag
+    // // JSDocEnumTag
+    // // JSDocFunctionType
+    // // JSDocSignature
+    // // JSDocTypedefTag
+    // MappedTypeNode
+    TSMappedType,
+    // MethodDeclaration
+    // * merged with MethodDefinition
+    // MethodSignature
+    TSMethodSignature,
+    // ModuleDeclaration
+    Sub(ModuleDeclaration),
+    // SetAccessorDeclaration
+    // * merged with MethodDefinition
+    // SourceFile
+    SourceFile,
+    // TypeAliasDeclaration
+    TSTypeAliasDeclaration,
+});
+// endregion: 1508
+
+// region: 3123
+/// Represents an expression that can be called or constructed, including function calls,
+/// constructor calls, template literals, decorators, JSX elements, and instanceof checks.
+#[derive(Debug)]
+pub enum CallLikeExpression<'a> {
+    /// Function call expression like `foo()`
+    CallExpression(Box<CallExpression<'a>>),
+    /// Constructor call with new like `new Foo()`
+    NewExpression(Box<NewExpression<'a>>),
+    /// Tagged template literal like `foo`bar``
+    TaggedTemplateExpression(Box<TaggedTemplateExpression<'a>>),
+    /// Class or method decorator like `@decorator`
+    Decorator(Box<Decorator<'a>>),
+    /// JSX opening element like `<div>`
+    ///! oxc doesn't have a separate JSXSelfClosingElement, so we can't explicitly model JSXOpeningElement | JSXSelfClosingElement
+    JsxElement(Box<JSXElement<'a>>),
+    /// instanceof check like `foo instanceof Bar`
+    ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
+    BinaryExpression(Box<BinaryExpression<'a>>),
+}
+// endregion: 3129
 
 // region: 3609
 
@@ -848,78 +910,6 @@ pub trait TypeCheckerTrait<'a>: std::fmt::Debug {
 }
 // endregion: 5416
 
-#[derive(Debug)]
-pub enum SignatureKind {
-    Call,
-    Construct,
-}
-
-define_flags!(SignatureFlags {
-    // Propagating flags
-    HasRestParameter = 1 << 0,  // Indicates last parameter is rest parameter
-    HasLiteralTypes = 1 << 1,  // Indicates signature is specialized
-    Abstract = 1 << 2,  // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
-
-    // Non-propagating flags
-    IsInnerCallChain = 1 << 3,  // Indicates signature comes from a CallChain nested in an outer OptionalChain
-    IsOuterCallChain = 1 << 4,  // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
-    IsUntypedSignatureInJsFile = 1 << 5,  // Indicates signature is from a js file and has no types
-    IsNonInferrable = 1 << 6,  // Indicates signature comes from a non-inferrable type
-    IsSignatureCandidateForOverloadFailure = 1 << 7,
-
-    PropagatingFlags = Self::HasRestParameter.0 | Self::HasLiteralTypes.0 | Self::Abstract.0 | Self::IsUntypedSignatureInJsFile.0 | Self::IsSignatureCandidateForOverloadFailure.0,
-
-    CallChainFlags = Self::IsInnerCallChain.0 | Self::IsOuterCallChain.0,
-});
-
-#[derive(Debug)]
-pub struct Signature<'a> {
-    /** @internal */
-    pub flags: SignatureFlags,
-    /** @internal */
-    pub checker: Option<Box<dyn TypeCheckerTrait<'a>>>,
-    pub declaration: Option<SignatureDeclaration>,  // Originating declaration
-    pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
-    pub parameters: Vec<rc_cell!(Symbol<'a>)>,      // Parameters
-    pub thisParameter: opt_rc_cell!(Symbol<'a>),    // symbol of this-type parameter
-    /** @internal */
-    pub resolvedReturnType: Option<Box<dyn Type<'a>>>, // Lazily set by `getReturnTypeOfSignature`
-    /** @internal */
-    pub resolvedTypePredicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
-    /** @internal */
-    pub minArgumentCount: i32,  // Number of non-optional parameters
-    /** @internal */
-    pub resolvedMinArgumentCount: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
-    /** @internal */
-    pub target: opt_rc_cell!(Signature<'a>), // Instantiation target
-    /** @internal */
-    pub mapper: Option<TypeMapper<'a>>, // Instantiation mapper
-    /** @internal */
-    pub compositeSignatures: Option<Vec<Signature<'a>>>, // Underlying signatures of a union/intersection signature
-    /** @internal */
-    pub compositeKind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
-    /** @internal */
-    pub erasedSignatureCache: opt_rc_cell!(Signature<'a>), // Erased version of signature (deferred)
-    /** @internal */
-    pub canonicalSignatureCache: opt_rc_cell!(Signature<'a>), // Canonical version of signature (deferred)
-    /** @internal */
-    pub baseSignatureCache: opt_rc_cell!(Signature<'a>), // Base version of signature (deferred)
-    /** @internal */
-    pub optionalCallSignatureCache: Option<OptionalCallSignatureCache<'a>>, // Optional chained call version of signature (deferred)
-    /** @internal */
-    pub isolatedSignatureType: Option<Box<dyn ObjectType<'a>>>, // A manufactured type that just contains the signature for purposes of signature comparison
-    /** @internal */
-    pub instantiations: Option<HashMap<String, rc_cell!(Signature<'a>)>>, // Generic signature instantiation cache
-    /** @internal */
-    pub implementationSignatureCache: opt_rc_cell!(Signature<'a>), // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
-}
-
-#[derive(Debug)]
-pub struct OptionalCallSignatureCache<'a> {
-    pub inner: opt_rc_cell!(Signature<'a>),
-    pub outer: opt_rc_cell!(Signature<'a>),
-}
-
 // region: 5864
 define_flags!(SymbolFlags {
     None = 0,
@@ -1415,6 +1405,80 @@ pub trait InterfaceType<'a>: ObjectType<'a> {
     fn get_interface_props(&self) -> &InterfaceTypeProps<'a>;
 }
 // endregion: 6537
+
+// region: 6908
+#[derive(Debug)]
+pub enum SignatureKind {
+    Call,
+    Construct,
+}
+
+define_flags!(SignatureFlags {
+    // Propagating flags
+    HasRestParameter = 1 << 0,  // Indicates last parameter is rest parameter
+    HasLiteralTypes = 1 << 1,  // Indicates signature is specialized
+    Abstract = 1 << 2,  // Indicates signature comes from an abstract class, abstract construct signature, or abstract constructor type
+
+    // Non-propagating flags
+    IsInnerCallChain = 1 << 3,  // Indicates signature comes from a CallChain nested in an outer OptionalChain
+    IsOuterCallChain = 1 << 4,  // Indicates signature comes from a CallChain that is the outermost chain of an optional expression
+    IsUntypedSignatureInJsFile = 1 << 5,  // Indicates signature is from a js file and has no types
+    IsNonInferrable = 1 << 6,  // Indicates signature comes from a non-inferrable type
+    IsSignatureCandidateForOverloadFailure = 1 << 7,
+
+    PropagatingFlags = Self::HasRestParameter.0 | Self::HasLiteralTypes.0 | Self::Abstract.0 | Self::IsUntypedSignatureInJsFile.0 | Self::IsSignatureCandidateForOverloadFailure.0,
+
+    CallChainFlags = Self::IsInnerCallChain.0 | Self::IsOuterCallChain.0,
+});
+
+#[derive(Debug)]
+pub struct Signature<'a> {
+    /** @internal */
+    pub flags: SignatureFlags,
+    /** @internal */
+    pub checker: Option<Box<dyn TypeCheckerTrait<'a>>>,
+    pub declaration: Option<SignatureDeclaration>,  // Originating declaration
+    pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
+    pub parameters: Vec<rc_cell!(Symbol<'a>)>,      // Parameters
+    pub thisParameter: opt_rc_cell!(Symbol<'a>),    // symbol of this-type parameter
+    /** @internal */
+    pub resolvedReturnType: Option<Box<dyn Type<'a>>>, // Lazily set by `getReturnTypeOfSignature`
+    /** @internal */
+    pub resolvedTypePredicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
+    /** @internal */
+    pub minArgumentCount: i32,  // Number of non-optional parameters
+    /** @internal */
+    pub resolvedMinArgumentCount: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
+    /** @internal */
+    pub target: opt_rc_cell!(Signature<'a>), // Instantiation target
+    /** @internal */
+    pub mapper: Option<TypeMapper<'a>>, // Instantiation mapper
+    /** @internal */
+    pub compositeSignatures: Option<Vec<Signature<'a>>>, // Underlying signatures of a union/intersection signature
+    /** @internal */
+    pub compositeKind: Option<TypeFlags>, // TypeFlags.Union if the underlying signatures are from union members, otherwise TypeFlags.Intersection
+    /** @internal */
+    pub erasedSignatureCache: opt_rc_cell!(Signature<'a>), // Erased version of signature (deferred)
+    /** @internal */
+    pub canonicalSignatureCache: opt_rc_cell!(Signature<'a>), // Canonical version of signature (deferred)
+    /** @internal */
+    pub baseSignatureCache: opt_rc_cell!(Signature<'a>), // Base version of signature (deferred)
+    /** @internal */
+    pub optionalCallSignatureCache: Option<OptionalCallSignatureCache<'a>>, // Optional chained call version of signature (deferred)
+    /** @internal */
+    pub isolatedSignatureType: Option<Box<dyn ObjectType<'a>>>, // A manufactured type that just contains the signature for purposes of signature comparison
+    /** @internal */
+    pub instantiations: Option<HashMap<String, rc_cell!(Signature<'a>)>>, // Generic signature instantiation cache
+    /** @internal */
+    pub implementationSignatureCache: opt_rc_cell!(Signature<'a>), // Copy of the signature with fresh type parameters to use in checking the body of a potentially self-referential generic function (deferred)
+}
+
+#[derive(Debug)]
+pub struct OptionalCallSignatureCache<'a> {
+    pub inner: opt_rc_cell!(Signature<'a>),
+    pub outer: opt_rc_cell!(Signature<'a>),
+}
+// endregion: 6980
 
 // region: 6995
 #[derive(Debug)]
