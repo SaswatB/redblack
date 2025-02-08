@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
+#[allow(unused_doc_comments)]
 mod compiler;
 mod services;
 use std::mem;
@@ -39,7 +41,7 @@ fn main() {
     let type_checker_host = Rc::new(RbTypeCheckerHost::new(cwd, CompilerOptions::default()));
     RB_CTX.set_type_checker_host(type_checker_host.clone());
 
-    let name = "src/snips/call_signature.ts";
+    let name = "src/snips/module_declaration.ts";
     let path = Path::new(&name);
     let source_text = fs::read_to_string(path).unwrap();
     // let source_type = SourceType::from_path(path).unwrap();

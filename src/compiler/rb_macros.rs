@@ -137,3 +137,132 @@ macro_rules! opt_rc_cell {
         Option<Rc<RefCell<$type>>>
     };
 }
+
+#[macro_export]
+macro_rules! generate_extended_enum {
+    (
+        $new_name:ident from $master_name:ident
+        direct: [$($dir_var:ident),* $(,)?],
+        subs:   [$($sub_ty:ident),* $(,)?]
+    ) => {
+        #[derive(Debug, Clone, Copy)]
+        pub enum $new_name<'a> {
+            // Direct variants
+            $($dir_var(&'a $dir_var<'a>),)*
+            // Each sub-enum is a single variant that wraps it
+            $($sub_ty($sub_ty<'a>),)*
+        }
+
+        paste::paste! {
+            impl<'a> $new_name<'a> {
+                pub fn [<to_ $master_name:snake>](&self) -> $master_name<'a> {
+                    match self {
+                        $(Self::$dir_var(inner) => $master_name::$dir_var(inner),)*
+                        $(Self::$sub_ty(inner) => inner.[<to_ $master_name:snake>](),)*
+                    }
+                }
+                pub fn [<from_ $master_name:snake>](value: $master_name<'a>) -> Option<Self> {
+                    // match directs
+                    let wrapped = match value {
+                        $($master_name::$dir_var(inner) => Some(Self::$dir_var(inner)),)*
+                        _ => None
+                    };
+                    if let Some(wrapped) = wrapped {
+                        return Some(wrapped)
+                    }
+                    // match subs
+                    $(if let Some(wrapped) = $sub_ty::[<from_ $master_name:snake>](value) {
+                        return Some(Self::$sub_ty(wrapped))
+                    })*
+                    None
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! parse_variants {
+    // 1) "End of list": no more tokens => call the generator
+    (
+        $new_name:ident, $master_name:ident,
+        ($($directs:ident),*),
+        ($($subs:ident),*),
+        =>
+    ) => {
+        crate::generate_extended_enum! {
+            $new_name from $master_name
+            direct: [$($directs),*],
+            subs:   [$($subs),*]
+        }
+    };
+
+    // 2) Found `Sub(Xyz)`, parse that out as a sub-enum name
+    (
+        $new_name:ident, $master_name:ident,
+        ($($directs:ident),*),
+        ($($subs:ident),*),
+        =>
+        Sub($sub_ty:ident)
+        $($rest:tt)*
+    ) => {
+        crate::parse_variants! {
+            $new_name, $master_name,
+            ($($directs),*),
+            ($($subs),* $sub_ty),
+            =>
+            $($rest)*
+        }
+    };
+
+    // 3) Found a direct variant
+    (
+        $new_name:ident, $master_name:ident,
+        ($($directs:ident),*),
+        ($($subs:ident),*),
+        =>
+        $variant:ident
+        $($rest:tt)*
+    ) => {
+        crate::parse_variants! {
+            $new_name, $master_name,
+            ($($directs,)* $variant),
+            ($($subs),*),
+            =>
+            $($rest)*
+        }
+    };
+
+    // 4) Skip commas
+    (
+        $new_name:ident, $master_name:ident,
+        ($($directs:ident),*),
+        ($($subs:ident),*),
+        =>
+        ,
+        $($rest:tt)*
+    ) => {
+        crate::parse_variants! {
+            $new_name, $master_name,
+            ($($directs),*),
+            ($($subs),*),
+            =>
+            $($rest)*
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! define_subset_enum {
+    (
+        $new_name:ident from $master_name:ident { $($body:tt)* }
+    ) => {
+        crate::parse_variants! {
+            $new_name, $master_name,
+            (), // start with empty direct list
+            (), // start with empty subs list
+            =>
+            $($body)*
+        }
+    };
+}

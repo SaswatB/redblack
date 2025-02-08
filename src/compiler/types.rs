@@ -1,12 +1,14 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingPattern, BlockStatement, CallExpression, Declaration, Decorator, Expression, FunctionBody, JSXElement, NewExpression, ObjectExpression, SourceFile, SwitchStatement, TaggedTemplateExpression, VariableDeclaration,
+        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingPattern, BlockStatement, CallExpression, CatchClause, Declaration, Decorator, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, JSXElement, MethodDefinition, NewExpression,
+        ObjectExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSFunctionType, TSIndexSignature, TSMappedType, TSMethodSignature, TSTypeAliasDeclaration, TaggedTemplateExpression,
+        VariableDeclaration,
     },
     AstKind,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{define_flags, define_string_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
+use crate::{define_flags, define_string_enum, define_subset_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
 use super::moduleNameResolver::PackageJsonInfoCache;
 
@@ -17,42 +19,69 @@ use super::moduleNameResolver::PackageJsonInfoCache;
  *
  * @internal
  */
-pub enum HasLocals<'a> {
-    // ArrowFunction
-    ArrowFunctionExpression(&'a ArrowFunctionExpression<'a>),
+define_subset_enum!(HasLocals from AstKind {
+    ArrowFunctionExpression,
     // Block
-    BlockStatement(&'a BlockStatement<'a>),
-    FunctionBody(&'a FunctionBody<'a>),
-    // TODO(RB): Add the rest
-    CallSignatureDeclaration,
-    CaseBlock,
+    BlockStatement,
+    FunctionBody,
+    // CallSignatureDeclaration
+    TSCallSignatureDeclaration,
+    // CaseBlock
+    SwitchStatement,
+    // CatchClause
     CatchClause,
-    ClassStaticBlockDeclaration,
-    ConditionalTypeNode,
-    ConstructorDeclaration,
-    ConstructorTypeNode,
-    ConstructSignatureDeclaration,
+    // ClassStaticBlockDeclaration
+    StaticBlock,
+    // ConditionalTypeNode
+    TSConditionalType,
+    // ConstructorDeclaration
+    MethodDefinition,
+    // ConstructorTypeNode
+    TSConstructorType,
+    // ConstructSignatureDeclaration
+    TSConstructSignatureDeclaration,
+    // ForStatement
     ForStatement,
+    // ForInStatement
     ForInStatement,
+    // ForOfStatement
     ForOfStatement,
-    FunctionDeclaration,
-    FunctionExpression,
-    FunctionTypeNode,
-    GetAccessorDeclaration,
-    IndexSignatureDeclaration,
-    JSDocCallbackTag,
-    JSDocEnumTag,
-    JSDocFunctionType,
-    JSDocSignature,
-    JSDocTypedefTag,
-    MappedTypeNode,
-    MethodDeclaration,
-    MethodSignature,
-    ModuleDeclaration,
-    SetAccessorDeclaration,
-    SourceFile(&'a SourceFile<'a>),
-    TypeAliasDeclaration,
-}
+    // FunctionDeclaration
+    Function,
+    // FunctionExpression
+    // * merged with Function
+    // FunctionTypeNode
+    TSFunctionType,
+    // GetAccessorDeclaration
+    // * merged with MethodDefinition
+    // IndexSignatureDeclaration
+    TSIndexSignature,
+    // ! rb ignoring jsdoc
+    // // JSDocCallbackTag
+    // JSDocCallbackTag,
+    // // JSDocEnumTag
+    // JSDocEnumTag,
+    // // JSDocFunctionType
+    // JSDocFunctionType(&'a JSDocFunctionType<'a>),
+    // // JSDocSignature
+    // JSDocSignature(&'a JSDocSignature<'a>),
+    // // JSDocTypedefTag
+    // JSDocTypedefTag(&'a JSDocTypedefTag<'a>),
+    // MappedTypeNode
+    TSMappedType,
+    // MethodDeclaration
+    // * merged with MethodDefinition
+    // MethodSignature
+    TSMethodSignature,
+    // ModuleDeclaration
+    Sub(ModuleDeclaration),
+    // SetAccessorDeclaration
+    // * merged with MethodDefinition
+    // SourceFile
+    SourceFile,
+    // TypeAliasDeclaration
+    TSTypeAliasDeclaration,
+});
 // endregion: 1508
 
 #[derive(Debug, Clone)]
@@ -229,6 +258,14 @@ pub struct SymbolTracker;
 
 #[derive(Debug)]
 pub struct JSDocSignature;
+
+// region: 3609
+
+define_subset_enum!(ModuleDeclaration from AstKind {
+    SourceFile
+});
+
+// endregion: 3615
 
 // region: 4120
 // NOTE: Ensure this is up-to-date with src/debug/debug.ts
