@@ -10,7 +10,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{define_flags, define_string_enum, define_subset_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
-use super::moduleNameResolver::PackageJsonInfoCache;
+use super::{moduleNameResolver::PackageJsonInfoCache, rb_unions::BindingElement};
 
 #[derive(Debug, Clone)]
 pub struct IndexInfo;
@@ -481,7 +481,7 @@ pub struct FlowAssignment<'a> {
 pub enum FlowAssignmentNode<'a> {
     Expression(&'a Expression<'a>),
     VariableDeclaration(&'a VariableDeclaration<'a>),
-    // BindingElement(&'a BindingElement<'a>), // todo(RB) figure out BindingElement
+    BindingElement(&'a BindingElement<'a>),
 }
 
 /** @internal */

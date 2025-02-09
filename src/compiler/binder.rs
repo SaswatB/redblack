@@ -850,10 +850,8 @@ pub fn getContainerFlags(node: &AstKind) -> ContainerFlags {
         return flags;
     }
 
-    if let AstKind::MethodDefinition(func) = node {
-        if isObjectLiteralOrClassExpressionMethodOrAccessor(node) {
-            return ContainerFlags::IsContainer | ContainerFlags::IsControlFlowContainer | ContainerFlags::HasLocals | ContainerFlags::IsFunctionLike | ContainerFlags::IsObjectLiteralOrClassExpressionMethodOrAccessor;
-        }
+    if isObjectLiteralOrClassExpressionMethodOrAccessor(node) {
+        return ContainerFlags::IsContainer | ContainerFlags::IsControlFlowContainer | ContainerFlags::HasLocals | ContainerFlags::IsFunctionLike | ContainerFlags::IsObjectLiteralOrClassExpressionMethodOrAccessor;
     }
     let flags = match node {
         AstKind::MethodDefinition(_) |
