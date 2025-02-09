@@ -27,9 +27,6 @@ pub struct TypePredicate;
 #[derive(Debug)]
 pub struct TypePredicateNode;
 
-#[derive(Debug)]
-pub struct SignatureDeclaration;
-
 #[derive(Debug, Clone)]
 pub struct TypeParameter;
 
@@ -218,7 +215,28 @@ define_subset_enum!(IsContainer from AstKind {
     ArrowFunctionExpression,
 });
 
-// endregion: 1436
+/**
+ * Nodes that introduce a new block scope. Corresponds with `ContainerFlags.IsBlockScopedContainer` in binder.ts.
+ *
+ * @internal
+ */
+define_subset_enum!(IsBlockScopedContainer from AstKind {
+    // IsContainer
+    Sub(IsContainer),
+    // CatchClause
+    CatchClause,
+    // ForStatement
+    ForStatement,
+    // ForInStatement
+    ForInStatement,
+    // ForOfStatement
+    ForOfStatement,
+    // CaseBlock
+    SwitchStatement,
+    // Block
+    BlockStatement,
+});
+// endregion: 1450
 
 // region: 1508
 /**
@@ -294,36 +312,44 @@ define_subset_enum!(Identifier from AstKind {
 });
 // endregion: 1703
 
-// region: 1438
-/**
- * Nodes that introduce a new block scope. Corresponds with `ContainerFlags.IsBlockScopedContainer` in binder.ts.
- *
- * @internal
- */
-define_subset_enum!(IsBlockScopedContainer from AstKind {
-    // IsContainer
-    Sub(IsContainer),
-    // CatchClause
-    CatchClause,
-    // ForStatement
-    ForStatement,
-    // ForInStatement
-    ForInStatement,
-    // ForOfStatement
-    ForOfStatement,
-    // CaseBlock
-    SwitchStatement,
-    // Block
-    BlockStatement,
-});
-// endregion: 1450
-
 // region: 1724
 define_subset_enum!(EntityName from AstKind {
     Sub(Identifier),
     TSQualifiedName,
 });
 // endregion: 1728
+
+// region: 1844
+define_subset_enum!(SignatureDeclaration from AstKind {
+    // CallSignatureDeclaration
+    TSCallSignatureDeclaration,
+    // ConstructSignatureDeclaration
+    TSConstructSignatureDeclaration,
+    // MethodSignature
+    TSMethodSignature,
+    // IndexSignatureDeclaration
+    TSIndexSignature,
+    // FunctionTypeNode
+    TSFunctionType,
+    // ConstructorTypeNode
+    TSConstructorType,
+    // JSDocFunctionType
+    // ! rb ignoring jsdoc
+    // FunctionDeclaration
+    Function,
+    // MethodDeclaration
+    // * merged with MethodDefinition
+    MethodDefinition,
+    // ConstructorDeclaration
+    // * merged with MethodDefinition
+    // AccessorDeclaration
+    // * merged with MethodDefinition
+    // FunctionExpression
+    // * merged with Function
+    // ArrowFunction
+    ArrowFunctionExpression,
+});
+// endregion: 1857
 
 // region: 2956
 define_subset_enum!(EntityNameExpression from AstKind {
@@ -721,10 +747,10 @@ pub trait TypeCheckerTrait<'a>: std::fmt::Debug {
     /** @internal */
     fn hasEffectiveRestParameter(&self, sig: Signature<'a>) -> bool;
     /** @internal */
-    fn containsArgumentsReference(&self, declaration: SignatureDeclaration) -> bool;
+    fn containsArgumentsReference(&self, declaration: SignatureDeclaration<'a>) -> bool;
 
-    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration) -> Option<Signature<'a>>;
-    fn isImplementationOfOverload(&self, node: SignatureDeclaration) -> Option<bool>;
+    fn getSignatureFromDeclaration(&self, declaration: SignatureDeclaration<'a>) -> Option<Signature<'a>>;
+    fn isImplementationOfOverload(&self, node: SignatureDeclaration<'a>) -> Option<bool>;
     fn isUndefinedSymbol(&self, symbol: Symbol<'a>) -> bool;
     fn isArgumentsSymbol(&self, symbol: Symbol<'a>) -> bool;
     fn isUnknownSymbol(&self, symbol: Symbol<'a>) -> bool;
@@ -825,12 +851,12 @@ pub trait TypeCheckerTrait<'a>: std::fmt::Debug {
     fn createAnonymousType(&self, symbol: Option<Symbol<'a>>, members: SymbolTable, callSignatures: Vec<Signature<'a>>, constructSignatures: Vec<Signature<'a>>, indexInfos: Vec<IndexInfo>) -> &dyn Type<'a>;
     /** @internal */
     fn createSignature(
-        &self, declaration: Option<SignatureDeclaration>, typeParameters: Option<Vec<TypeParameter>>, thisParameter: Option<Symbol>, parameters: Vec<Symbol>, resolvedReturnType: &dyn Type, typePredicate: Option<TypePredicate>, minArgumentCount: usize, flags: SignatureFlags,
+        &self, declaration: Option<SignatureDeclaration<'a>>, typeParameters: Option<Vec<TypeParameter>>, thisParameter: Option<Symbol>, parameters: Vec<Symbol>, resolvedReturnType: &dyn Type<'a>, typePredicate: Option<TypePredicate>, minArgumentCount: usize, flags: SignatureFlags,
     ) -> Signature<'a>;
     /** @internal */
     fn createSymbol(&self, flags: SymbolFlags, name: &str) -> TransientSymbol;
     /** @internal */
-    fn createIndexInfo(&self, keyType: &dyn Type<'a>, type_: &dyn Type<'a>, isReadonly: bool, declaration: Option<SignatureDeclaration>) -> IndexInfo;
+    fn createIndexInfo(&self, keyType: &dyn Type<'a>, type_: &dyn Type<'a>, isReadonly: bool, declaration: Option<SignatureDeclaration<'a>>) -> IndexInfo;
     /** @internal */
     fn isSymbolAccessible(&self, symbol: Symbol<'a>, enclosingDeclaration: Option<AstKind>, meaning: SymbolFlags, shouldComputeAliasToMarkVisible: bool) -> SymbolAccessibilityResult;
     /** @internal */
@@ -1478,16 +1504,16 @@ pub struct Signature<'a> {
     pub flags: SignatureFlags,
     /** @internal */
     pub checker: Option<Box<dyn TypeCheckerTrait<'a>>>,
-    pub declaration: Option<SignatureDeclaration>,  // Originating declaration
-    pub typeParameters: Option<Vec<TypeParameter>>, // Type parameters (undefined if non-generic)
-    pub parameters: Vec<rc_cell!(Symbol<'a>)>,      // Parameters
-    pub thisParameter: opt_rc_cell!(Symbol<'a>),    // symbol of this-type parameter
+    pub declaration: Option<SignatureDeclaration<'a>>, // Originating declaration
+    pub typeParameters: Option<Vec<TypeParameter>>,    // Type parameters (undefined if non-generic)
+    pub parameters: Vec<rc_cell!(Symbol<'a>)>,         // Parameters
+    pub thisParameter: opt_rc_cell!(Symbol<'a>),       // symbol of this-type parameter
     /** @internal */
     pub resolvedReturnType: Option<Box<dyn Type<'a>>>, // Lazily set by `getReturnTypeOfSignature`
     /** @internal */
     pub resolvedTypePredicate: Option<TypePredicate>, // Lazily set by `getTypePredicateOfSignature`
     /** @internal */
-    pub minArgumentCount: i32,  // Number of non-optional parameters
+    pub minArgumentCount: i32,     // Number of non-optional parameters
     /** @internal */
     pub resolvedMinArgumentCount: Option<i32>, // Number of non-optional parameters (excluding trailing `void`)
     /** @internal */

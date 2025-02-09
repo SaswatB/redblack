@@ -9,6 +9,11 @@ use oxc_ast::{ast::SourceFile, AstKind, Visit};
 
 use super::rb_extra::SourceFileExt;
 
+// region: 2922
+/** @internal */
+pub fn isObjectLiteralOrClassExpressionMethodOrAccessor(node: &AstKind) -> bool { matches!(node, AstKind::MethodDefinition(_)) && if let Some(parent) = node.parent() { matches!(parent, AstKind::ObjectExpression(_) | AstKind::Class(_)) } else { false } }
+// endregion: 2927
+
 // region: 3608
 /** @internal */
 pub fn isPartOfTypeQuery(node: &AstKind) -> bool {

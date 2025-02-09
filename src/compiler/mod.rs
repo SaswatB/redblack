@@ -12,3 +12,4 @@ pub mod rb_macros;
 pub mod rb_unions;
 pub mod types;
 pub mod utilities;
+pub mod utilitiesPublic;
