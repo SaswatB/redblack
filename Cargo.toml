@@ -16,3 +16,5 @@ weak-table = "*"
 once_cell = "*"
 paste = "*"
 rb_macros = { path = "./rb_macros" }
+regex = "*"
+lazy_static = "*"

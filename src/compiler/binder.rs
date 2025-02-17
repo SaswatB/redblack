@@ -1,15 +1,19 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use oxc_ast::{ast::SourceFile, AstKind, GetChildren};
+use oxc_ast::{
+    ast::{PrivateIdentifier, SourceFile},
+    AstKind, GetChildren,
+};
 
 use crate::{define_flags, flag_names_impl, opt_rc_cell};
 
 use super::{
+    diagnostic_information_map_generated::Diagnostics,
     factory::node_tests::isClassStaticBlockDeclaration,
     rb_extra::{AstKindExt, SourceFileExt},
-    rb_unions::IsContainerOrEntityNameExpression,
-    types::{CompilerOptions, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, IsBlockScopedContainer, ScriptTarget, Symbol, __String},
-    utilities::{getEmitScriptTarget, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery},
+    rb_unions::{DeclarationNameOrQualifiedName, IsContainerOrEntityNameExpression, StringOrNumber},
+    types::{CompilerOptions, DiagnosticArguments, DiagnosticMessage, DiagnosticWithLocation, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, IsBlockScopedContainer, ScriptTarget, Symbol, __String},
+    utilities::{createDiagnosticForNodeInSourceFile, declarationNameToString, getEmitScriptTarget, getSourceFileOfNode, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery},
     utilitiesPublic::isFunctionLike,
 };
 
@@ -142,6 +146,13 @@ impl<'a> Default for Binder<'a> {
 }
 
 impl<'a> Binder<'a> {
+    /**
+     * Inside the binder, we may create a diagnostic for an as-yet unbound node (with potentially no parent pointers, implying no accessible source file)
+     * If so, the node _must_ be in the current file (as that's the only way anything could have traversed to it to yield it as the error node)
+     * This version of `createDiagnosticForNode` uses the binder's context to account for this, and always yields correct diagnostics even in these situations.
+     */
+    fn createDiagnosticForNode(&mut self, node: &AstKind<'a>, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation { createDiagnosticForNodeInSourceFile(getSourceFileOfNode(Some(node)).or(self.file), node, message, args) }
+
     fn bindSourceFile(&mut self, f: &'a SourceFile<'a>, opts: &'a CompilerOptions) {
         self.file = Some(f);
         self.options = Some(opts);
@@ -539,8 +550,11 @@ impl<'a> Binder<'a> {
     fn bindWorker(&mut self, node: &AstKind<'a>) {
         match node {
             /* Strict mode checks */
-            AstKind::IdentifierReference(_) | //
+            // Identifier
+            AstKind::IdentifierName(_) |
+            AstKind::IdentifierReference(_) |
             AstKind::BindingIdentifier(_) |
+            // end Identifier
                 // ! rb skipping jsdoc
                 // for typedef type names with namespaces, bind the new jsdoc type symbol here
                 // because it requires all containing namespaces to be in effect, namely the
@@ -572,7 +586,7 @@ impl<'a> Binder<'a> {
                 node.set_flowNode(self.currentFlow.clone());
             }
             AstKind::PrivateIdentifier(private) => {
-                // return checkPrivateIdentifier(node as PrivateIdentifier);
+                return self.checkPrivateIdentifier(private);
             }
             // todo(RB): continue conversion from here
             AstKind::PropertyAccessExpression(_) |
@@ -662,12 +676,16 @@ impl<'a> Binder<'a> {
             AstKind::FormalParameter(param) => {
                 // return bindParameter(node as ParameterDeclaration);
             }
-            AstKind::VariableDeclaration(decl) => {
+            AstKind::VariableDeclarationList(decl) => {
                 // return bindVariableDeclarationOrBindingElement(node as VariableDeclaration);
             }
-            AstKind::BindingPattern(pattern) => {
+            // BindingElement
+            AstKind::BindingProperty(_) |
+            AstKind::ArrayPatternElement(_) |
+            AstKind::BindingRestElement(_) => {
                 node.set_flowNode(self.currentFlow.clone());
             }
+            // end BindingElement
             AstKind::PropertyDefinition(prop) => {
                 // return bindPropertyWorker(node);
             }
@@ -822,6 +840,23 @@ impl<'a> Binder<'a> {
         }
     }
     // endregion: 2082
+
+    // region: 2579
+    // The binder visits every node, so this is a good place to check for
+    // the reserved private name (there is only one)
+    fn checkPrivateIdentifier(&mut self, node: &'a PrivateIdentifier<'a>) {
+        if node.name.as_str() == "#constructor" {
+            // Report error only if there are no parse errors in file
+            if self.file.as_ref().unwrap().parseDiagnostics().borrow().is_empty() {
+                self.file.as_ref().unwrap().bindDiagnostics().borrow_mut().push(self.createDiagnosticForNode(
+                    &node.to_ast_kind(),
+                    Diagnostics::constructor_is_a_reserved_word(),
+                    vec![StringOrNumber::String(declarationNameToString(DeclarationNameOrQualifiedName::from_ast_kind(&node.to_ast_kind())))],
+                ));
+            }
+        }
+    }
+    // endregion: 2588
 }
 
 // region: 3888

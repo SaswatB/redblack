@@ -58,7 +58,7 @@ fn main() {
     println!("AST:");
     println!("{source_file:#?}");
 
-    if let Statement::VariableDeclaration(node) = &source_file.body[0] {
+    if let Statement::VariableDeclarationList(node) = &source_file.body[0] {
         println!("Node: {:?}", node);
         println!("Parent: {:?}", node.to_ast_kind().parent());
         let declarator = &node.declarations[0];

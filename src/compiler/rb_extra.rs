@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use super::moduleNameResolver::PackageJsonInfo;
 use super::rb_host::RbTypeCheckerHost;
+use super::types::Diagnostic;
 use super::types::FlowNode;
 use super::types::SymbolTable;
 use super::types::{CompilerOptions, ResolutionMode};
@@ -90,6 +91,8 @@ entity_properties!(SourceFile, {
     implied_node_format: ResolutionMode = ResolutionMode::Undefined,
     locals: Option<Rc<RefCell<SymbolTable<'static>>>> = None,
     symbolCount: usize = 0,
+    parseDiagnostics: RefCell<Vec<Diagnostic<'static>>> = RefCell::new(Vec::new()),
+    bindDiagnostics: RefCell<Vec<Diagnostic<'static>>> = RefCell::new(Vec::new()),
     classifiableNames: Option<Rc<RefCell<HashSet<String>>>> = None,
 });
 

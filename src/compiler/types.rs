@@ -1,16 +1,20 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrowFunctionExpression, BinaryExpression, BindingIdentifier, BindingPattern, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody,
-        IdentifierReference, JSXAttribute, JSXElement, MethodDefinition, NewExpression, ObjectExpression, PropertyAccessExpression, SourceFile, StaticBlock, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration,
-        TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, VariableDeclaration,
+        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, BigIntLiteral, BinaryExpression, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, DestructureBindingPattern,
+        ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, IdentifierName, IdentifierReference, ImportNamespaceSpecifier, JSXAttribute, JSXElement, MethodDefinition, NewExpression, NumericLiteral, ObjectExpression, ObjectPattern,
+        ObjectProperty, PrivateIdentifier, PropertyAccessExpression, PropertyDefinition, SourceFile, StaticBlock, StringLiteral, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName,
+        TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSPropertySignature, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, TemplateLiteral, VariableDeclarator,
     },
-    AstKind,
+    AstKind, GetChildren,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{define_flags, define_string_enum, define_subset_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
-use super::{moduleNameResolver::PackageJsonInfoCache, rb_unions::BindingElement};
+use super::{
+    moduleNameResolver::PackageJsonInfoCache,
+    rb_unions::{StringOrDiagnosticMessageChain, StringOrNumber},
+};
 
 #[derive(Debug, Clone)]
 pub struct IndexInfo;
@@ -58,9 +62,6 @@ pub struct QualifiedName;
 pub struct ImportTypeNode;
 
 #[derive(Debug)]
-pub struct MemberName;
-
-#[derive(Debug)]
 pub struct JsxAttributes;
 
 #[derive(Debug)]
@@ -77,9 +78,6 @@ pub struct ThisContainer;
 
 #[derive(Debug)]
 pub struct TypeOnlyAliasDeclaration;
-
-#[derive(Debug)]
-pub struct ClassLikeDeclaration;
 
 #[derive(Debug)]
 pub struct ClassElement;
@@ -107,12 +105,6 @@ pub struct SymbolAccessibilityResult;
 
 #[derive(Debug)]
 pub struct SymbolWalker;
-
-#[derive(Debug)]
-pub struct Diagnostic;
-
-#[derive(Debug)]
-pub struct DiagnosticWithLocation;
 
 #[derive(Debug)]
 pub enum IndexKind {
@@ -303,10 +295,27 @@ define_subset_enum!(HasLocals from AstKind {
     // TypeAliasDeclaration
     TSTypeAliasDeclaration,
 });
-// endregion: 1508
+// endregion: 1544
+
+// region: 1578
+pub type MutableNodeArray<'a> = NodeArray<'a>;
+
+#[derive(Debug, Clone)]
+pub struct NodeArray<'a> {
+    // TextRange
+    pub pos: u32,
+    pub end: u32,
+    // Array
+    pub items: Vec<AstKind<'a>>,
+    // NodeArray
+    pub hasTrailingComma: bool,
+    // pub transformFlags: TransformFlags, // todo(RB): add this if needed
+}
+// endregion: 1587
 
 // region: 1696
 define_subset_enum!(Identifier from AstKind {
+    IdentifierName,
     BindingIdentifier,
     IdentifierReference
 });
@@ -317,7 +326,42 @@ define_subset_enum!(EntityName from AstKind {
     Sub(Identifier),
     TSQualifiedName,
 });
-// endregion: 1728
+
+define_subset_enum!(PropertyName from AstKind {
+    Sub(Identifier),
+    StringLiteral,
+    TemplateLiteral, // no_substitution_template: true
+    NumericLiteral,
+    ObjectProperty, // computed: true
+    PrivateIdentifier,
+    BigIntLiteral,
+});
+
+define_subset_enum!(MemberName from AstKind {
+    Sub(Identifier),
+    PrivateIdentifier,
+});
+
+define_subset_enum!(DeclarationName from AstKind {
+    Sub(PropertyName),
+    JSXAttribute,
+    StringLiteral,
+    ElementAccessExpression,
+    DestructureBindingPattern,
+    Sub(EntityNameExpression),
+});
+
+// export interface Declaration extends Node {
+//     _declarationBrand: any;
+//     /** @internal */ symbol: Symbol; // Symbol declared by node (initialized by binding)
+//     /** @internal */ localSymbol?: Symbol; // Local symbol declared by node (initialized by binding only for exported nodes)
+// }
+
+pub trait NamedDeclaration {
+    fn name(&self) -> Option<DeclarationName<'_>>;
+}
+
+// endregion: 1759
 
 // region: 1844
 define_subset_enum!(SignatureDeclaration from AstKind {
@@ -350,6 +394,252 @@ define_subset_enum!(SignatureDeclaration from AstKind {
     ArrowFunctionExpression,
 });
 // endregion: 1857
+
+// region: 1869
+impl NamedDeclaration for VariableDeclarator<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.id)) }
+}
+// endregion: 1877
+
+// region: 1899
+define_subset_enum!(BindingElement from AstKind {
+    BindingProperty,
+    ArrayPatternElement,
+    BindingRestElement,
+});
+impl NamedDeclaration for BindingElement<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            BindingElement::BindingProperty(binding_property) => binding_property.name(),
+            BindingElement::ArrayPatternElement(array_pattern_element) => array_pattern_element.name(),
+            BindingElement::BindingRestElement(binding_rest_element) => binding_rest_element.name(),
+        }
+    }
+}
+impl NamedDeclaration for BindingProperty<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.value)) }
+}
+impl NamedDeclaration for ArrayPatternElement<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        if let Some(element) = &self.element {
+            Some(DeclarationName::DestructureBindingPattern(element))
+        } else {
+            None
+        }
+    }
+}
+impl NamedDeclaration for BindingRestElement<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.argument)) }
+}
+
+// /** @internal */
+// export type BindingElementGrandparent = BindingElement["parent"]["parent"];
+
+// // dprint-ignore
+// export interface PropertySignature extends TypeElement, JSDocContainer {
+//     readonly kind: SyntaxKind.PropertySignature;
+//     readonly parent: TypeLiteralNode | InterfaceDeclaration;
+//     readonly modifiers?: NodeArray<Modifier>;
+//     readonly name: PropertyName;                 // Declared property name
+//     readonly questionToken?: QuestionToken;      // Present on optional property
+//     readonly type?: TypeNode;                    // Optional type annotation
+
+//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
+//     /** @internal */ readonly initializer?: Expression | undefined; // A property signature cannot have an initializer
+// }
+impl NamedDeclaration for TSPropertySignature<'_> {
+    // ! rb typescript says that name is a PropertyName, but Oxc says name is a PropertyKey. Idk, so we use a potentially lossy conversion
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.key.to_ast_kind()).expect("TSPropertySignature must have a name?")) }
+}
+
+// // dprint-ignore
+// export interface PropertyDeclaration extends ClassElement, JSDocContainer {
+//     readonly kind: SyntaxKind.PropertyDeclaration;
+//     readonly parent: ClassLikeDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: PropertyName;
+//     readonly questionToken?: QuestionToken;      // Present for use with reporting a grammar error for auto-accessors (see `isGrammarError` in utilities.ts)
+//     readonly exclamationToken?: ExclamationToken;
+//     readonly type?: TypeNode;
+//     readonly initializer?: Expression;           // Optional initializer
+// }
+impl NamedDeclaration for PropertyDefinition<'_> {
+    // ! rb typescript says that name is a PropertyName, but Oxc says name is a PropertyKey. Idk, so we use a potentially lossy conversion
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.key.to_ast_kind()).expect("PropertyDefinition must have a name?")) }
+}
+
+// export interface AutoAccessorPropertyDeclaration extends PropertyDeclaration {
+//     _autoAccessorBrand: any;
+// }
+
+// /** @internal */
+// export interface PrivateIdentifierPropertyDeclaration extends PropertyDeclaration {
+//     name: PrivateIdentifier;
+// }
+// /** @internal */
+// export interface PrivateIdentifierAutoAccessorPropertyDeclaration extends AutoAccessorPropertyDeclaration {
+//     name: PrivateIdentifier;
+// }
+// /** @internal */
+// export interface PrivateIdentifierMethodDeclaration extends MethodDeclaration {
+//     name: PrivateIdentifier;
+// }
+// /** @internal */
+// export interface PrivateIdentifierGetAccessorDeclaration extends GetAccessorDeclaration {
+//     name: PrivateIdentifier;
+// }
+// /** @internal */
+// export interface PrivateIdentifierSetAccessorDeclaration extends SetAccessorDeclaration {
+//     name: PrivateIdentifier;
+// }
+// /** @internal */
+// export type PrivateIdentifierAccessorDeclaration = PrivateIdentifierGetAccessorDeclaration | PrivateIdentifierSetAccessorDeclaration;
+// /** @internal */
+// export type PrivateClassElementDeclaration =
+//     | PrivateIdentifierPropertyDeclaration
+//     | PrivateIdentifierAutoAccessorPropertyDeclaration
+//     | PrivateIdentifierMethodDeclaration
+//     | PrivateIdentifierGetAccessorDeclaration
+//     | PrivateIdentifierSetAccessorDeclaration;
+
+// /** @internal */
+// export type InitializedPropertyDeclaration = PropertyDeclaration & { readonly initializer: Expression; };
+// endregion: 1974
+
+// region: 2046
+define_subset_enum!(BindingPattern from AstKind {
+    ObjectPattern,
+    ArrayPattern,
+});
+
+define_subset_enum!(ArrayBindingElement from AstKind {
+    ArrayPatternElement,
+    BindingRestElement,
+});
+
+// /**
+//  * Several node kinds share function-like features such as a signature,
+//  * a name, and a body. These nodes should extend FunctionLikeDeclarationBase.
+//  * Examples:
+//  * - FunctionDeclaration
+//  * - MethodDeclaration
+//  * - AccessorDeclaration
+//  */
+// export interface FunctionLikeDeclarationBase extends SignatureDeclarationBase {
+//     _functionLikeDeclarationBrand: any;
+
+//     readonly asteriskToken?: AsteriskToken | undefined;
+//     readonly questionToken?: QuestionToken | undefined;
+//     readonly exclamationToken?: ExclamationToken | undefined;
+//     readonly body?: Block | Expression | undefined;
+//     /** @internal */ endFlowNode?: FlowNode;
+//     /** @internal */ returnFlowNode?: FlowNode;
+// }
+
+// export type FunctionLikeDeclaration =
+//     | FunctionDeclaration
+//     | MethodDeclaration
+//     | GetAccessorDeclaration
+//     | SetAccessorDeclaration
+//     | ConstructorDeclaration
+//     | FunctionExpression
+//     | ArrowFunction;
+// /** @deprecated Use SignatureDeclaration */
+// export type FunctionLike = SignatureDeclaration;
+
+// export interface FunctionDeclaration extends FunctionLikeDeclarationBase, DeclarationStatement, LocalsContainer {
+//     readonly kind: SyntaxKind.FunctionDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name?: Identifier;
+//     readonly body?: FunctionBody;
+// }
+impl NamedDeclaration for Function<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        if let Some(id) = &self.id {
+            Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(id))))
+        } else {
+            None
+        }
+    }
+}
+
+// export interface MethodSignature extends SignatureDeclarationBase, TypeElement, LocalsContainer {
+//     readonly kind: SyntaxKind.MethodSignature;
+//     readonly parent: TypeLiteralNode | InterfaceDeclaration;
+//     readonly modifiers?: NodeArray<Modifier>;
+//     readonly name: PropertyName;
+// }
+
+// // Note that a MethodDeclaration is considered both a ClassElement and an ObjectLiteralElement.
+// // Both the grammars for ClassDeclaration and ObjectLiteralExpression allow for MethodDeclarations
+// // as child elements, and so a MethodDeclaration satisfies both interfaces.  This avoids the
+// // alternative where we would need separate kinds/types for ClassMethodDeclaration and
+// // ObjectLiteralMethodDeclaration, which would look identical.
+// //
+// // Because of this, it may be necessary to determine what sort of MethodDeclaration you have
+// // at later stages of the compiler pipeline.  In that case, you can either check the parent kind
+// // of the method, or use helpers like isObjectLiteralMethodDeclaration
+// export interface MethodDeclaration extends FunctionLikeDeclarationBase, ClassElement, ObjectLiteralElement, JSDocContainer, LocalsContainer, FlowContainer {
+//     readonly kind: SyntaxKind.MethodDeclaration;
+//     readonly parent: ClassLikeDeclaration | ObjectLiteralExpression;
+//     readonly modifiers?: NodeArray<ModifierLike> | undefined;
+//     readonly name: PropertyName;
+//     readonly body?: FunctionBody | undefined;
+
+//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
+//     /** @internal */ readonly exclamationToken?: ExclamationToken | undefined; // A method cannot have an exclamation token
+// }
+impl NamedDeclaration for MethodDefinition<'_> {
+    // ! rb typescript says that name is a PropertyName, but Oxc says name is a PropertyKey. Idk, so we use a potentially lossy conversion
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.key.to_ast_kind()).expect("MethodDefinition must have a name?")) }
+}
+
+// export interface ConstructorDeclaration extends FunctionLikeDeclarationBase, ClassElement, JSDocContainer, LocalsContainer {
+//     readonly kind: SyntaxKind.Constructor;
+//     readonly parent: ClassLikeDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike> | undefined;
+//     readonly body?: FunctionBody | undefined;
+
+//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
+//     /** @internal */ readonly typeParameters?: NodeArray<TypeParameterDeclaration>; // A constructor cannot have type parameters
+//     /** @internal */ readonly type?: TypeNode; // A constructor cannot have a return type annotation
+// }
+
+// /** For when we encounter a semicolon in a class declaration. ES6 allows these as class elements. */
+// export interface SemicolonClassElement extends ClassElement, JSDocContainer {
+//     readonly kind: SyntaxKind.SemicolonClassElement;
+//     readonly parent: ClassLikeDeclaration;
+// }
+
+// // See the comment on MethodDeclaration for the intuition behind GetAccessorDeclaration being a
+// // ClassElement and an ObjectLiteralElement.
+// export interface GetAccessorDeclaration extends FunctionLikeDeclarationBase, ClassElement, TypeElement, ObjectLiteralElement, JSDocContainer, LocalsContainer, FlowContainer {
+//     readonly kind: SyntaxKind.GetAccessor;
+//     readonly parent: ClassLikeDeclaration | ObjectLiteralExpression | TypeLiteralNode | InterfaceDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: PropertyName;
+//     readonly body?: FunctionBody;
+
+//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
+//     /** @internal */ readonly typeParameters?: NodeArray<TypeParameterDeclaration> | undefined; // A get accessor cannot have type parameters
+// }
+
+// // See the comment on MethodDeclaration for the intuition behind SetAccessorDeclaration being a
+// // ClassElement and an ObjectLiteralElement.
+// export interface SetAccessorDeclaration extends FunctionLikeDeclarationBase, ClassElement, TypeElement, ObjectLiteralElement, JSDocContainer, LocalsContainer, FlowContainer {
+//     readonly kind: SyntaxKind.SetAccessor;
+//     readonly parent: ClassLikeDeclaration | ObjectLiteralExpression | TypeLiteralNode | InterfaceDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: PropertyName;
+//     readonly body?: FunctionBody;
+
+//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
+//     /** @internal */ readonly typeParameters?: NodeArray<TypeParameterDeclaration> | undefined; // A set accessor cannot have type parameters
+//     /** @internal */ readonly type?: TypeNode | undefined; // A set accessor cannot have a return type
+// }
+
+// export type AccessorDeclaration = GetAccessorDeclaration | SetAccessorDeclaration;
+// endregion: 2159
 
 // region: 2956
 define_subset_enum!(EntityNameExpression from AstKind {
@@ -395,6 +685,281 @@ pub enum CallLikeExpression<'a> {
     BinaryExpression(Box<BinaryExpression<'a>>),
 }
 // endregion: 3129
+
+// region: 3520
+// export interface ClassLikeDeclarationBase extends NamedDeclaration, JSDocContainer {
+//     readonly kind: SyntaxKind.ClassDeclaration | SyntaxKind.ClassExpression;
+//     readonly name?: Identifier;
+//     readonly typeParameters?: NodeArray<TypeParameterDeclaration>;
+//     readonly heritageClauses?: NodeArray<HeritageClause>;
+//     readonly members: NodeArray<ClassElement>;
+// }
+
+// export interface ClassDeclaration extends ClassLikeDeclarationBase, DeclarationStatement {
+//     readonly kind: SyntaxKind.ClassDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     /** May be undefined in `export default class { ... }`. */
+//     readonly name?: Identifier;
+// }
+
+// export interface ClassExpression extends ClassLikeDeclarationBase, PrimaryExpression {
+//     readonly kind: SyntaxKind.ClassExpression;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+// }
+
+impl NamedDeclaration for Class<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        if let Some(id) = &self.id {
+            Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(id))))
+        } else {
+            None
+        }
+    }
+}
+
+pub type ClassLikeDeclaration<'a> = Class<'a>;
+// endregion: 3544
+
+// region: 3555
+// export interface InterfaceDeclaration extends DeclarationStatement, JSDocContainer {
+//     readonly kind: SyntaxKind.InterfaceDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: Identifier;
+//     readonly typeParameters?: NodeArray<TypeParameterDeclaration>;
+//     readonly heritageClauses?: NodeArray<HeritageClause>;
+//     readonly members: NodeArray<TypeElement>;
+// }
+impl NamedDeclaration for TSInterfaceDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
+}
+
+// export interface HeritageClause extends Node {
+//     readonly kind: SyntaxKind.HeritageClause;
+//     readonly parent: InterfaceDeclaration | ClassLikeDeclaration;
+//     readonly token: SyntaxKind.ExtendsKeyword | SyntaxKind.ImplementsKeyword;
+//     readonly types: NodeArray<ExpressionWithTypeArguments>;
+// }
+
+// export interface TypeAliasDeclaration extends DeclarationStatement, JSDocContainer, LocalsContainer {
+//     readonly kind: SyntaxKind.TypeAliasDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: Identifier;
+//     readonly typeParameters?: NodeArray<TypeParameterDeclaration>;
+//     readonly type: TypeNode;
+// }
+impl NamedDeclaration for TSTypeAliasDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
+}
+
+// export interface EnumMember extends NamedDeclaration, JSDocContainer {
+//     readonly kind: SyntaxKind.EnumMember;
+//     readonly parent: EnumDeclaration;
+//     // This does include ComputedPropertyName, but the parser will give an error
+//     // if it parses a ComputedPropertyName in an EnumMember
+//     readonly name: PropertyName;
+//     readonly initializer?: Expression;
+// }
+impl NamedDeclaration for TSEnumMember<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match &self.id {
+            TSEnumMemberName::Identifier(identifier) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::IdentifierName(identifier)))),
+            TSEnumMemberName::String(string_literal) => Some(DeclarationName::StringLiteral(string_literal)),
+        }
+    }
+}
+
+// export interface EnumDeclaration extends DeclarationStatement, JSDocContainer {
+//     readonly kind: SyntaxKind.EnumDeclaration;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: Identifier;
+//     readonly members: NodeArray<EnumMember>;
+// }
+impl NamedDeclaration for TSEnumDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
+}
+
+// export type ModuleName =
+//     | Identifier
+//     | StringLiteral;
+
+// export type ModuleBody =
+//     | NamespaceBody
+//     | JSDocNamespaceBody;
+
+// /** @internal */
+// export interface AmbientModuleDeclaration extends ModuleDeclaration {
+//     readonly body?: ModuleBlock;
+// }
+
+// export interface ModuleDeclaration extends DeclarationStatement, JSDocContainer, LocalsContainer {
+//     readonly kind: SyntaxKind.ModuleDeclaration;
+//     readonly parent: ModuleBody | SourceFile;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly name: ModuleName;
+//     readonly body?: ModuleBody | JSDocNamespaceDeclaration;
+// }
+impl NamedDeclaration for TSModuleDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match &self.id {
+            TSModuleDeclarationName::Identifier(id) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&id)))),
+            TSModuleDeclarationName::StringLiteral(string_literal) => Some(DeclarationName::StringLiteral(string_literal)),
+        }
+    }
+}
+
+// export type NamespaceBody =
+//     | ModuleBlock
+//     | NamespaceDeclaration;
+
+// export interface NamespaceDeclaration extends ModuleDeclaration {
+//     readonly name: Identifier;
+//     readonly body: NamespaceBody;
+// }
+
+// export type JSDocNamespaceBody =
+//     | Identifier
+//     | JSDocNamespaceDeclaration;
+
+// export interface JSDocNamespaceDeclaration extends ModuleDeclaration {
+//     readonly name: Identifier;
+//     readonly body?: JSDocNamespaceBody;
+// }
+
+// export interface ModuleBlock extends Node, Statement {
+//     readonly kind: SyntaxKind.ModuleBlock;
+//     readonly parent: ModuleDeclaration;
+//     readonly statements: NodeArray<Statement>;
+// }
+
+// export type ModuleReference =
+//     | EntityName
+//     | ExternalModuleReference;
+// endregion: 3644
+
+// region: 3713
+// export type ImportAttributeName = Identifier | StringLiteral;
+
+// export interface ImportAttribute extends Node {
+//     readonly kind: SyntaxKind.ImportAttribute;
+//     readonly parent: ImportAttributes;
+//     readonly name: ImportAttributeName;
+//     readonly value: Expression;
+// }
+
+// export interface ImportAttributes extends Node {
+//     readonly token: SyntaxKind.WithKeyword | SyntaxKind.AssertKeyword;
+//     readonly kind: SyntaxKind.ImportAttributes;
+//     readonly parent: ImportDeclaration | ExportDeclaration;
+//     readonly elements: NodeArray<ImportAttribute>;
+//     readonly multiLine?: boolean;
+// }
+
+// export interface NamespaceImport extends NamedDeclaration {
+//     readonly kind: SyntaxKind.NamespaceImport;
+//     readonly parent: ImportClause;
+//     readonly name: Identifier;
+// }
+impl NamedDeclaration for ImportNamespaceSpecifier<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.local)))) }
+}
+
+// export interface NamespaceExport extends NamedDeclaration {
+//     readonly kind: SyntaxKind.NamespaceExport;
+//     readonly parent: ExportDeclaration;
+//     readonly name: ModuleExportName;
+// }
+
+// export interface NamespaceExportDeclaration extends DeclarationStatement, JSDocContainer {
+//     readonly kind: SyntaxKind.NamespaceExportDeclaration;
+//     readonly name: Identifier;
+
+//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
+//     /** @internal */ readonly modifiers?: NodeArray<ModifierLike> | undefined;
+// }
+
+// export interface ExportDeclaration extends DeclarationStatement, JSDocContainer {
+//     readonly kind: SyntaxKind.ExportDeclaration;
+//     readonly parent: SourceFile | ModuleBlock;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly isTypeOnly: boolean;
+//     /** Will not be assigned in the case of `export * from "foo";` */
+//     readonly exportClause?: NamedExportBindings;
+//     /** If this is not a StringLiteral it will be a grammar error. */
+//     readonly moduleSpecifier?: Expression;
+//     /** @deprecated */ readonly assertClause?: AssertClause;
+//     readonly attributes?: ImportAttributes;
+// }
+
+// export interface NamedImports extends Node {
+//     readonly kind: SyntaxKind.NamedImports;
+//     readonly parent: ImportClause;
+//     readonly elements: NodeArray<ImportSpecifier>;
+// }
+
+// export interface NamedExports extends Node {
+//     readonly kind: SyntaxKind.NamedExports;
+//     readonly parent: ExportDeclaration;
+//     readonly elements: NodeArray<ExportSpecifier>;
+// }
+
+// export type NamedImportsOrExports = NamedImports | NamedExports;
+
+// export interface ImportSpecifier extends NamedDeclaration {
+//     readonly kind: SyntaxKind.ImportSpecifier;
+//     readonly parent: NamedImports;
+//     readonly propertyName?: ModuleExportName; // Name preceding "as" keyword (or undefined when "as" is absent)
+//     readonly name: Identifier; // Declared name
+//     readonly isTypeOnly: boolean;
+// }
+
+// export interface ExportSpecifier extends NamedDeclaration, JSDocContainer {
+//     readonly kind: SyntaxKind.ExportSpecifier;
+//     readonly parent: NamedExports;
+//     readonly isTypeOnly: boolean;
+//     readonly propertyName?: ModuleExportName; // Name preceding "as" keyword (or undefined when "as" is absent)
+//     readonly name: ModuleExportName; // Declared name
+// }
+
+// export type ModuleExportName = Identifier | StringLiteral;
+
+// export type ImportOrExportSpecifier =
+//     | ImportSpecifier
+//     | ExportSpecifier;
+
+// export type TypeOnlyCompatibleAliasDeclaration =
+//     | ImportClause
+//     | ImportEqualsDeclaration
+//     | NamespaceImport
+//     | ImportOrExportSpecifier
+//     | ExportDeclaration
+//     | NamespaceExport;
+
+// export type TypeOnlyImportDeclaration =
+//     | ImportClause & { readonly isTypeOnly: true; readonly name: Identifier; }
+//     | ImportEqualsDeclaration & { readonly isTypeOnly: true; }
+//     | NamespaceImport & { readonly parent: ImportClause & { readonly isTypeOnly: true; }; }
+//     | ImportSpecifier & ({ readonly isTypeOnly: true; } | { readonly parent: NamedImports & { readonly parent: ImportClause & { readonly isTypeOnly: true; }; }; });
+
+// export type TypeOnlyExportDeclaration =
+//     | ExportSpecifier & ({ readonly isTypeOnly: true; } | { readonly parent: NamedExports & { readonly parent: ExportDeclaration & { readonly isTypeOnly: true; }; }; })
+//     | ExportDeclaration & { readonly isTypeOnly: true; readonly moduleSpecifier: Expression; } // export * from "mod"
+//     | NamespaceExport & { readonly parent: ExportDeclaration & { readonly isTypeOnly: true; readonly moduleSpecifier: Expression; }; } // export * as ns from "mod"
+// ;
+
+// export type TypeOnlyAliasDeclaration = TypeOnlyImportDeclaration | TypeOnlyExportDeclaration;
+
+// /**
+//  * This is either an `export =` or an `export default` declaration.
+//  * Unless `isExportEquals` is set, this node was parsed as an `export default`.
+//  */
+// export interface ExportAssignment extends DeclarationStatement, JSDocContainer {
+//     readonly kind: SyntaxKind.ExportAssignment;
+//     readonly parent: SourceFile;
+//     readonly modifiers?: NodeArray<ModifierLike>;
+//     readonly isExportEquals?: boolean;
+//     readonly expression: Expression;
+// }
+// endregion: 3833
 
 // region: 4120
 // NOTE: Ensure this is up-to-date with src/debug/debug.ts
@@ -480,7 +1045,7 @@ pub struct FlowAssignment<'a> {
 
 pub enum FlowAssignmentNode<'a> {
     Expression(&'a Expression<'a>),
-    VariableDeclaration(&'a VariableDeclaration<'a>),
+    VariableDeclarator(&'a VariableDeclarator<'a>),
     BindingElement(&'a BindingElement<'a>),
 }
 
@@ -1592,10 +2157,97 @@ pub struct DiagnosticMessage {
     pub elidedInCompatibilityPyramid: Option<bool>,
     pub reportsDeprecated: Option<bool>,
 }
-// endregion: 7145
 
-// region: 7231
+/** @internal */
 #[derive(Debug)]
+pub struct RepopulateModuleNotFoundDiagnosticChain {
+    pub moduleReference: String,
+    pub mode: ResolutionMode,
+    pub packageName: Option<String>,
+}
+
+/** @internal */
+pub type RepopulateModeMismatchDiagnosticChain = bool; // true
+
+/** @internal */
+#[derive(Debug)]
+pub enum RepopulateDiagnosticChainInfo {
+    ModuleNotFound(RepopulateModuleNotFoundDiagnosticChain),
+    ModeMismatch(RepopulateModeMismatchDiagnosticChain),
+}
+
+/**
+ * A linked list of formatted diagnostic messages to be used as part of a multiline message.
+ * It is built from the bottom up, leaving the head to be the "main" diagnostic.
+ * While it seems that DiagnosticMessageChain is structurally similar to DiagnosticMessage,
+ * the difference is that messages are all preformatted in DMC.
+ */
+#[derive(Debug, Clone)]
+pub struct DiagnosticMessageChain {
+    pub messageText: String,
+    pub category: DiagnosticCategory,
+    pub code: i32,
+    pub next: Option<Vec<DiagnosticMessageChain>>,
+    /** @internal */
+    // pub repopulateInfo: Option<Box<dyn Fn() -> RepopulateDiagnosticChainInfo>>, // todo(rb): implement this if needed
+    /** @internal */
+    pub canonicalHead: Option<CanonicalDiagnostic>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Diagnostic<'a> {
+    // DiagnosticRelatedInformation
+    pub category: DiagnosticCategory,
+    pub code: i32,
+    pub file: Option<&'a SourceFile<'a>>,
+    pub start: Option<u32>,
+    pub length: Option<u32>,
+    pub messageText: StringOrDiagnosticMessageChain,
+
+    // DiagnosticWithDetachedLocation
+    pub fileName: Option<String>,
+
+    // Diagnostic
+    /** May store more in future. For now, this will simply be `true` to indicate when a diagnostic is an unused-identifier diagnostic. */
+    pub reportsUnnecessary: Option<()>,
+
+    pub reportsDeprecated: Option<()>,
+    pub source: Option<String>,
+    pub relatedInformation: Option<Vec<DiagnosticRelatedInformation<'a>>>,
+    /** @internal */
+    pub skippedOn: Option<String>, // keyof CompilerOptions
+    /**
+     * @internal
+     * Used for deduplication and comparison.
+     * Whenever it is possible for two diagnostics that report the same problem to be produced with
+     * different messages (e.g. "Cannot find name 'foo'" vs "Cannot find name 'foo'. Did you mean 'bar'?"),
+     * this property can be set to a canonical message,
+     * so that those two diagnostics are appropriately considered to be the same.
+     */
+    pub canonicalHead: Option<CanonicalDiagnostic>,
+}
+
+/** @internal */
+#[derive(Debug, Clone)]
+pub struct CanonicalDiagnostic {
+    pub code: i32,
+    pub messageText: String,
+}
+
+/** @internal */
+pub type DiagnosticArguments = Vec<StringOrNumber>;
+
+/** @internal */
+pub type DiagnosticAndArguments<'a> = (DiagnosticMessage, DiagnosticArguments);
+
+pub type DiagnosticRelatedInformation<'a> = Diagnostic<'a>;
+
+pub type DiagnosticWithLocation<'a> = Diagnostic<'a>;
+
+/** @internal */
+pub type DiagnosticWithDetachedLocation<'a> = Diagnostic<'a>;
+
+#[derive(Debug, Clone, Copy)]
 pub enum DiagnosticCategory {
     Error,
     Warning,
@@ -1937,7 +2589,166 @@ pub enum ScriptTarget {
 // import LanguageVariant from oxc
 // endregion: 7591
 
-// region: 7876
+// region: 7734
+// dprint-ignore
+/** @internal */
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CharacterCodes {
+    EOF = -1,
+    nullCharacter = 0,
+    maxAsciiCharacter = 0x7F,
+
+    lineFeed = 0x0A,       // \n
+    carriageReturn = 0x0D, // \r
+    lineSeparator = 0x2028,
+    paragraphSeparator = 0x2029,
+    nextLine = 0x0085,
+
+    // Unicode 3.0 space characters
+    space = 0x0020,            // " "
+    nonBreakingSpace = 0x00A0, //
+    enQuad = 0x2000,
+    emQuad = 0x2001,
+    enSpace = 0x2002,
+    emSpace = 0x2003,
+    threePerEmSpace = 0x2004,
+    fourPerEmSpace = 0x2005,
+    sixPerEmSpace = 0x2006,
+    figureSpace = 0x2007,
+    punctuationSpace = 0x2008,
+    thinSpace = 0x2009,
+    hairSpace = 0x200A,
+    zeroWidthSpace = 0x200B,
+    narrowNoBreakSpace = 0x202F,
+    ideographicSpace = 0x3000,
+    mathematicalSpace = 0x205F,
+    ogham = 0x1680,
+
+    // Unicode replacement character produced when a byte sequence is invalid
+    replacementCharacter = 0xFFFD,
+
+    underscore = 0x5F,
+    dollar = 0x24,
+
+    _0 = 0x30,
+    _1 = 0x31,
+    _2 = 0x32,
+    _3 = 0x33,
+    _4 = 0x34,
+    _5 = 0x35,
+    _6 = 0x36,
+    _7 = 0x37,
+    _8 = 0x38,
+    _9 = 0x39,
+
+    a = 0x61,
+    b = 0x62,
+    c = 0x63,
+    d = 0x64,
+    e = 0x65,
+    f = 0x66,
+    g = 0x67,
+    h = 0x68,
+    i = 0x69,
+    j = 0x6A,
+    k = 0x6B,
+    l = 0x6C,
+    m = 0x6D,
+    n = 0x6E,
+    o = 0x6F,
+    p = 0x70,
+    q = 0x71,
+    r = 0x72,
+    s = 0x73,
+    t = 0x74,
+    u = 0x75,
+    v = 0x76,
+    w = 0x77,
+    x = 0x78,
+    y = 0x79,
+    z = 0x7A,
+
+    A = 0x41,
+    B = 0x42,
+    C = 0x43,
+    D = 0x44,
+    E = 0x45,
+    F = 0x46,
+    G = 0x47,
+    H = 0x48,
+    I = 0x49,
+    J = 0x4A,
+    K = 0x4B,
+    L = 0x4C,
+    M = 0x4D,
+    N = 0x4E,
+    O = 0x4F,
+    P = 0x50,
+    Q = 0x51,
+    R = 0x52,
+    S = 0x53,
+    T = 0x54,
+    U = 0x55,
+    V = 0x56,
+    W = 0x57,
+    X = 0x58,
+    Y = 0x59,
+    Z = 0x5a,
+
+    ampersand = 0x26,    // &
+    asterisk = 0x2A,     // *
+    at = 0x40,           // @
+    backslash = 0x5C,    // \
+    backtick = 0x60,     // `
+    bar = 0x7C,          // |
+    caret = 0x5E,        // ^
+    closeBrace = 0x7D,   // }
+    closeBracket = 0x5D, // ]
+    closeParen = 0x29,   // )
+    colon = 0x3A,        // :
+    comma = 0x2C,        // ,
+    dot = 0x2E,          // .
+    doubleQuote = 0x22,  // "
+    equals = 0x3D,       // =
+    exclamation = 0x21,  // !
+    greaterThan = 0x3E,  // >
+    hash = 0x23,         // #
+    lessThan = 0x3C,     // <
+    minus = 0x2D,        // -
+    openBrace = 0x7B,    // {
+    openBracket = 0x5B,  // [
+    openParen = 0x28,    // (
+    percent = 0x25,      // %
+    plus = 0x2B,         // +
+    question = 0x3F,     // ?
+    semicolon = 0x3B,    // ;
+    singleQuote = 0x27,  // '
+    slash = 0x2F,        // /
+    tilde = 0x7E,        // ~
+
+    backspace = 0x08, // \b
+    formFeed = 0x0C,  // \f
+    byteOrderMark = 0xFEFF,
+    tab = 0x09,         // \t
+    verticalTab = 0x0B, // \v
+}
+
+impl PartialEq<u32> for CharacterCodes {
+    fn eq(&self, other: &u32) -> bool { *self as u32 == *other }
+}
+
+impl PartialEq<CharacterCodes> for u32 {
+    fn eq(&self, other: &CharacterCodes) -> bool { *self == *other as u32 }
+}
+
+impl PartialEq<char> for CharacterCodes {
+    fn eq(&self, other: &char) -> bool { *self as u32 == *other as u32 }
+}
+
+impl PartialEq<CharacterCodes> for char {
+    fn eq(&self, other: &CharacterCodes) -> bool { *self as u32 == *other as u32 }
+}
+
 pub trait ModuleResolutionHost {
     // TODO: GH#18217 Optional methods frequently used as non-optional
 
@@ -1995,6 +2806,20 @@ impl Extension {
     }
 }
 // endregion: 7976
+
+// region: 9915
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextSpan {
+    pub start: u32,
+    pub length: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextChangeRange {
+    pub span: TextSpan,
+    pub newLength: u32,
+}
+// endregion: 9925
 
 // region: 9840
 /** @internal */

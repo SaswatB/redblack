@@ -1,13 +1,383 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 
+use super::rb_extra::SourceFileExt;
+use super::rb_unions::strings_to_string_or_numbers;
+use super::rb_unions::DeclarationNameOrQualifiedName;
+use super::rb_unions::StringOrDiagnosticMessageChain;
+use super::scanner::skipTrivia;
+use super::utilitiesPublic::createTextSpanFromBounds;
 use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
 use crate::compiler::rb_extra::AstKindExt;
 use crate::compiler::types::*;
+use crate::compiler::utilitiesPublic::createTextSpan;
+use oxc_ast::ast::ArrowFunctionExpression;
 use oxc_ast::{ast::SourceFile, AstKind, Visit};
+use oxc_span::GetSpan;
+use oxc_span::Span;
 
-use super::rb_extra::SourceFileExt;
+// region: 774
+/** @internal */
+pub fn getFullWidth(node: &AstKind) -> u32 { node.span().end - node.span().start }
+// endregion: 779
+
+// region: 957
+pub fn getSourceFileOfNode<'a>(node: Option<&AstKind<'a>>) -> Option<&'a SourceFile<'a>> {
+    let mut current = *node?;
+    loop {
+        if let AstKind::SourceFile(source_file) = current {
+            return Some(source_file);
+        }
+        current = current.parent()?;
+    }
+}
+// endregion: 967
+
+// region: 1043
+// Returns true if this node is missing from the actual source code. A 'missing' node is different
+// from 'undefined/defined'. When a node is undefined (which can happen for optional nodes
+// in the tree), it is definitely missing. However, a node may be defined, but still be
+// missing.  This happens whenever the parser knows it needs to parse something, but can't
+// get anything in the source code that it expects at that location. For example:
+//
+//          let a: ;
+//
+// Here, the Type in the Type-Annotation is not-optional (as there is a colon in the source
+// code). So the parser will attempt to parse out a type, and will create an actual node.
+// However, this node will be 'missing' in the sense that no actual source-code/tokens are
+// contained within it.
+/** @internal */
+pub fn nodeIsMissing(node: Option<&AstKind>) -> bool {
+    if node.is_none() {
+        return true;
+    }
+
+    let node = node.unwrap();
+    return node.span().start == node.span().end && node.span().start >= 0; // && node.kind !== SyntaxKind.EndOfFileToken;
+}
+
+/** @internal */
+pub fn nodeIsPresent(node: Option<&AstKind>) -> bool { !nodeIsMissing(node) }
+// endregion: 1069
+
+// region: 1272
+/** @internal */
+pub fn getSourceTextOfNodeFromSourceFile(source_file: &SourceFile, node: &AstKind, include_trivia: Option<bool>) -> String { getTextOfNodeFromSourceText(source_file.source_text, node, include_trivia) }
+// endregion: 1277
+
+// region: 1307
+/** @internal */
+pub fn getTextOfNodeFromSourceText(source_text: &str, node: &AstKind, include_trivia: Option<bool>) -> String {
+    if node.span().start == node.span().end {
+        return "".to_string();
+    }
+
+    let start = if include_trivia.unwrap_or(false) { node.span().start } else { skipTrivia(source_text, node.span().start, None, None, None) };
+
+    let text = source_text[start as usize..node.span().end as usize].to_string();
+
+    // ! skipping jsdoc
+    // if (isJSDocTypeExpressionOrChild(node)) {
+    //     // strip space + asterisk at line start
+    //     text = text.split(/\r\n|\n|\r/).map(line => line.replace(/^\s*\*/, "").trimStart()).join("\n");
+    // }
+
+    text
+}
+
+/** @internal */
+pub fn getTextOfNode(node: &AstKind, include_trivia: Option<bool>) -> String { getSourceTextOfNodeFromSourceFile(getSourceFileOfNode(Some(node)).unwrap(), node, include_trivia) }
+// endregion: 1328
+
+// region: 2194
+// Return display name of an identifier
+// Computed property names will just be emitted as "[<expr>]", where <expr> is the source
+// text of the expression in the computed property.
+/** @internal */
+pub fn declarationNameToString(name: Option<DeclarationNameOrQualifiedName>) -> String {
+    if name.is_none() || getFullWidth(&name.unwrap().to_ast_kind()) == 0 {
+        "(Missing)".into()
+    } else {
+        getTextOfNode(&name.unwrap().to_ast_kind(), None)
+    }
+}
+// endregion: 2202
+
+// region: 2265
+/** @internal */
+pub fn createDiagnosticForNode<'a>(node: &AstKind<'a>, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation<'a> {
+    let source_file = getSourceFileOfNode(Some(node));
+    createDiagnosticForNodeInSourceFile(source_file, node, message, args)
+}
+
+/** @internal */
+pub fn createDiagnosticForNodeArray<'a>(source_file: &'a SourceFile<'a>, nodes: &NodeArray<'a>, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation<'a> {
+    let start = skipTrivia(&source_file.source_text, nodes.pos, None, None, None);
+    createFileDiagnostic(source_file, start, nodes.end - start, message, args)
+}
+
+/** @internal */
+pub fn createDiagnosticForNodeInSourceFile<'a>(source_file: Option<&'a SourceFile<'a>>, node: &AstKind<'a>, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation<'a> {
+    let span = getErrorSpanForNode(source_file.unwrap(), node);
+    createFileDiagnostic(source_file.unwrap(), span.start, span.length, message, args)
+}
+
+/** @internal */
+pub fn createDiagnosticForNodeFromMessageChain<'a>(source_file: &'a SourceFile<'a>, node: &AstKind<'a>, message_chain: DiagnosticMessageChain, related_information: Option<Vec<DiagnosticRelatedInformation<'a>>>) -> DiagnosticWithLocation<'a> {
+    let span = getErrorSpanForNode(source_file, node);
+    createFileDiagnosticFromMessageChain(source_file, span.start, span.length, message_chain, related_information)
+}
+
+/** @internal */
+pub fn createDiagnosticForNodeArrayFromMessageChain<'a>(source_file: &'a SourceFile<'a>, nodes: &NodeArray<'a>, message_chain: DiagnosticMessageChain, related_information: Option<Vec<DiagnosticRelatedInformation<'a>>>) -> DiagnosticWithLocation<'a> {
+    let start = skipTrivia(&source_file.source_text, nodes.pos, None, None, None);
+    createFileDiagnosticFromMessageChain(source_file, start, nodes.end - start, message_chain, related_information)
+}
+
+/** @internal */
+pub fn assertDiagnosticLocation(source_text: &str, start: u32, length: u32) {
+    assert!(start >= 0);
+    assert!(length >= 0);
+    assert!(start <= source_text.len() as u32);
+    assert!(start + length <= source_text.len() as u32);
+}
+
+/** @internal */
+pub fn createFileDiagnosticFromMessageChain<'a>(file: &'a SourceFile<'a>, start: u32, length: u32, message_chain: DiagnosticMessageChain, related_information: Option<Vec<DiagnosticRelatedInformation<'a>>>) -> DiagnosticWithLocation<'a> {
+    assertDiagnosticLocation(&file.source_text, start, length);
+    let messageChain = message_chain.clone();
+    DiagnosticWithLocation {
+        file: Some(file),
+        start: Some(start),
+        length: Some(length),
+        code: message_chain.code,
+        category: message_chain.category,
+        messageText: if message_chain.next.is_some() { StringOrDiagnosticMessageChain::DiagnosticMessageChain(message_chain) } else { StringOrDiagnosticMessageChain::String(message_chain.messageText) },
+        relatedInformation: related_information,
+        canonicalHead: messageChain.canonicalHead,
+
+        fileName: None,
+        reportsUnnecessary: None,
+        reportsDeprecated: None,
+        source: None,
+        skippedOn: None,
+    }
+}
+
+/** @internal */
+pub fn createDiagnosticForFileFromMessageChain<'a>(source_file: &'a SourceFile<'a>, message_chain: DiagnosticMessageChain, related_information: Option<Vec<DiagnosticRelatedInformation<'a>>>) -> DiagnosticWithLocation<'a> {
+    DiagnosticWithLocation {
+        file: Some(source_file),
+        start: Some(0),
+        length: Some(0),
+        code: message_chain.code,
+        category: message_chain.category,
+        messageText: if message_chain.next.is_some() { StringOrDiagnosticMessageChain::DiagnosticMessageChain(message_chain) } else { StringOrDiagnosticMessageChain::String(message_chain.messageText) },
+        relatedInformation: related_information,
+
+        canonicalHead: None,
+        fileName: None,
+        reportsUnnecessary: None,
+        reportsDeprecated: None,
+        source: None,
+        skippedOn: None,
+    }
+}
+
+/** @internal */
+pub fn createDiagnosticMessageChainFromDiagnostic(diagnostic: DiagnosticRelatedInformation) -> DiagnosticMessageChain {
+    match diagnostic.messageText {
+        StringOrDiagnosticMessageChain::String(message_text) => DiagnosticMessageChain {
+            code: diagnostic.code,
+            category: diagnostic.category,
+            messageText: message_text,
+            next: None, //diagnostic.next,
+            canonicalHead: None,
+        },
+        StringOrDiagnosticMessageChain::DiagnosticMessageChain(message_chain) => message_chain,
+    }
+}
+
+/** @internal */
+pub fn createDiagnosticForRange<'a>(source_file: &'a SourceFile<'a>, range: Span, message: DiagnosticMessage) -> DiagnosticWithLocation<'a> {
+    DiagnosticWithLocation {
+        file: Some(source_file),
+        start: Some(range.start),
+        length: Some(range.end - range.start),
+        code: message.code,
+        category: message.category,
+        messageText: StringOrDiagnosticMessageChain::String(message.message),
+
+        fileName: None,
+        reportsUnnecessary: None,
+        reportsDeprecated: None,
+        source: None,
+        relatedInformation: None,
+        skippedOn: None,
+        canonicalHead: None,
+    }
+}
+
+/** @internal */
+pub fn getCanonicalDiagnostic(message: DiagnosticMessage, args: &[String]) -> CanonicalDiagnostic { CanonicalDiagnostic { code: message.code, messageText: formatMessage(&message, &strings_to_string_or_numbers(args)) } }
+
+/** @internal */
+pub fn getSpanOfTokenAtPosition<'a>(_source_file: &'a SourceFile<'a>, pos: u32) -> TextSpan {
+    // let scanner = createScanner(source_file.language_version, /*skipTrivia*/ true, source_file.language_variant, &source_file.text, /*onError*/ None, pos);
+    // scanner.scan();
+    // let start = scanner.getTokenStart();
+    // createTextSpanFromBounds(start, scanner.getTokenEnd())
+    createTextSpanFromBounds(pos, pos + 1) // todo(RB): figure out scanner
+}
+
+// /** @internal */
+// pub fn scanTokenAtPosition<'a>(source_file: &'a SourceFile<'a>, pos: u32) -> SyntaxKind {
+//     let scanner = createScanner(source_file.language_version, /*skipTrivia*/ true, source_file.language_variant, &source_file.text, /*onError*/ None, pos);
+//     scanner.scan();
+//     scanner.getToken()
+// }
+
+pub fn getErrorSpanForArrowFunction<'a>(_source_file: &'a SourceFile<'a>, node: &ArrowFunctionExpression) -> TextSpan {
+    // let pos = skipTrivia(&source_file.text, node.span().start, None, None, None);
+    // if let Some(body) = &node.body {
+    //     if let AstKind::BlockStatement(_) = body {
+    //         let start_line = getLineAndCharacterOfPosition(source_file, body.span().start).line;
+    //         let end_line = getLineAndCharacterOfPosition(source_file, body.span().end).line;
+    //         if start_line < end_line {
+    //             // The arrow function spans multiple lines,
+    //             // make the error span be the first line, inclusive.
+    //             return createTextSpan(pos, getEndLinePosition(start_line, source_file) - pos + 1);
+    //         }
+    //     }
+    // }
+    // createTextSpanFromBounds(pos, node.span().end)
+    createTextSpanFromBounds(node.span().start, node.span().end) // todo(RB): figure out scanner
+}
+
+/** @internal */
+pub fn getErrorSpanForNode<'a>(source_file: &'a SourceFile<'a>, node: &AstKind<'a>) -> TextSpan {
+    let mut error_node = Some(*node);
+    match node {
+        AstKind::SourceFile(_) => {
+            let pos = skipTrivia(&source_file.source_text, 0, Some(false), None, None);
+            if pos == source_file.source_text.len() as u32 {
+                // file is empty - return span for the beginning of the file
+                return createTextSpan(0, 0);
+            }
+            return getSpanOfTokenAtPosition(source_file, pos);
+        }
+        // This list is a work in progress. Add missing node kinds to improve their error
+        // spans.
+        AstKind::VariableDeclarator(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        // BindingElement
+        AstKind::BindingProperty(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::ArrayPatternElement(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::BindingRestElement(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        // end BindingElement
+        AstKind::Class(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::TSInterfaceDeclaration(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::TSModuleDeclaration(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::TSEnumDeclaration(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::TSEnumMember(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::Function(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        // MethodDefinition moved below to handle constructor
+        AstKind::TSTypeAliasDeclaration(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::PropertyDefinition(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::TSPropertySignature(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::ImportNamespaceSpecifier(n) => {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+        }
+        AstKind::ArrowFunctionExpression(arrow) => {
+            return getErrorSpanForArrowFunction(source_file, arrow);
+        }
+        AstKind::SwitchCase(case_clause) => {
+            let start = skipTrivia(&source_file.source_text, case_clause.span.start, None, None, None);
+            let end = if case_clause.consequent.len() > 0 { case_clause.consequent[0].span().start } else { case_clause.span.end };
+            return createTextSpanFromBounds(start, end);
+        }
+        AstKind::ReturnStatement(_) | AstKind::YieldExpression(_) => {
+            let pos = skipTrivia(&source_file.source_text, node.span().start, None, None, None);
+            return getSpanOfTokenAtPosition(source_file, pos);
+        }
+        AstKind::TSSatisfiesExpression(satisfies) => {
+            let pos = skipTrivia(&source_file.source_text, satisfies.expression.span().end, None, None, None);
+            return getSpanOfTokenAtPosition(source_file, pos);
+        }
+        // ! skipping jsdoc
+        // case SyntaxKind.JSDocSatisfiesTag: {
+        //     const pos = skipTrivia(sourceFile.text, (node as JSDocSatisfiesTag).tagName.pos);
+        //     return getSpanOfTokenAtPosition(sourceFile, pos);
+        // }
+        AstKind::MethodDefinition(n) => {
+            // if n.kind == MethodDefinitionKind::Constructor {
+            //     let start = skipTrivia(&source_file.source_text, n.span.start, None, None, None);
+            //     let scanner = createScanner(source_file.language_version, Some(true), source_file.language_variant, &source_file.source_text, None, Some(start));
+            //     let mut token = scanner.scan();
+            //     while token != SyntaxKind::ConstructorKeyword && token != SyntaxKind::EndOfFileToken {
+            //         token = scanner.scan();
+            //     }
+            //     let end = scanner.get_token_end();
+            //     return createTextSpanFromBounds(start, end); // todo(RB): figure out scanner
+            // } else {
+            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            // }
+        }
+        _ => {}
+    }
+
+    if error_node.is_none() {
+        // If we don't have a better node, then just set the error on the first token of
+        // construct.
+        return getSpanOfTokenAtPosition(source_file, node.span().start);
+    }
+
+    // ! skipping jsdoc
+    // debug_assert!(!isJSDoc(error_node.unwrap()));
+
+    let error_node = error_node.unwrap();
+    let is_missing = nodeIsMissing(Some(&error_node));
+    let pos = if is_missing || matches!(node, AstKind::JSXText(_)) { error_node.span().start } else { skipTrivia(&source_file.source_text, error_node.span().start, None, None, None) };
+
+    // These asserts should all be satisfied for a properly constructed `error_node`.
+    if is_missing {
+        debug_assert!(pos == error_node.span().start, "This failure could trigger https://github.com/Microsoft/TypeScript/issues/20809");
+        debug_assert!(pos == error_node.span().end, "This failure could trigger https://github.com/Microsoft/TypeScript/issues/20809");
+    } else {
+        debug_assert!(pos >= error_node.span().start, "This failure could trigger https://github.com/Microsoft/TypeScript/issues/20809");
+        debug_assert!(pos <= error_node.span().end, "This failure could trigger https://github.com/Microsoft/TypeScript/issues/20809");
+    }
+
+    createTextSpanFromBounds(pos, error_node.span().end)
+}
+// endregion: 2481
 
 // region: 2922
 /** @internal */
@@ -28,6 +398,85 @@ pub fn isPartOfTypeQuery(node: &AstKind) -> bool {
     matches!(current, AstKind::TSTypeQuery(_))
 }
 // endregion: 3614
+
+// region: 8366
+/** @internal */
+pub fn formatStringFromArgs(text: &str, args: &DiagnosticArguments) -> String {
+    let re = regex::Regex::new(r"\{(\d+)\}").unwrap();
+    re.replace_all(text, |caps: &regex::Captures| {
+        let index: usize = caps[1].parse().unwrap();
+        args[index].to_string()
+    })
+    .into_owned()
+}
+
+static mut localizedDiagnosticMessages: Option<HashMap<String, String>> = None;
+
+/** @internal */
+pub fn setLocalizedDiagnosticMessages(messages: Option<HashMap<String, String>>) {
+    unsafe {
+        localizedDiagnosticMessages = messages;
+    }
+}
+
+/** @internal */
+// If the localized messages json is unset, and if given function use it to set the json
+pub fn maybeSetLocalizedDiagnosticMessages<F>(getMessages: Option<F>)
+where
+    F: FnOnce() -> Option<HashMap<String, String>>,
+{
+    unsafe {
+        if localizedDiagnosticMessages.is_none() && getMessages.is_some() {
+            localizedDiagnosticMessages = getMessages.unwrap()();
+        }
+    }
+}
+
+/** @internal */
+pub fn getLocaleSpecificMessage(message: &DiagnosticMessage) -> String { unsafe { localizedDiagnosticMessages.as_ref().and_then(|messages| messages.get(&message.key)).map(|s| s.to_string()).unwrap_or_else(|| message.message.clone()) } }
+// endregion: 8390
+
+// region: 8465
+/** @internal */
+/** @internal */
+pub fn createFileDiagnostic<'a>(file: &'a SourceFile<'a>, start: u32, length: u32, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation<'a> {
+    assertDiagnosticLocation(&file.source_text, start, length);
+
+    let mut text = getLocaleSpecificMessage(&message);
+
+    if !args.is_empty() {
+        text = formatStringFromArgs(&text, &args);
+    }
+
+    DiagnosticWithLocation {
+        file: Some(file),
+        start: Some(start),
+        length: Some(length),
+        messageText: StringOrDiagnosticMessageChain::String(text),
+        category: message.category,
+        code: message.code,
+        reportsUnnecessary: message.reportsUnnecessary.map(|_| ()),
+        reportsDeprecated: message.reportsDeprecated.map(|_| ()),
+
+        fileName: None,
+        source: None,
+        relatedInformation: None,
+        skippedOn: None,
+        canonicalHead: None,
+    }
+}
+
+/** @internal */
+pub fn formatMessage(message: &DiagnosticMessage, args: &DiagnosticArguments) -> String {
+    let mut text = getLocaleSpecificMessage(message);
+
+    if !args.is_empty() {
+        text = formatStringFromArgs(&text, args);
+    }
+
+    text
+}
+// endregion: 8498
 
 // region: 8737
 /**
@@ -342,3 +791,12 @@ pub fn hasZeroOrOneAsteriskCharacter(str: &str) -> bool {
     true
 }
 // endregion: 9202
+
+// region: 9974
+/** @internal */
+pub fn positionIsSynthesized(pos: u32) -> bool {
+    // This is a fast way of testing the following conditions:
+    //  pos === undefined || pos === null || isNaN(pos) || pos < 0;
+    !(pos >= 0)
+}
+// endregion: 9979
