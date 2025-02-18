@@ -1,9 +1,10 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, BigIntLiteral, BinaryExpression, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, DestructureBindingPattern,
-        ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, IdentifierName, IdentifierReference, ImportNamespaceSpecifier, JSXAttribute, JSXElement, MethodDefinition, NewExpression, NumericLiteral, ObjectExpression, ObjectPattern,
-        ObjectProperty, PrivateIdentifier, PropertyAccessExpression, PropertyDefinition, SourceFile, StaticBlock, StringLiteral, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName,
-        TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSPropertySignature, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral, TaggedTemplateExpression, TemplateLiteral, VariableDeclarator,
+        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, DestructureBindingPattern,
+        ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, IdentifierName, IdentifierReference, ImportNamespaceSpecifier, JSXAttribute, JSXElement, LogicalExpression, MethodDefinition, NewExpression, NumericLiteral,
+        ObjectExpression, ObjectPattern, ObjectProperty, PrivateIdentifier, PrivateInExpression, PropertyAccessExpression, PropertyDefinition, SequenceExpression, SourceFile, StaticBlock, StringLiteral, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration,
+        TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSPropertySignature, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral,
+        TaggedTemplateExpression, TemplateLiteral, VariableDeclarator,
     },
     AstKind, GetChildren,
 };
@@ -641,6 +642,16 @@ impl NamedDeclaration for MethodDefinition<'_> {
 // export type AccessorDeclaration = GetAccessorDeclaration | SetAccessorDeclaration;
 // endregion: 2159
 
+// region: 2642
+define_subset_enum!(BinaryExpression from AstKind {
+    GeneralBinaryExpression,
+    AssignmentExpression,
+    LogicalExpression,
+    PrivateInExpression,
+    SequenceExpression,
+});
+// endregion: 2649
+
 // region: 2956
 define_subset_enum!(EntityNameExpression from AstKind {
     Sub(Identifier),
@@ -667,23 +678,22 @@ define_subset_enum!(PropertyAccessEntityNameExpression from AstKind {
 // region: 3123
 /// Represents an expression that can be called or constructed, including function calls,
 /// constructor calls, template literals, decorators, JSX elements, and instanceof checks.
-#[derive(Debug)]
-pub enum CallLikeExpression<'a> {
-    /// Function call expression like `foo()`
-    CallExpression(Box<CallExpression<'a>>),
-    /// Constructor call with new like `new Foo()`
-    NewExpression(Box<NewExpression<'a>>),
-    /// Tagged template literal like `foo`bar``
-    TaggedTemplateExpression(Box<TaggedTemplateExpression<'a>>),
-    /// Class or method decorator like `@decorator`
-    Decorator(Box<Decorator<'a>>),
-    /// JSX opening element like `<div>`
-    ///! oxc doesn't have a separate JSXSelfClosingElement, so we can't explicitly model JSXOpeningElement | JSXSelfClosingElement
-    JsxElement(Box<JSXElement<'a>>),
-    /// instanceof check like `foo instanceof Bar`
-    ///! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use BinaryExpression
-    BinaryExpression(Box<BinaryExpression<'a>>),
-}
+define_subset_enum!(CallLikeExpression from AstKind {
+    // Function call expression like `foo()`
+    CallExpression,
+    // Constructor call with new like `new Foo()`
+    NewExpression,
+    // Tagged template literal like `foo`bar``
+    TaggedTemplateExpression,
+    // Class or method decorator like `@decorator`
+    Decorator,
+    // JSX opening element like `<div>`
+    // ! oxc doesn't have a separate JSXSelfClosingElement, so we can't explicitly model JSXOpeningElement | JSXSelfClosingElement
+    JSXElement,
+    // instanceof check like `foo instanceof Bar`
+    // ! There doesn't seem to be a good way to explicitly model InstanceofExpression, so we use GeneralBinaryExpression
+    GeneralBinaryExpression,
+});
 // endregion: 3129
 
 // region: 3520

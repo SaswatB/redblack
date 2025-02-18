@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use oxc_ast::{
-    ast::{PrivateIdentifier, SourceFile},
+    ast::{AssignmentOperator, CallExpression, Expression, GeneralBinaryOperator, PrivateIdentifier, SourceFile, UnaryOperator},
     AstKind, GetChildren,
 };
 
@@ -9,12 +9,12 @@ use crate::{define_flags, flag_names_impl, opt_rc_cell};
 
 use super::{
     diagnostic_information_map_generated::Diagnostics,
-    factory::node_tests::isClassStaticBlockDeclaration,
+    factory::nodeTests::{isClassStaticBlockDeclaration, isTypeOfExpression},
     rb_extra::{AstKindExt, SourceFileExt},
     rb_unions::{DeclarationNameOrQualifiedName, IsContainerOrEntityNameExpression, StringOrNumber},
-    types::{CompilerOptions, DiagnosticArguments, DiagnosticMessage, DiagnosticWithLocation, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, IsBlockScopedContainer, ScriptTarget, Symbol, __String},
-    utilities::{createDiagnosticForNodeInSourceFile, declarationNameToString, getEmitScriptTarget, getSourceFileOfNode, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery},
-    utilitiesPublic::isFunctionLike,
+    types::{BinaryExpression, CompilerOptions, DiagnosticArguments, DiagnosticMessage, DiagnosticWithLocation, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, IsBlockScopedContainer, ScriptTarget, Symbol, __String},
+    utilities::{createDiagnosticForNodeInSourceFile, declarationNameToString, getEmitScriptTarget, getSourceFileOfNode, isEntityNameExpression, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery, isStringOrNumericLiteralLike},
+    utilitiesPublic::{isBooleanLiteral, isFunctionLike, isLeftHandSideExpression, isOptionalChain, isOptionalChainResult, isStringLiteralLike},
 };
 
 // region: 332
@@ -487,7 +487,164 @@ impl<'a> Binder<'a> {
         // self.bindJSDoc(node);
         self.inAssignmentPattern = save_in_assignment_pattern;
     }
-    // endregion: 1226
+
+    fn isNarrowingExpression(&mut self, expr: &'a Expression<'a>) -> bool {
+        match expr {
+            Expression::Identifier(_) |
+            Expression::ThisExpression(_) => true,
+            
+            Expression::PropertyAccessExpression(_) |
+            Expression::ElementAccessExpression(_) => self.containsNarrowableReference(expr),
+            
+            Expression::CallExpression(call) => self.hasNarrowableArgument(call),
+            
+            Expression::ParenthesizedExpression(paren) => {
+                // ! rb skipping jsdoc
+                // if isJSDocTypeAssertion(expr) {
+                //     return false;
+                // }
+                // fallthrough to NonNullExpression case
+                self.isNarrowingExpression(&paren.expression)
+            }
+            
+            Expression::TSNonNullExpression(non_null) => {
+                self.isNarrowingExpression(&non_null.expression) 
+            }
+            
+            // BinaryExpression
+            Expression::GeneralBinaryExpression(_) | Expression::AssignmentExpression(_) | Expression::LogicalExpression(_) | Expression::PrivateInExpression(_) | Expression::SequenceExpression(_) => {
+            // end BinaryExpression
+                self.isNarrowingBinaryExpression(&BinaryExpression::from_ast_kind(&expr.to_ast_kind()).unwrap())
+            }
+            
+            // PrefixUnaryExpression
+            // TypeOfExpression
+            Expression::UnaryExpression(unary) => {
+                if unary.operator == UnaryOperator::LogicalNot {
+                    self.isNarrowingExpression(&unary.argument)
+                } else if unary.operator == UnaryOperator::Delete {
+                    self.isNarrowingExpression(&unary.argument)
+                } else {
+                    false
+                }
+            }
+            
+            _ => false
+        }
+    }
+
+    fn isNarrowableReference(&mut self, expr: &Expression<'a>) -> bool {
+        match expr {
+            Expression::Identifier(_) |
+            Expression::ThisExpression(_) |
+            Expression::Super(_) |
+            Expression::MetaProperty(_) => true,
+            
+            Expression::PropertyAccessExpression(member) => self.isNarrowableReference(&member.object),
+            Expression::ParenthesizedExpression(paren) => self.isNarrowableReference(&paren.expression),
+            Expression::TSNonNullExpression(non_null) => self.isNarrowableReference(&non_null.expression),
+            
+            Expression::ElementAccessExpression(element) => {
+                (isStringOrNumericLiteralLike(&element.argument_expression.to_ast_kind()) || 
+                 isEntityNameExpression(&element.argument_expression.to_ast_kind())) &&
+                self.isNarrowableReference(&element.object)
+            }
+            
+            Expression::SequenceExpression(seq) => {
+                self.isNarrowableReference(&seq.expressions.last().unwrap())
+            }
+            Expression::AssignmentExpression(assignment) => {
+                isLeftHandSideExpression(&assignment.left.to_ast_kind())
+            }
+            
+            _ => false
+        }
+    }
+    
+    fn containsNarrowableReference(&mut self, expr: &'a Expression<'a>) -> bool {
+        if self.isNarrowableReference(expr) {
+            true
+        } else if let Some(is_optional_chain) = isOptionalChain(expr.to_ast_kind()) {
+            let expression = match is_optional_chain {
+                isOptionalChainResult::PropertyAccessExpression(n) => &n.object,
+                isOptionalChainResult::ElementAccessExpression(n) => &n.object,
+                isOptionalChainResult::CallExpression(n) => &n.callee,
+                isOptionalChainResult::PrivateFieldExpression(n) => &n.object,
+            };
+            self.containsNarrowableReference(expression)
+        } else {
+            false
+        }
+    }
+
+    fn hasNarrowableArgument(&mut self, expr: &'a CallExpression<'a>) -> bool {
+        for argument in &expr.arguments {
+            if let Some(argument) = argument.as_expression() {
+                if self.containsNarrowableReference(&argument) {
+                    return true;
+                }
+            }
+        }
+        
+        if let Expression::PropertyAccessExpression(prop_access) = &expr.callee {
+            if self.containsNarrowableReference(&prop_access.object) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn isNarrowingTypeofOperands(&mut self, expr1: &'a Expression<'a>, expr2: &Expression<'a>) -> bool {
+        let Some(typeof_expr) = isTypeOfExpression(&expr1.to_ast_kind()) else { return false };
+        self.isNarrowableOperand(&typeof_expr.argument) && 
+            isStringLiteralLike(&expr2.to_ast_kind())
+    }
+
+    fn isNarrowingBinaryExpression(&mut self, expr: &BinaryExpression<'a>) -> bool {
+        match expr {
+            BinaryExpression::AssignmentExpression(assignment) 
+            if matches!(assignment.operator, AssignmentOperator::Assign | AssignmentOperator::LogicalOr | AssignmentOperator::LogicalAnd | AssignmentOperator::LogicalNullish) => {
+                // ! rb I'm not sure this unwrap is correct
+                self.containsNarrowableReference(&assignment.left.get_expression().unwrap())
+            }
+            BinaryExpression::GeneralBinaryExpression(binary)
+            if matches!(binary.operator, GeneralBinaryOperator::Equality | GeneralBinaryOperator::Inequality | GeneralBinaryOperator::StrictEquality | GeneralBinaryOperator::StrictInequality) => {
+                self.isNarrowableOperand(&binary.left) || self.isNarrowableOperand(&binary.right) ||
+                    self.isNarrowingTypeofOperands(&binary.right, &binary.left) || self.isNarrowingTypeofOperands(&binary.left, &binary.right) ||
+                    (isBooleanLiteral(&binary.right.to_ast_kind()) && self.isNarrowingExpression(&binary.left) || 
+                     isBooleanLiteral(&binary.left.to_ast_kind()) && self.isNarrowingExpression(&binary.right))
+            }
+            BinaryExpression::GeneralBinaryExpression(binary) if binary.operator == GeneralBinaryOperator::Instanceof => {
+                self.isNarrowableOperand(&binary.left)
+            }
+            BinaryExpression::GeneralBinaryExpression(binary) if binary.operator == GeneralBinaryOperator::In => {
+                self.isNarrowingExpression(&binary.right)
+            }
+            BinaryExpression::SequenceExpression(expr) => {
+                self.isNarrowingExpression(&expr.expressions.last().unwrap())
+            }
+            _ => false
+        }
+    }
+
+    fn isNarrowableOperand(&mut self, expr: &'a Expression<'a>) -> bool {
+        match expr {
+            Expression::ParenthesizedExpression(paren) => {
+                self.isNarrowableOperand(&paren.expression)
+            }
+            Expression::AssignmentExpression(assignment) => {
+                // ! rb I'm not sure this unwrap is correct
+                self.isNarrowableOperand(&assignment.left.get_expression().unwrap())
+            }
+            Expression::SequenceExpression(seq) => {
+                self.isNarrowableOperand(&seq.expressions.last().unwrap())
+            }
+            _ => self.containsNarrowableReference(expr)
+        }
+    }
+    // endregion: 1339
+
+    
 
     // region: 2741
     fn bind(&mut self, node: Option<AstKind<'a>>) {

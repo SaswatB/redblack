@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use super::factory::nodeTests::isIdentifier;
+use super::factory::nodeTests::isNumericLiteral;
 use super::rb_extra::SourceFileExt;
 use super::rb_unions::strings_to_string_or_numbers;
 use super::rb_unions::DeclarationNameOrQualifiedName;
 use super::rb_unions::StringOrDiagnosticMessageChain;
 use super::scanner::skipTrivia;
 use super::utilitiesPublic::createTextSpanFromBounds;
+use super::utilitiesPublic::isStringLiteralLike;
 use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
@@ -14,6 +17,7 @@ use crate::compiler::rb_extra::AstKindExt;
 use crate::compiler::types::*;
 use crate::compiler::utilitiesPublic::createTextSpan;
 use oxc_ast::ast::ArrowFunctionExpression;
+use oxc_ast::GetChildren;
 use oxc_ast::{ast::SourceFile, AstKind, Visit};
 use oxc_span::GetSpan;
 use oxc_span::Span;
@@ -398,6 +402,27 @@ pub fn isPartOfTypeQuery(node: &AstKind) -> bool {
     matches!(current, AstKind::TSTypeQuery(_))
 }
 // endregion: 3614
+
+// region: 5191
+/** @internal */
+pub fn isStringOrNumericLiteralLike(node: &AstKind) -> bool { isStringLiteralLike(node) || isNumericLiteral(node) }
+// endregion: 5196
+
+// region: 7300
+/** @internal */
+pub fn isEntityNameExpression(node: &AstKind) -> bool { isIdentifier(node) || isPropertyAccessEntityNameExpression(node) }
+// endregion: 7305
+
+// region: 7335
+/** @internal */
+pub fn isPropertyAccessEntityNameExpression(node: &AstKind) -> bool {
+    let AstKind::PropertyAccessExpression(property_access) = node else {
+        return false;
+    };
+    // ! rb this isIdentifier check is kinda useless lol
+    isIdentifier(&AstKind::IdentifierName(&property_access.property)) && isEntityNameExpression(&property_access.object.to_ast_kind())
+}
+// endregion: 7340
 
 // region: 8366
 /** @internal */
