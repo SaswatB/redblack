@@ -3,12 +3,15 @@ use std::fmt::Debug;
 
 use super::factory::nodeTests::isIdentifier;
 use super::factory::nodeTests::isNumericLiteral;
+use super::factory::nodeTests::isPropertyAccessExpression;
+use super::factory::utilities::skipOuterExpressions;
 use super::rb_extra::SourceFileExt;
 use super::rb_unions::strings_to_string_or_numbers;
 use super::rb_unions::DeclarationNameOrQualifiedName;
 use super::rb_unions::StringOrDiagnosticMessageChain;
 use super::scanner::skipTrivia;
 use super::utilitiesPublic::createTextSpanFromBounds;
+use super::utilitiesPublic::escapeLeadingUnderscores;
 use super::utilitiesPublic::isStringLiteralLike;
 use crate::compiler::parser::*;
 use crate::compiler::path::*;
@@ -403,6 +406,103 @@ pub fn isPartOfTypeQuery(node: &AstKind) -> bool {
 }
 // endregion: 3614
 
+// region: 3646
+/** @internal */
+pub fn isSourceFileJS(file: &SourceFile) -> bool { file.source_type.is_javascript() }
+
+/** @internal */
+// ! rb consider making this faster?
+pub fn isInJSFile(node: &AstKind) -> bool { isSourceFileJS(getSourceFileOfNode(Some(node)).unwrap()) }
+// endregion: 3656
+
+// region: 3932
+/** @internal */
+pub fn isModuleIdentifier(node: &AstKind) -> bool {
+    let Some(identifier) = Identifier::from_ast_kind(node) else {
+        return false;
+    };
+    identifier.name() == "module"
+}
+
+/** @internal */
+pub fn isModuleExportsAccessExpression(node: &AstKind) -> bool {
+    if !isPropertyAccessExpression(node) && !isLiteralLikeElementAccess(node) {
+        return false;
+    }
+    if let Some(access) = AccessExpression::from_ast_kind(node) {
+        if !isModuleIdentifier(&access.object().to_ast_kind()) {
+            return false;
+        }
+    }
+    getElementOrPropertyAccessName(&AccessExpression::from_ast_kind(node).unwrap()) == Some("exports".to_string())
+}
+// endregion: 3944
+
+// region: 3970
+/**
+ * x[0] OR x['a'] OR x[Symbol.y]
+ */
+pub fn isLiteralLikeElementAccess(node: &AstKind) -> bool {
+    let AstKind::ElementAccessExpression(element_access) = node else {
+        return false;
+    };
+    isStringOrNumericLiteralLike(&element_access.argument_expression.to_ast_kind())
+}
+// endregion: 3977
+
+// region: 4041
+/**
+ * Does not handle signed numeric names like `a[+0]` - handling those would require handling prefix unary expressions
+ * throughout late binding handling as well, which is awkward (but ultimately probably doable if there is demand)
+ *
+ * @internal
+ */
+/** @internal */
+pub fn getElementOrPropertyAccessArgumentExpressionOrName<'a>(node: &'a AccessExpression<'a>) -> Option<AstKind<'a>> {
+    match node {
+        AccessExpression::PropertyAccessExpression(property_access) => Some(property_access.property().to_ast_kind()),
+        AccessExpression::ElementAccessExpression(element_access) => {
+            let expr = element_access.argument_expression.to_ast_kind();
+            let arg = skipParentheses(expr, None);
+            if isNumericLiteral(&arg) || isStringLiteralLike(&arg) {
+                Some(arg)
+            } else {
+                Some(node.to_ast_kind())
+            }
+        }
+    }
+}
+
+/** @internal */
+pub fn getElementOrPropertyAccessName<'a>(node: &'a AccessExpression<'a>) -> Option<String> {
+    let name = getElementOrPropertyAccessArgumentExpressionOrName(node);
+    if let Some(name) = name {
+        if let Some(identifier) = Identifier::from_ast_kind(&name) {
+            return Some(identifier.name().to_string());
+        }
+        if isStringLiteralLike(&name) {
+            let name = StringLiteralLike::from_ast_kind(&name)?.value();
+            return Some(escapeLeadingUnderscores(&name));
+        }
+        if isNumericLiteral(&name) {
+            let AstKind::NumericLiteral(numeric) = name else {
+                return None;
+            };
+            return Some(numeric.raw.as_ref().unwrap().to_string());
+        }
+    }
+    None
+}
+// endregion: 4075
+
+// region: 4871
+/** @internal */
+pub fn skipParentheses<'a>(node: AstKind<'a>, exclude_jsdoc_type_assertions: Option<bool>) -> AstKind<'a> {
+    let flags = if exclude_jsdoc_type_assertions.unwrap_or(false) { OuterExpressionKinds::Parentheses | OuterExpressionKinds::ExcludeJSDocTypeAssertion } else { OuterExpressionKinds::Parentheses };
+    skipOuterExpressions(node, flags)
+}
+// endregion: 4882
+
 // region: 5191
 /** @internal */
 pub fn isStringOrNumericLiteralLike(node: &AstKind) -> bool { isStringLiteralLike(node) || isNumericLiteral(node) }
@@ -416,11 +516,10 @@ pub fn isEntityNameExpression(node: &AstKind) -> bool { isIdentifier(node) || is
 // region: 7335
 /** @internal */
 pub fn isPropertyAccessEntityNameExpression(node: &AstKind) -> bool {
-    let AstKind::PropertyAccessExpression(property_access) = node else {
+    let Some(property_access) = PropertyAccessExpression::from_ast_kind(node) else {
         return false;
     };
-    // ! rb this isIdentifier check is kinda useless lol
-    isIdentifier(&AstKind::IdentifierName(&property_access.property)) && isEntityNameExpression(&property_access.object.to_ast_kind())
+    isEntityNameExpression(&property_access.object().to_ast_kind())
 }
 // endregion: 7340
 

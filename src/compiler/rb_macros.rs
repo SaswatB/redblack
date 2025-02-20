@@ -143,12 +143,15 @@ macro_rules! generate_extended_enum {
     (
         $new_name:ident from $master_name:ident
         direct: [$($dir_var:ident),* $(,)?],
+        nl: [$($nl_var:ident),* $(,)?],
         subs:   [$($sub_ty:ident),* $(,)?]
     ) => {
         #[derive(Debug, Clone, Copy)]
         pub enum $new_name<'a> {
-            // Direct variants
+            // Direct variants with lifetime
             $($dir_var(&'a $dir_var<'a>),)*
+            // Direct variants without lifetime
+            $($nl_var(&'a $nl_var),)*
             // Each sub-enum is a single variant that wraps it
             $($sub_ty($sub_ty<'a>),)*
         }
@@ -158,6 +161,7 @@ macro_rules! generate_extended_enum {
                 pub fn [<to_ $master_name:snake>](&self) -> $master_name<'a> {
                     match self {
                         $(Self::$dir_var(inner) => $master_name::$dir_var(inner),)*
+                        $(Self::$nl_var(inner) => $master_name::$nl_var(inner),)*
                         $(Self::$sub_ty(inner) => inner.[<to_ $master_name:snake>](),)*
                     }
                 }
@@ -165,6 +169,7 @@ macro_rules! generate_extended_enum {
                     // match directs
                     let wrapped = match value {
                         $($master_name::$dir_var(inner) => Some(Self::$dir_var(inner)),)*
+                        $($master_name::$nl_var(inner) => Some(Self::$nl_var(inner)),)*
                         _ => None
                     };
                     if let Some(wrapped) = wrapped {
@@ -187,12 +192,14 @@ macro_rules! parse_variants {
     (
         $new_name:ident, $master_name:ident,
         ($($directs:ident),*),
+        ($($nls:ident),*),
         ($($subs:ident),*),
         =>
     ) => {
         crate::generate_extended_enum! {
             $new_name from $master_name
             direct: [$($directs),*],
+            nl: [$($nls),*],
             subs:   [$($subs),*]
         }
     };
@@ -201,6 +208,7 @@ macro_rules! parse_variants {
     (
         $new_name:ident, $master_name:ident,
         ($($directs:ident),*),
+        ($($nls:ident),*),
         ($($subs:ident),*),
         =>
         Sub($sub_ty:ident)
@@ -209,16 +217,38 @@ macro_rules! parse_variants {
         crate::parse_variants! {
             $new_name, $master_name,
             ($($directs),*),
+            ($($nls),*),
             ($($subs,)* $sub_ty),
             =>
             $($rest)*
         }
     };
 
-    // 3) Found a direct variant
+    // 3) Found a no-lifetime variant
     (
         $new_name:ident, $master_name:ident,
         ($($directs:ident),*),
+        ($($nls:ident),*),
+        ($($subs:ident),*),
+        =>
+        NL($variant:ident)
+        $($rest:tt)*
+    ) => {
+        crate::parse_variants! {
+            $new_name, $master_name,
+            ($($directs),*),
+            ($($nls,)* $variant),
+            ($($subs),*),
+            =>
+            $($rest)*
+        }
+    };
+
+    // 4) Found a direct variant
+    (
+        $new_name:ident, $master_name:ident,
+        ($($directs:ident),*),
+        ($($nls:ident),*),
         ($($subs:ident),*),
         =>
         $variant:ident
@@ -227,16 +257,18 @@ macro_rules! parse_variants {
         crate::parse_variants! {
             $new_name, $master_name,
             ($($directs,)* $variant),
+            ($($nls),*),
             ($($subs),*),
             =>
             $($rest)*
         }
     };
 
-    // 4) Skip commas
+    // 5) Skip commas
     (
         $new_name:ident, $master_name:ident,
         ($($directs:ident),*),
+        ($($nls:ident),*),
         ($($subs:ident),*),
         =>
         ,
@@ -245,6 +277,7 @@ macro_rules! parse_variants {
         crate::parse_variants! {
             $new_name, $master_name,
             ($($directs),*),
+            ($($nls),*),
             ($($subs),*),
             =>
             $($rest)*
@@ -260,6 +293,7 @@ macro_rules! define_subset_enum {
         crate::parse_variants! {
             $new_name, $master_name,
             (), // start with empty direct list
+            (), // start with empty nl list
             (), // start with empty subs list
             =>
             $($body)*

@@ -64,13 +64,13 @@ fn lookupFromPackageJson(file_name: &str, host: &dyn ModuleResolutionHost, optio
 pub fn getImpliedNodeFormatForEmitWorker(sourceFile: &SourceFile, options: &CompilerOptions) -> ResolutionMode {
     let moduleKind = getEmitModuleKind(options);
     if ModuleKind::Node16 <= moduleKind && moduleKind <= ModuleKind::NodeNext {
-        return sourceFile.implied_node_format();
+        return sourceFile.impliedNodeFormat();
     }
-    let packageJsonContentType = sourceFile.package_json_scope().map(|scope| scope.contents.packageJsonContent.r#type).flatten();
-    if sourceFile.implied_node_format() == ResolutionMode::CommonJS && (packageJsonContentType.as_deref() == Some("commonjs") || fileExtensionIsOneOf(&sourceFile.filepath().to_string_lossy(), [Extension::Cjs.as_str(), Extension::Cts.as_str()].to_vec())) {
+    let packageJsonContentType = sourceFile.packageJsonScope().map(|scope| scope.contents.packageJsonContent.r#type).flatten();
+    if sourceFile.impliedNodeFormat() == ResolutionMode::CommonJS && (packageJsonContentType.as_deref() == Some("commonjs") || fileExtensionIsOneOf(&sourceFile.filepath().to_string_lossy(), [Extension::Cjs.as_str(), Extension::Cts.as_str()].to_vec())) {
         return ResolutionMode::CommonJS;
     }
-    if sourceFile.implied_node_format() == ResolutionMode::ESNext && (packageJsonContentType.as_deref() == Some("module") || fileExtensionIsOneOf(&sourceFile.filepath().to_string_lossy(), [Extension::Mjs.as_str(), Extension::Mts.as_str()].to_vec())) {
+    if sourceFile.impliedNodeFormat() == ResolutionMode::ESNext && (packageJsonContentType.as_deref() == Some("module") || fileExtensionIsOneOf(&sourceFile.filepath().to_string_lossy(), [Extension::Mjs.as_str(), Extension::Mts.as_str()].to_vec())) {
         return ResolutionMode::ESNext;
     }
     return ResolutionMode::Undefined;

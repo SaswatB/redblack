@@ -5,7 +5,7 @@ use crate::opt_rc_cell;
 use oxc_ast::ast::Declaration;
 use oxc_ast::ast::SourceFile;
 use oxc_ast::{
-    ast::{Argument, Expression, JSXAttribute, ObjectExpression, PropertyAccessExpression},
+    ast::{Argument, Expression, JSXAttribute, ObjectExpression},
     AstKind,
 };
 use std::cell::RefCell;

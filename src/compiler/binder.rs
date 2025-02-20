@@ -5,16 +5,17 @@ use oxc_ast::{
     AstKind, GetChildren,
 };
 
-use crate::{define_flags, flag_names_impl, opt_rc_cell};
+use crate::{define_flags, flag_names_impl, opt_rc_cell, rc_cell};
+use crate::compiler::rb_extra::SourceFilePassthrough;
 
 use super::{
     diagnostic_information_map_generated::Diagnostics,
     factory::nodeTests::{isClassStaticBlockDeclaration, isTypeOfExpression},
     rb_extra::{AstKindExt, SourceFileExt},
     rb_unions::{DeclarationNameOrQualifiedName, IsContainerOrEntityNameExpression, StringOrNumber},
-    types::{BinaryExpression, CompilerOptions, DiagnosticArguments, DiagnosticMessage, DiagnosticWithLocation, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, IsBlockScopedContainer, ScriptTarget, Symbol, __String},
-    utilities::{createDiagnosticForNodeInSourceFile, declarationNameToString, getEmitScriptTarget, getSourceFileOfNode, isEntityNameExpression, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery, isStringOrNumericLiteralLike},
-    utilitiesPublic::{isBooleanLiteral, isFunctionLike, isLeftHandSideExpression, isOptionalChain, isOptionalChainResult, isStringLiteralLike},
+    types::{AccessExpression, AstKindExpression, BinaryExpression, CompilerOptions, DiagnosticArguments, DiagnosticMessage, DiagnosticWithLocation, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, HasLocalsExt, IsBlockScopedContainer, ScriptTarget, Symbol, SymbolFlags, SymbolTable, __String},
+    utilities::{createDiagnosticForNodeInSourceFile, declarationNameToString, getEmitScriptTarget, getSourceFileOfNode, isEntityNameExpression, isInJSFile, isModuleExportsAccessExpression, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery, isStringOrNumericLiteralLike},
+    utilitiesPublic::{canHaveSymbol, isBooleanLiteral, isFunctionLike, isLeftHandSideExpression, isOptionalChain, isOptionalChainResult, isStringLiteralLike},
 };
 
 // region: 332
@@ -203,6 +204,21 @@ impl<'a> Binder<'a> {
     }
 
     // endregion: 628
+
+    // region: 750
+         /**
+         * Declares a Symbol for the node and adds it to symbols. Reports errors for conflicting identifier names.
+         * @param symbolTable - The symbol table which node will be added to.
+         * @param parent - node's parent declaration.
+         * @param node - The declaration to be added to the symbol table
+         * @param includes - The SymbolFlags that node has in addition to its declaration type (eg: export, ambient, etc.)
+         * @param excludes - The flags which node cannot be declared alongside in a symbol table. Used to report forbidden declarations.
+         */
+        fn declareSymbol(&mut self, symbolTable: rc_cell!(SymbolTable<'a>), parent: Option<Rc<RefCell<Symbol<'a>>>>, node: AstKind<'a>, includes: SymbolFlags, excludes: SymbolFlags, isReplaceableByMethod: Option<bool>, isComputedName: Option<bool>) -> Rc<RefCell<Symbol<'a>>> {
+            // todo(RB): continue conversion from here
+            todo!();
+        }
+    // endregion: 896
 
     // region: 960
     // All container nodes are kept on a linked list in declaration order. This list is used by
@@ -490,14 +506,15 @@ impl<'a> Binder<'a> {
 
     fn isNarrowingExpression(&mut self, expr: &'a Expression<'a>) -> bool {
         match expr {
-            Expression::Identifier(_) |
-            Expression::ThisExpression(_) => true,
-            
-            Expression::PropertyAccessExpression(_) |
+            Expression::Identifier(_) | Expression::ThisExpression(_) => true,
+
+            // PropertyAccessExpression
+            Expression::StaticMemberExpression(_) | Expression::PrivateFieldExpression(_) | 
+            // end PropertyAccessExpression
             Expression::ElementAccessExpression(_) => self.containsNarrowableReference(expr),
-            
+
             Expression::CallExpression(call) => self.hasNarrowableArgument(call),
-            
+
             Expression::ParenthesizedExpression(paren) => {
                 // ! rb skipping jsdoc
                 // if isJSDocTypeAssertion(expr) {
@@ -506,17 +523,15 @@ impl<'a> Binder<'a> {
                 // fallthrough to NonNullExpression case
                 self.isNarrowingExpression(&paren.expression)
             }
-            
-            Expression::TSNonNullExpression(non_null) => {
-                self.isNarrowingExpression(&non_null.expression) 
-            }
-            
+
+            Expression::TSNonNullExpression(non_null) => self.isNarrowingExpression(&non_null.expression),
+
             // BinaryExpression
             Expression::GeneralBinaryExpression(_) | Expression::AssignmentExpression(_) | Expression::LogicalExpression(_) | Expression::PrivateInExpression(_) | Expression::SequenceExpression(_) => {
-            // end BinaryExpression
+                // end BinaryExpression
                 self.isNarrowingBinaryExpression(&BinaryExpression::from_ast_kind(&expr.to_ast_kind()).unwrap())
             }
-            
+
             // PrefixUnaryExpression
             // TypeOfExpression
             Expression::UnaryExpression(unary) => {
@@ -528,48 +543,39 @@ impl<'a> Binder<'a> {
                     false
                 }
             }
-            
-            _ => false
+
+            _ => false,
         }
     }
 
-    fn isNarrowableReference(&mut self, expr: &Expression<'a>) -> bool {
+    fn isNarrowableReference(&mut self, expr: &AstKindExpression<'a>) -> bool {
         match expr {
-            Expression::Identifier(_) |
-            Expression::ThisExpression(_) |
-            Expression::Super(_) |
-            Expression::MetaProperty(_) => true,
-            
-            Expression::PropertyAccessExpression(member) => self.isNarrowableReference(&member.object),
-            Expression::ParenthesizedExpression(paren) => self.isNarrowableReference(&paren.expression),
-            Expression::TSNonNullExpression(non_null) => self.isNarrowableReference(&non_null.expression),
-            
-            Expression::ElementAccessExpression(element) => {
-                (isStringOrNumericLiteralLike(&element.argument_expression.to_ast_kind()) || 
-                 isEntityNameExpression(&element.argument_expression.to_ast_kind())) &&
-                self.isNarrowableReference(&element.object)
-            }
-            
-            Expression::SequenceExpression(seq) => {
-                self.isNarrowableReference(&seq.expressions.last().unwrap())
-            }
-            Expression::AssignmentExpression(assignment) => {
-                isLeftHandSideExpression(&assignment.left.to_ast_kind())
-            }
-            
-            _ => false
+            AstKindExpression::IdentifierReference(_) | AstKindExpression::ThisExpression(_) | AstKindExpression::Super(_) | AstKindExpression::MetaProperty(_) => true,
+
+            // PropertyAccessExpression
+            AstKindExpression::StaticMemberExpression(member) => self.isNarrowableReference(&AstKindExpression::from_expression(&member.object)),
+            AstKindExpression::PrivateFieldExpression(member) => self.isNarrowableReference(&AstKindExpression::from_expression(&member.object)),
+            // end PropertyAccessExpression
+            AstKindExpression::ParenthesizedExpression(paren) => self.isNarrowableReference(&AstKindExpression::from_expression(&paren.expression)),
+            AstKindExpression::TSNonNullExpression(non_null) => self.isNarrowableReference(&AstKindExpression::from_expression(&non_null.expression)),
+
+            AstKindExpression::ElementAccessExpression(element) => (isStringOrNumericLiteralLike(&element.argument_expression.to_ast_kind()) || isEntityNameExpression(&element.argument_expression.to_ast_kind())) && self.isNarrowableReference(&AstKindExpression::from_expression(&element.object)),
+
+            AstKindExpression::SequenceExpression(seq) => self.isNarrowableReference(&AstKindExpression::from_expression(&seq.expressions.last().unwrap())),
+            AstKindExpression::AssignmentExpression(assignment) => isLeftHandSideExpression(&assignment.left.to_ast_kind()),
+
+            _ => false,
         }
     }
-    
+
     fn containsNarrowableReference(&mut self, expr: &'a Expression<'a>) -> bool {
-        if self.isNarrowableReference(expr) {
+        if self.isNarrowableReference(&AstKindExpression::from_expression(expr)) {
             true
         } else if let Some(is_optional_chain) = isOptionalChain(expr.to_ast_kind()) {
             let expression = match is_optional_chain {
-                isOptionalChainResult::PropertyAccessExpression(n) => &n.object,
+                isOptionalChainResult::PropertyAccessExpression(n) => &n.object(),
                 isOptionalChainResult::ElementAccessExpression(n) => &n.object,
                 isOptionalChainResult::CallExpression(n) => &n.callee,
-                isOptionalChainResult::PrivateFieldExpression(n) => &n.object,
             };
             self.containsNarrowableReference(expression)
         } else {
@@ -585,8 +591,12 @@ impl<'a> Binder<'a> {
                 }
             }
         }
-        
-        if let Expression::PropertyAccessExpression(prop_access) = &expr.callee {
+
+        if let Expression::StaticMemberExpression(prop_access) = &expr.callee {
+            if self.containsNarrowableReference(&prop_access.object) {
+                return true;
+            }
+        } else if let Expression::PrivateFieldExpression(prop_access) = &expr.callee {
             if self.containsNarrowableReference(&prop_access.object) {
                 return true;
             }
@@ -596,55 +606,41 @@ impl<'a> Binder<'a> {
 
     fn isNarrowingTypeofOperands(&mut self, expr1: &'a Expression<'a>, expr2: &Expression<'a>) -> bool {
         let Some(typeof_expr) = isTypeOfExpression(&expr1.to_ast_kind()) else { return false };
-        self.isNarrowableOperand(&typeof_expr.argument) && 
-            isStringLiteralLike(&expr2.to_ast_kind())
+        self.isNarrowableOperand(&typeof_expr.argument) && isStringLiteralLike(&expr2.to_ast_kind())
     }
 
     fn isNarrowingBinaryExpression(&mut self, expr: &BinaryExpression<'a>) -> bool {
         match expr {
-            BinaryExpression::AssignmentExpression(assignment) 
-            if matches!(assignment.operator, AssignmentOperator::Assign | AssignmentOperator::LogicalOr | AssignmentOperator::LogicalAnd | AssignmentOperator::LogicalNullish) => {
+            BinaryExpression::AssignmentExpression(assignment) if matches!(assignment.operator, AssignmentOperator::Assign | AssignmentOperator::LogicalOr | AssignmentOperator::LogicalAnd | AssignmentOperator::LogicalNullish) => {
                 // ! rb I'm not sure this unwrap is correct
                 self.containsNarrowableReference(&assignment.left.get_expression().unwrap())
             }
-            BinaryExpression::GeneralBinaryExpression(binary)
-            if matches!(binary.operator, GeneralBinaryOperator::Equality | GeneralBinaryOperator::Inequality | GeneralBinaryOperator::StrictEquality | GeneralBinaryOperator::StrictInequality) => {
-                self.isNarrowableOperand(&binary.left) || self.isNarrowableOperand(&binary.right) ||
-                    self.isNarrowingTypeofOperands(&binary.right, &binary.left) || self.isNarrowingTypeofOperands(&binary.left, &binary.right) ||
-                    (isBooleanLiteral(&binary.right.to_ast_kind()) && self.isNarrowingExpression(&binary.left) || 
-                     isBooleanLiteral(&binary.left.to_ast_kind()) && self.isNarrowingExpression(&binary.right))
-            }
-            BinaryExpression::GeneralBinaryExpression(binary) if binary.operator == GeneralBinaryOperator::Instanceof => {
+            BinaryExpression::GeneralBinaryExpression(binary) if matches!(binary.operator, GeneralBinaryOperator::Equality | GeneralBinaryOperator::Inequality | GeneralBinaryOperator::StrictEquality | GeneralBinaryOperator::StrictInequality) => {
                 self.isNarrowableOperand(&binary.left)
+                    || self.isNarrowableOperand(&binary.right)
+                    || self.isNarrowingTypeofOperands(&binary.right, &binary.left)
+                    || self.isNarrowingTypeofOperands(&binary.left, &binary.right)
+                    || (isBooleanLiteral(&binary.right.to_ast_kind()) && self.isNarrowingExpression(&binary.left) || isBooleanLiteral(&binary.left.to_ast_kind()) && self.isNarrowingExpression(&binary.right))
             }
-            BinaryExpression::GeneralBinaryExpression(binary) if binary.operator == GeneralBinaryOperator::In => {
-                self.isNarrowingExpression(&binary.right)
-            }
-            BinaryExpression::SequenceExpression(expr) => {
-                self.isNarrowingExpression(&expr.expressions.last().unwrap())
-            }
-            _ => false
+            BinaryExpression::GeneralBinaryExpression(binary) if binary.operator == GeneralBinaryOperator::Instanceof => self.isNarrowableOperand(&binary.left),
+            BinaryExpression::GeneralBinaryExpression(binary) if binary.operator == GeneralBinaryOperator::In => self.isNarrowingExpression(&binary.right),
+            BinaryExpression::SequenceExpression(expr) => self.isNarrowingExpression(&expr.expressions.last().unwrap()),
+            _ => false,
         }
     }
 
     fn isNarrowableOperand(&mut self, expr: &'a Expression<'a>) -> bool {
         match expr {
-            Expression::ParenthesizedExpression(paren) => {
-                self.isNarrowableOperand(&paren.expression)
-            }
+            Expression::ParenthesizedExpression(paren) => self.isNarrowableOperand(&paren.expression),
             Expression::AssignmentExpression(assignment) => {
                 // ! rb I'm not sure this unwrap is correct
                 self.isNarrowableOperand(&assignment.left.get_expression().unwrap())
             }
-            Expression::SequenceExpression(seq) => {
-                self.isNarrowableOperand(&seq.expressions.last().unwrap())
-            }
-            _ => self.containsNarrowableReference(expr)
+            Expression::SequenceExpression(seq) => self.isNarrowableOperand(&seq.expressions.last().unwrap()),
+            _ => self.containsNarrowableReference(expr),
         }
     }
     // endregion: 1339
-
-    
 
     // region: 2741
     fn bind(&mut self, node: Option<AstKind<'a>>) {
@@ -711,6 +707,7 @@ impl<'a> Binder<'a> {
             AstKind::IdentifierName(_) |
             AstKind::IdentifierReference(_) |
             AstKind::BindingIdentifier(_) |
+            AstKind::PrivateIdentifier(_) |
             // end Identifier
                 // ! rb skipping jsdoc
                 // for typedef type names with namespaces, bind the new jsdoc type symbol here
@@ -745,26 +742,30 @@ impl<'a> Binder<'a> {
             AstKind::PrivateIdentifier(private) => {
                 return self.checkPrivateIdentifier(private);
             }
-            // todo(RB): continue conversion from here
-            AstKind::PropertyAccessExpression(_) |
+            // PropertyAccessExpression
+            AstKind::StaticMemberExpression(_) |
+            AstKind::PrivateFieldExpression(_) |
+            // end PropertyAccessExpression
             AstKind::ElementAccessExpression(_) => {
-                // const expr = node as PropertyAccessExpression | ElementAccessExpression;
-                // if (currentFlow && isNarrowableReference(expr)) {
-                //     expr.flowNode = currentFlow;
-                // }
+                let expr = AstKindExpression::from_ast_kind(&node).unwrap();
+                if self.currentFlow.is_some() && self.isNarrowableReference(&expr) {
+                    node.set_flowNode(self.currentFlow.clone());
+                }
+                // ! rb skipping jsdoc
                 // if (isSpecialPropertyDeclaration(expr)) {
                 //     bindSpecialPropertyDeclaration(expr);
                 // }
-                // if (
-                //     isInJSFile(expr) &&
-                //     file.commonJsModuleIndicator &&
-                //     isModuleExportsAccessExpression(expr) &&
-                //     !lookupSymbolForName(blockScopeContainer, "module" as __String)
-                // ) {
-                //     declareSymbol(file.locals!, /*parent*/ undefined, expr.expression, SymbolFlags.FunctionScopedVariable | SymbolFlags.ModuleExports, SymbolFlags.FunctionScopedVariableExcludes);
-                // }
+                if isInJSFile(node) &&
+                    self.file.unwrap().source_type.is_script() && // file.commonJsModuleIndicator &&
+                    isModuleExportsAccessExpression(&expr.to_ast_kind()) &&
+                    self.blockScopeContainer.is_some() &&
+                    lookupSymbolForName(&self.blockScopeContainer.unwrap().to_ast_kind(), "module").is_none() {
+                    let expr = AccessExpression::from_ast_kind(&expr.to_ast_kind()).unwrap();
+                    self.declareSymbol(self.file.unwrap().locals().unwrap(), /*parent*/ None, expr.object().to_ast_kind(), SymbolFlags::FunctionScopedVariable | SymbolFlags::ModuleExports, SymbolFlags::FunctionScopedVariableExcludes, None, None);
+                }
             }
-            AstKind::BinaryExpression(expr) => {
+            // todo(RB): continue conversion from here
+            AstKind::GeneralBinaryExpression(expr) => {
                 // const specialKind = getAssignmentDeclarationKind(node as BinaryExpression);
                 // switch (specialKind) {
                 //     case AssignmentDeclarationKind.ExportsProperty:
@@ -1105,3 +1106,37 @@ pub fn getContainerFlags(node: &AstKind) -> ContainerFlags {
     }
 }
 // endregion: 3968
+
+// region: 3969
+pub fn lookupSymbolForName<'a>(container: &'a AstKind<'a>, name: &str) -> opt_rc_cell!(Symbol<'a>) {
+    if let Some(container_with_locals) = HasLocals::from_ast_kind(container) {
+        if let Some(locals) = &container_with_locals.locals() {
+            if let Some(local) = locals.borrow().get(name) {
+                let export_symbol = local.borrow().exportSymbol.clone();
+                if export_symbol.is_some() {
+                    return export_symbol;
+                }
+                return Some(local.clone());
+            }
+        }
+    }
+
+    if let AstKind::SourceFile(source_file) = container {
+        if let Some(js_global_augmentations) = &source_file.jsGlobalAugmentations() {
+            if js_global_augmentations.borrow().contains_key(name) {
+                return js_global_augmentations.borrow().get(name).cloned();
+            }
+        }
+    }
+
+    if canHaveSymbol(container) {
+        if let Some(symbol) = &container.symbol() {
+            if let Some(exports) = &symbol.borrow().exports {
+                return exports.get(name).cloned();
+            }
+        }
+    }
+
+    None
+}
+// endregion: 3982

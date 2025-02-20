@@ -1,16 +1,17 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, CallExpression, CatchClause, Class, Declaration, Decorator, DestructureBindingPattern,
-        ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, IdentifierName, IdentifierReference, ImportNamespaceSpecifier, JSXAttribute, JSXElement, LogicalExpression, MethodDefinition, NewExpression, NumericLiteral,
-        ObjectExpression, ObjectPattern, ObjectProperty, PrivateIdentifier, PrivateInExpression, PropertyAccessExpression, PropertyDefinition, SequenceExpression, SourceFile, StaticBlock, StringLiteral, SwitchStatement, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration,
-        TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSPropertySignature, TSQualifiedName, TSTypeAliasDeclaration, TSTypeLiteral,
-        TaggedTemplateExpression, TemplateLiteral, VariableDeclarator,
+        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause, ChainExpression, Class,
+        ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression,
+        ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, LogicalExpression, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression,
+        PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSConditionalType,
+        TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSNonNullExpression,
+        TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameterDeclaration, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{define_flags, define_string_enum, define_subset_enum, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
+use crate::{define_flags, define_string_enum, define_subset_enum, entity_properties, flag_names_impl, flow_node_enum, opt_rc_cell, rc_cell};
 
 use super::{
     moduleNameResolver::PackageJsonInfoCache,
@@ -142,6 +143,14 @@ pub struct SymbolTracker;
 
 #[derive(Debug)]
 pub struct JSDocSignature;
+
+// region: 961
+type LocalsContainer<'a> = HasLocals<'a>;
+entity_properties!(HasLocals, {
+    locals: Option<Rc<RefCell<SymbolTable<'static>>>> = None,
+    nextContainer: Option<HasLocals<'static>> = None,
+});
+// endregion: 967
 
 // region: 1403
 
@@ -296,6 +305,9 @@ define_subset_enum!(HasLocals from AstKind {
     // TypeAliasDeclaration
     TSTypeAliasDeclaration,
 });
+impl<'a> HasLocals<'a> {
+    pub fn get_node_id(&self) -> u32 { self.to_ast_kind().get_node_id() }
+}
 // endregion: 1544
 
 // region: 1578
@@ -318,8 +330,19 @@ pub struct NodeArray<'a> {
 define_subset_enum!(Identifier from AstKind {
     IdentifierName,
     BindingIdentifier,
-    IdentifierReference
+    IdentifierReference,
+    PrivateIdentifier,
 });
+impl<'a> Identifier<'a> {
+    pub fn name(&self) -> &str {
+        match self {
+            Identifier::IdentifierName(identifier_name) => identifier_name.name.as_str(),
+            Identifier::BindingIdentifier(binding_identifier) => binding_identifier.name.as_str(),
+            Identifier::IdentifierReference(identifier_reference) => identifier_reference.name.as_str(),
+            Identifier::PrivateIdentifier(private_identifier) => private_identifier.name.as_str(),
+        }
+    }
+}
 // endregion: 1703
 
 // region: 1724
@@ -642,6 +665,89 @@ impl NamedDeclaration for MethodDefinition<'_> {
 // export type AccessorDeclaration = GetAccessorDeclaration | SetAccessorDeclaration;
 // endregion: 2159
 
+// region: 2367
+define_subset_enum!(StringLiteralLike from AstKind {
+    StringLiteral,
+    TemplateLiteral, // NoSubstitutionTemplateLiteral
+});
+impl<'a> StringLiteralLike<'a> {
+    pub fn value(&self) -> String {
+        match self {
+            StringLiteralLike::StringLiteral(string) => string.value.to_string(),
+            StringLiteralLike::TemplateLiteral(template) => {
+                let first_quasi = template.quasis.first().unwrap();
+                first_quasi.value.cooked.unwrap().to_string()
+            }
+        }
+    }
+}
+define_subset_enum!(PropertyNameLiteral from AstKind {
+    Sub(Identifier),
+    Sub(StringLiteralLike),
+    NumericLiteral,
+    JSXNamespacedName,
+    BigIntLiteral,
+});
+// endregion: 2370
+
+// region: 2383
+// Note: 'brands' in our syntax nodes serve to give us a small amount of nominal typing.
+// Consider 'Expression'.  Without the brand, 'Expression' is actually no different
+// (structurally) than 'Node'.  Because of this you can pass any Node to a function that
+// takes an Expression without any error.  By using the 'brands' we ensure that the type
+// checker actually thinks you have something of the right type.  Note: the brands are
+// never actually given values.  At runtime they have zero cost.
+
+define_subset_enum!(AstKindExpression from AstKind {
+    NL(BooleanLiteral),
+    NL(NullLiteral),
+    NumericLiteral,
+    BigIntLiteral,
+    RegExpLiteral,
+    StringLiteral,
+    TemplateLiteral,
+    IdentifierReference,
+    MetaProperty,
+    NL(Super),
+    ArrayExpression,
+    ArrowFunctionExpression,
+    AssignmentExpression,
+    AwaitExpression,
+    GeneralBinaryExpression,
+    CallExpression,
+    ChainExpression,
+    Class,
+    ConditionalExpression,
+    Function,
+    ImportExpression,
+    LogicalExpression,
+    NewExpression,
+    ObjectExpression,
+    ParenthesizedExpression,
+    SequenceExpression,
+    TaggedTemplateExpression,
+    NL(ThisExpression),
+    UnaryExpression,
+    UpdateExpression,
+    YieldExpression,
+    PrivateInExpression,
+    JSXElement,
+    JSXFragment,
+    TSAsExpression,
+    TSSatisfiesExpression,
+    TSTypeAssertion,
+    TSNonNullExpression,
+    TSInstantiationExpression,
+    ElementAccessExpression,
+    StaticMemberExpression,
+    PrivateFieldExpression,
+});
+
+impl<'a> AstKindExpression<'a> {
+    pub fn from_expression(expr: &'a Expression<'a>) -> Self { AstKindExpression::from_ast_kind(&expr.to_ast_kind()).unwrap() }
+}
+// endregion: 2394
+
 // region: 2642
 define_subset_enum!(BinaryExpression from AstKind {
     GeneralBinaryExpression,
@@ -663,15 +769,42 @@ define_subset_enum!(EntityNameOrEntityNameExpression from AstKind {
     Sub(EntityNameExpression),
 });
 define_subset_enum!(AccessExpression from AstKind {
-    PropertyAccessExpression,
+    Sub(PropertyAccessExpression),
     ElementAccessExpression,
 });
-// endregion: 2958
+impl<'a> AccessExpression<'a> {
+    pub fn object(&self) -> &'a Expression<'a> {
+        match self {
+            AccessExpression::PropertyAccessExpression(expr) => &expr.object(),
+            AccessExpression::ElementAccessExpression(expr) => &expr.object,
+        }
+    }
+}
+
+define_subset_enum!(PropertyAccessExpression from AstKind {
+    StaticMemberExpression,
+    PrivateFieldExpression,
+});
+impl<'a> PropertyAccessExpression<'a> {
+    pub fn object(&self) -> &'a Expression<'a> {
+        match self {
+            PropertyAccessExpression::StaticMemberExpression(expr) => &expr.object,
+            PropertyAccessExpression::PrivateFieldExpression(expr) => &expr.object,
+        }
+    }
+    pub fn property(&self) -> Identifier<'a> {
+        match self {
+            PropertyAccessExpression::StaticMemberExpression(expr) => Identifier::IdentifierName(&expr.property),
+            PropertyAccessExpression::PrivateFieldExpression(expr) => Identifier::PrivateIdentifier(&expr.field),
+        }
+    }
+}
+// endregion: 2966
 
 // region: 2986
 // todo(RB): this is supposed to be branded, may need to change
 define_subset_enum!(PropertyAccessEntityNameExpression from AstKind {
-    PropertyAccessExpression,
+    Sub(PropertyAccessExpression)
 });
 // endregion: 2991
 
@@ -845,6 +978,29 @@ impl NamedDeclaration for TSModuleDeclaration<'_> {
 //     | EntityName
 //     | ExternalModuleReference;
 // endregion: 3644
+
+// region: 3690
+// In case of:
+// import d from "mod" => name = d, namedBinding = undefined
+// import * as ns from "mod" => name = undefined, namedBinding: NamespaceImport = { name: ns }
+// import d, * as ns from "mod" => name = d, namedBinding: NamespaceImport = { name: ns }
+// import { a, b as x } from "mod" => name = undefined, namedBinding: NamedImports = { elements: [{ name: a }, { name: x, propertyName: b}]}
+// import d, { a, b as x } from "mod" => name = d, namedBinding: NamedImports = { elements: [{ name: a }, { name: x, propertyName: b}]}
+define_subset_enum!(ImportClause from NamedDeclaration { // based on ImportDeclarationSpecifier
+    ImportSpecifier,
+    ImportDefaultSpecifier,
+    ImportNamespaceSpecifier,
+});
+impl NamedDeclaration for ImportClause<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            ImportClause::ImportSpecifier(import_specifier) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&import_specifier.local)))),
+            ImportClause::ImportDefaultSpecifier(import_default_specifier) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&import_default_specifier.local)))),
+            ImportClause::ImportNamespaceSpecifier(import_namespace_specifier) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&import_namespace_specifier.local)))),
+        }
+    }
+}
+// endregion: 3704
 
 // region: 3713
 // export type ImportAttributeName = Identifier | StringLiteral;
@@ -2816,6 +2972,32 @@ impl Extension {
     }
 }
 // endregion: 7976
+
+// region: 8499
+define_flags!(OuterExpressionKinds {
+    Parentheses = 1 << 0,
+    TypeAssertions = 1 << 1,
+    NonNullAssertions = 1 << 2,
+    PartiallyEmittedExpressions = 1 << 3,
+    ExpressionsWithTypeArguments = 1 << 4,
+
+    Assertions = Self::TypeAssertions.0 | Self::NonNullAssertions.0,
+    All = Self::Parentheses.0 | Self::Assertions.0 | Self::PartiallyEmittedExpressions.0 | Self::ExpressionsWithTypeArguments.0,
+
+    ExcludeJSDocTypeAssertion = 1 << 31,
+});
+
+define_subset_enum!(OuterExpression from AstKind {
+    ParenthesizedExpression,
+    TSTypeAssertion,
+    TSSatisfiesExpression,
+    TSAsExpression,
+    TSNonNullExpression,
+    TSTypeParameterDeclaration,
+    // !rb skipping PartiallyEmittedExpression
+    // PartiallyEmittedExpression,
+});
+// endregion: 8522
 
 // region: 9915
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

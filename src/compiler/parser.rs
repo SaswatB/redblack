@@ -145,10 +145,10 @@ pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> SourceF
     let ret = Parser::new(&ALLOCATOR, &source_text, source_type).with_options(ParseOptions { parse_regular_expression: true, ..ParseOptions::default() }).parse();
     result = ret.source_file;
     result.set_filepath(path.to_path_buf());
-    result.set_package_json_scope(None); // todo
-    result.set_external_module_indicator(isFileProbablyExternalModule(&result));
+    result.set_packageJsonScope(None); // todo
+    result.set_externalModuleIndicator(isFileProbablyExternalModule(&result));
     let tc_host = &*RB_CTX.get_type_checker_host();
-    result.set_implied_node_format(getImpliedNodeFormatForFile(file_name, tc_host, tc_host.getCompilerOptions()));
+    result.set_impliedNodeFormat(getImpliedNodeFormatForFile(file_name, tc_host, tc_host.getCompilerOptions()));
 
     // performance::mark("afterParse");
     // performance::measure("Parse", "beforeParse", "afterParse");
@@ -159,5 +159,5 @@ pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> SourceF
 
 // region: 1384
 // See also `isExternalOrCommonJsModule` in utilities.ts
-pub fn isExternalModule(file: &SourceFile) -> bool { file.external_module_indicator() }
+pub fn isExternalModule(file: &SourceFile) -> bool { file.externalModuleIndicator() }
 // endregion: 1387

@@ -3,7 +3,7 @@ use oxc_ast::{
     AstKind,
 };
 
-use crate::compiler::types::Identifier;
+use crate::compiler::types::{Identifier, PropertyAccessExpression};
 
 // region: 234
 pub fn isNumericLiteral(node: &AstKind) -> bool { matches!(node, AstKind::NumericLiteral(_)) }
@@ -22,8 +22,10 @@ pub fn isClassStaticBlockDeclaration(node: Option<&AstKind>) -> bool { matches!(
 // endregion: 436
 
 // region: 583
-pub fn isPropertyAccessExpression(node: &AstKind) -> bool { matches!(node, AstKind::PropertyAccessExpression(_)) }
-// endregion: 587
+pub fn isPropertyAccessExpression(node: &AstKind) -> bool { PropertyAccessExpression::from_ast_kind(node).is_some() }
+
+pub fn isElementAccessExpression(node: &AstKind) -> bool { matches!(node, AstKind::ElementAccessExpression(_)) }
+// endregion: 591
 
 // region: 623
 pub fn isTypeOfExpression<'a>(node: &AstKind<'a>) -> Option<&'a UnaryExpression<'a>> {
