@@ -1,12 +1,12 @@
 use oxc_ast::{
     ast::{
         Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause,
-        ChainExpression, Class, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference,
-        ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern,
-        ObjectProperty, ParenthesizedExpression, PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration,
-        TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName,
-        TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameterDeclaration, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarator,
-        YieldExpression,
+        ChainExpression, Class, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, Expression, ExpressionWithTypeArguments, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator,
+        IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral,
+        ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression, PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement,
+        TSAsExpression, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSMappedType, TSMethodSignature,
+        TSModuleDeclaration, TSModuleDeclarationName, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression,
+        VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -3093,7 +3093,7 @@ define_subset_enum!(OuterExpression from AstKind {
     TSSatisfiesExpression,
     TSAsExpression,
     TSNonNullExpression,
-    TSTypeParameterDeclaration,
+    ExpressionWithTypeArguments,
     // !rb skipping PartiallyEmittedExpression
     // PartiallyEmittedExpression,
 });
