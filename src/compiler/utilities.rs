@@ -275,49 +275,49 @@ pub fn getErrorSpanForNode<'a>(source_file: &'a SourceFile<'a>, node: &AstKind<'
         // This list is a work in progress. Add missing node kinds to improve their error
         // spans.
         AstKind::VariableDeclarator(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         // BindingElement
         AstKind::BindingProperty(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::ArrayPatternElement(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::BindingRestElement(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         // end BindingElement
         AstKind::Class(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::TSInterfaceDeclaration(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::TSModuleDeclaration(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::TSEnumDeclaration(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::TSEnumMember(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::Function(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         // MethodDefinition moved below to handle constructor
         AstKind::TSTypeAliasDeclaration(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::PropertyDefinition(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::TSPropertySignature(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::ImportNamespaceSpecifier(n) => {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
         }
         AstKind::ArrowFunctionExpression(arrow) => {
             return getErrorSpanForArrowFunction(source_file, arrow);
@@ -351,7 +351,7 @@ pub fn getErrorSpanForNode<'a>(source_file: &'a SourceFile<'a>, node: &AstKind<'
             //     let end = scanner.get_token_end();
             //     return createTextSpanFromBounds(start, end); // todo(RB): figure out scanner
             // } else {
-            error_node = NamedDeclaration::name(*n).map(|n| n.to_ast_kind());
+            error_node = NamedDeclarationTrait::name(*n).map(|n| n.to_ast_kind());
             // }
         }
         _ => {}

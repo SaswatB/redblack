@@ -1,12 +1,13 @@
 use oxc_ast::{
     ast::{
         Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause,
-        ChainExpression, Class, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, Expression, ExpressionWithTypeArguments, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator,
-        IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral,
-        ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression, PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement,
-        TSAsExpression, TSCallSignatureDeclaration, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSMappedType, TSMethodSignature,
-        TSModuleDeclaration, TSModuleDeclarationName, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression,
-        VariableDeclarator, YieldExpression,
+        ChainExpression, Class, ClassExtends, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, DestructureBindingPatternKind, ElementAccessExpression, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, Expression,
+        ExpressionWithTypeArguments, ForInStatement, ForOfStatement, ForStatement, FormalParameter, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier,
+        JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, JSXSpreadAttribute, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression, PrivateFieldExpression,
+        PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements, TSConditionalType,
+        TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType, TSMethodSignature,
+        TSModuleDeclaration, TSModuleDeclarationName, TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression, TemplateLiteral, ThisExpression,
+        UnaryExpression, UpdateExpression, VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -38,16 +39,10 @@ pub struct TypePredicateNode;
 pub struct TypeParameter;
 
 #[derive(Debug)]
-pub struct ExportSpecifier;
-
-#[derive(Debug)]
 pub struct AssignmentPattern;
 
 #[derive(Debug)]
 pub struct EmitTextWriter;
-
-#[derive(Debug)]
-pub struct ObjectLiteralElementLike;
 
 #[derive(Debug)]
 pub struct JsxAttributeLike;
@@ -344,6 +339,21 @@ impl<'a> Identifier<'a> {
         }
     }
 }
+impl<'a> NamedDeclarationTrait for Identifier<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
+impl<'a> NamedDeclarationTrait for IdentifierName<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
+impl<'a> NamedDeclarationTrait for BindingIdentifier<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
+impl<'a> NamedDeclarationTrait for IdentifierReference<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
+impl<'a> NamedDeclarationTrait for PrivateIdentifier<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
 // endregion: 1703
 
 // region: 1724
@@ -381,12 +391,104 @@ define_subset_enum!(DeclarationName from AstKind {
 //     /** @internal */ symbol: Symbol; // Symbol declared by node (initialized by binding)
 //     /** @internal */ localSymbol?: Symbol; // Local symbol declared by node (initialized by binding only for exported nodes)
 // }
+define_subset_enum!(NamedDeclaration from AstKind {
+    // Sub(DynamicNamedDeclaration),
+    Sub(DeclarationStatement),
+    TSTypeParameter,
+    Sub(SignatureDeclaration),
+    VariableDeclarator,
+    Sub(ParameterDeclaration),
+    Sub(BindingElement),
+    Sub(ObjectLiteralElement),
+    Sub(PropertyAccessExpression),
+    Class,
+    Sub(TypeElement),
+    TSEnumMember,
+    Sub(ImportClause),
+    ImportNamespaceSpecifier,
+    TSNamespaceExportDeclaration,
+    ImportSpecifier,
+    ExportSpecifier,
+    // ! rb ignoring jsdoc
+    // JSDocTypedefTag,
+    // JSDocCallbackTag,
+});
+impl<'a> NamedDeclarationTrait for NamedDeclaration<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            NamedDeclaration::DeclarationStatement(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::TSTypeParameter(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::SignatureDeclaration(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::VariableDeclarator(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::ParameterDeclaration(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::BindingElement(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::ObjectLiteralElement(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::PropertyAccessExpression(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::Class(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::TypeElement(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::TSEnumMember(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::ImportClause(n) => NamedDeclarationTrait::name(n),
+            NamedDeclaration::ImportNamespaceSpecifier(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::TSNamespaceExportDeclaration(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::ImportSpecifier(n) => NamedDeclarationTrait::name(*n),
+            NamedDeclaration::ExportSpecifier(n) => NamedDeclarationTrait::name(*n),
+        }
+    }
+}
 
-pub trait NamedDeclaration {
+pub trait NamedDeclarationTrait {
     fn name(&self) -> Option<DeclarationName<'_>>;
 }
 
-// endregion: 1759
+/** @internal */
+// define_subset_enum!(DynamicNamedDeclaration from AstKind {
+//     LateBoundDeclaration
+// });
+// endregion: 1765
+
+// region: 1786
+
+define_subset_enum!(DeclarationStatement from AstKind {
+    Function,
+    // MissingDeclaration,
+    Class,
+    TSInterfaceDeclaration,
+    TSTypeAliasDeclaration,
+    TSEnumDeclaration,
+    TSModuleDeclaration,
+    TSImportEqualsDeclaration,
+    TSNamespaceExportDeclaration,
+    Sub(ExportDeclaration),
+    TSExportAssignment,
+    ExportDefaultDeclaration,
+});
+
+impl<'a> NamedDeclarationTrait for DeclarationStatement<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            DeclarationStatement::Function(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::Class(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::TSInterfaceDeclaration(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::TSTypeAliasDeclaration(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::TSEnumDeclaration(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::TSModuleDeclaration(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::TSImportEqualsDeclaration(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::TSNamespaceExportDeclaration(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::ExportDeclaration(n) => NamedDeclarationTrait::name(n),
+            DeclarationStatement::TSExportAssignment(n) => NamedDeclarationTrait::name(*n),
+            DeclarationStatement::ExportDefaultDeclaration(n) => NamedDeclarationTrait::name(*n),
+        }
+    }
+}
+
+// endregion: 1790
+
+// region: 1821
+// export interface TypeParameterDeclaration extends NamedDeclaration, JSDocContainer {
+impl NamedDeclarationTrait for TSTypeParameter<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.name.to_ast_kind()).expect("TSTypeParameter must have a name?")) }
+}
+// endregion: 1834
 
 // region: 1844
 define_subset_enum!(SignatureDeclaration from AstKind {
@@ -418,21 +520,62 @@ define_subset_enum!(SignatureDeclaration from AstKind {
     // ArrowFunction
     ArrowFunctionExpression,
 });
-// endregion: 1857
+impl<'a> NamedDeclarationTrait for SignatureDeclaration<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            SignatureDeclaration::TSCallSignatureDeclaration(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::TSConstructSignatureDeclaration(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::TSMethodSignature(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::TSIndexSignature(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::TSFunctionType(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::TSConstructorType(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::Function(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::MethodDefinition(n) => NamedDeclarationTrait::name(*n),
+            SignatureDeclaration::ArrowFunctionExpression(n) => NamedDeclarationTrait::name(*n),
+        }
+    }
+}
 
-// region: 1869
-impl NamedDeclaration for VariableDeclarator<'_> {
+// export interface CallSignatureDeclaration extends SignatureDeclarationBase, TypeElement, LocalsContainer {
+impl NamedDeclarationTrait for TSCallSignatureDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+
+// export interface ConstructSignatureDeclaration extends SignatureDeclarationBase, TypeElement, LocalsContainer {
+impl NamedDeclarationTrait for TSConstructSignatureDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+
+// export type BindingName = Identifier | BindingPattern;
+
+impl NamedDeclarationTrait for VariableDeclarator<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.id)) }
 }
 // endregion: 1877
 
-// region: 1899
+// region: 1887
+define_subset_enum!(ParameterDeclaration from AstKind {
+    FormalParameter,
+    BindingRestElement,
+});
+impl<'a> NamedDeclarationTrait for ParameterDeclaration<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            ParameterDeclaration::FormalParameter(formal_parameter) => NamedDeclarationTrait::name(*formal_parameter),
+            ParameterDeclaration::BindingRestElement(binding_rest_element) => NamedDeclarationTrait::name(*binding_rest_element),
+        }
+    }
+}
+impl<'a> NamedDeclarationTrait for FormalParameter<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.pattern)) }
+}
+
 define_subset_enum!(BindingElement from AstKind {
     BindingProperty,
     ArrayPatternElement,
     BindingRestElement,
 });
-impl NamedDeclaration for BindingElement<'_> {
+impl NamedDeclarationTrait for BindingElement<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> {
         match self {
             BindingElement::BindingProperty(binding_property) => binding_property.name(),
@@ -441,10 +584,10 @@ impl NamedDeclaration for BindingElement<'_> {
         }
     }
 }
-impl NamedDeclaration for BindingProperty<'_> {
+impl NamedDeclarationTrait for BindingProperty<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.value)) }
 }
-impl NamedDeclaration for ArrayPatternElement<'_> {
+impl NamedDeclarationTrait for ArrayPatternElement<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> {
         if let Some(element) = &self.element {
             Some(DeclarationName::DestructureBindingPattern(element))
@@ -453,42 +596,21 @@ impl NamedDeclaration for ArrayPatternElement<'_> {
         }
     }
 }
-impl NamedDeclaration for BindingRestElement<'_> {
+impl NamedDeclarationTrait for BindingRestElement<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::DestructureBindingPattern(&self.argument)) }
 }
 
 // /** @internal */
 // export type BindingElementGrandparent = BindingElement["parent"]["parent"];
 
-// // dprint-ignore
-// export interface PropertySignature extends TypeElement, JSDocContainer {
-//     readonly kind: SyntaxKind.PropertySignature;
-//     readonly parent: TypeLiteralNode | InterfaceDeclaration;
-//     readonly modifiers?: NodeArray<Modifier>;
-//     readonly name: PropertyName;                 // Declared property name
-//     readonly questionToken?: QuestionToken;      // Present on optional property
-//     readonly type?: TypeNode;                    // Optional type annotation
-
-//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
-//     /** @internal */ readonly initializer?: Expression | undefined; // A property signature cannot have an initializer
-// }
-impl NamedDeclaration for TSPropertySignature<'_> {
+// export interface PropertySignature extends TypeElement, JSDocContainer
+impl NamedDeclarationTrait for TSPropertySignature<'_> {
     // ! rb typescript says that name is a PropertyName, but Oxc says name is a PropertyKey. Idk, so we use a potentially lossy conversion
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.key.to_ast_kind()).expect("TSPropertySignature must have a name?")) }
 }
 
-// // dprint-ignore
-// export interface PropertyDeclaration extends ClassElement, JSDocContainer {
-//     readonly kind: SyntaxKind.PropertyDeclaration;
-//     readonly parent: ClassLikeDeclaration;
-//     readonly modifiers?: NodeArray<ModifierLike>;
-//     readonly name: PropertyName;
-//     readonly questionToken?: QuestionToken;      // Present for use with reporting a grammar error for auto-accessors (see `isGrammarError` in utilities.ts)
-//     readonly exclamationToken?: ExclamationToken;
-//     readonly type?: TypeNode;
-//     readonly initializer?: Expression;           // Optional initializer
-// }
-impl NamedDeclaration for PropertyDefinition<'_> {
+// export interface PropertyDeclaration extends ClassElement, JSDocContainer
+impl NamedDeclarationTrait for PropertyDefinition<'_> {
     // ! rb typescript says that name is a PropertyName, but Oxc says name is a PropertyKey. Idk, so we use a potentially lossy conversion
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.key.to_ast_kind()).expect("PropertyDefinition must have a name?")) }
 }
@@ -529,7 +651,42 @@ impl NamedDeclaration for PropertyDefinition<'_> {
 
 // /** @internal */
 // export type InitializedPropertyDeclaration = PropertyDeclaration & { readonly initializer: Expression; };
-// endregion: 1974
+
+// export interface ObjectLiteralElement extends NamedDeclaration {
+define_subset_enum!(ObjectLiteralElement from AstKind {
+    ObjectProperty,
+    SpreadElement,
+    MethodDefinition,
+    JSXSpreadAttribute,
+});
+impl NamedDeclarationTrait for ObjectLiteralElement<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            ObjectLiteralElement::ObjectProperty(object_property) => NamedDeclarationTrait::name(*object_property),
+            ObjectLiteralElement::SpreadElement(spread_element) => NamedDeclarationTrait::name(*spread_element),
+            ObjectLiteralElement::MethodDefinition(method_definition) => NamedDeclarationTrait::name(*method_definition),
+            ObjectLiteralElement::JSXSpreadAttribute(jsx_spread_attribute) => NamedDeclarationTrait::name(*jsx_spread_attribute),
+        }
+    }
+}
+
+define_subset_enum!(ObjectLiteralElementLike from AstKind {
+    ObjectProperty,
+    SpreadElement,
+    MethodDefinition,
+});
+
+// export interface PropertyAssignment extends ObjectLiteralElement, JSDocContainer {
+// export interface ShorthandPropertyAssignment extends ObjectLiteralElement, JSDocContainer {
+impl NamedDeclarationTrait for ObjectProperty<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { DeclarationName::from_ast_kind(&self.key.to_ast_kind()) }
+}
+
+// export interface SpreadAssignment extends ObjectLiteralElement, JSDocContainer {
+impl NamedDeclarationTrait for SpreadElement<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { DeclarationName::from_ast_kind(&self.argument.to_ast_kind()) }
+}
+// endregion: 2020
 
 // region: 2046
 define_subset_enum!(BindingPattern from AstKind {
@@ -573,27 +730,14 @@ define_subset_enum!(ArrayBindingElement from AstKind {
 // export type FunctionLike = SignatureDeclaration;
 
 // export interface FunctionDeclaration extends FunctionLikeDeclarationBase, DeclarationStatement, LocalsContainer {
-//     readonly kind: SyntaxKind.FunctionDeclaration;
-//     readonly modifiers?: NodeArray<ModifierLike>;
-//     readonly name?: Identifier;
-//     readonly body?: FunctionBody;
-// }
-impl NamedDeclaration for Function<'_> {
-    fn name(&self) -> Option<DeclarationName<'_>> {
-        if let Some(id) = &self.id {
-            Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(id))))
-        } else {
-            None
-        }
-    }
+impl NamedDeclarationTrait for Function<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { self.id.as_ref().map(|id| DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(id)))) }
 }
 
 // export interface MethodSignature extends SignatureDeclarationBase, TypeElement, LocalsContainer {
-//     readonly kind: SyntaxKind.MethodSignature;
-//     readonly parent: TypeLiteralNode | InterfaceDeclaration;
-//     readonly modifiers?: NodeArray<Modifier>;
-//     readonly name: PropertyName;
-// }
+impl NamedDeclarationTrait for TSMethodSignature<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { DeclarationName::from_ast_kind(&self.key.to_ast_kind()) }
+}
 
 // // Note that a MethodDeclaration is considered both a ClassElement and an ObjectLiteralElement.
 // // Both the grammars for ClassDeclaration and ObjectLiteralExpression allow for MethodDeclarations
@@ -614,7 +758,7 @@ impl NamedDeclaration for Function<'_> {
 //     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
 //     /** @internal */ readonly exclamationToken?: ExclamationToken | undefined; // A method cannot have an exclamation token
 // }
-impl NamedDeclaration for MethodDefinition<'_> {
+impl NamedDeclarationTrait for MethodDefinition<'_> {
     // ! rb typescript says that name is a PropertyName, but Oxc says name is a PropertyKey. Idk, so we use a potentially lossy conversion
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.key.to_ast_kind()).expect("MethodDefinition must have a name?")) }
 }
@@ -664,7 +808,24 @@ impl NamedDeclaration for MethodDefinition<'_> {
 // }
 
 // export type AccessorDeclaration = GetAccessorDeclaration | SetAccessorDeclaration;
-// endregion: 2159
+
+// export interface IndexSignatureDeclaration extends SignatureDeclarationBase, ClassElement, TypeElement, LocalsContainer {
+impl NamedDeclarationTrait for TSIndexSignature<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+// endregion: 2166
+
+// region: 2222
+// export interface FunctionTypeNode extends FunctionOrConstructorTypeNodeBase, LocalsContainer {
+impl NamedDeclarationTrait for TSFunctionType<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+
+// export interface ConstructorTypeNode extends FunctionOrConstructorTypeNodeBase, LocalsContainer {
+impl NamedDeclarationTrait for TSConstructorType<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+// endregion: 2234
 
 // region: 2367
 define_subset_enum!(StringLiteralLike from AstKind {
@@ -823,7 +984,33 @@ impl<'a> BinaryExpression<'a> {
 }
 // endregion: 2649
 
-// region: 2956
+// region: 2741
+// export interface FunctionExpression extends PrimaryExpression, FunctionLikeDeclarationBase, JSDocContainer, LocalsContainer, FlowContainer {
+// defined under FunctionDeclaration
+
+// export interface ArrowFunction extends Expression, FunctionLikeDeclarationBase, JSDocContainer, LocalsContainer, FlowContainer {
+impl NamedDeclarationTrait for ArrowFunctionExpression<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+// endregion: 2756
+
+// region: 2938
+/**
+ * This interface is a base interface for ObjectLiteralExpression and JSXAttributes to extend from. JSXAttributes is similar to
+ * ObjectLiteralExpression in that it contains array of properties; however, JSXAttributes' properties can only be
+ * JSXAttribute or JSXSpreadAttribute. ObjectLiteralExpression, on the other hand, can only have properties of type
+ * ObjectLiteralElement (e.g. PropertyAssignment, ShorthandPropertyAssignment etc.)
+ */
+// export interface ObjectLiteralExpressionBase<T extends ObjectLiteralElement> extends PrimaryExpression, Declaration {
+define_subset_enum!(ObjectLiteralExpressionBase from AstKind {
+    ObjectExpression,
+    JSXAttribute,
+    JSXSpreadAttribute,
+});
+
+// An ObjectLiteralExpression is the declaration node for an anonymous symbol.
+// export interface ObjectLiteralExpression extends ObjectLiteralExpressionBase<ObjectLiteralElementLike>, JSDocContainer {
+
 define_subset_enum!(EntityNameExpression from AstKind {
     Sub(Identifier),
     Sub(PropertyAccessEntityNameExpression),
@@ -864,6 +1051,20 @@ impl<'a> PropertyAccessExpression<'a> {
         }
     }
 }
+impl NamedDeclarationTrait for PropertyAccessExpression<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            PropertyAccessExpression::StaticMemberExpression(expr) => NamedDeclarationTrait::name(*expr),
+            PropertyAccessExpression::PrivateFieldExpression(expr) => NamedDeclarationTrait::name(*expr),
+        }
+    }
+}
+impl NamedDeclarationTrait for StaticMemberExpression<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { NamedDeclarationTrait::name(&self.property) }
+}
+impl NamedDeclarationTrait for PrivateFieldExpression<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { NamedDeclarationTrait::name(&self.field) }
+}
 // endregion: 2966
 
 // region: 2986
@@ -894,8 +1095,16 @@ define_subset_enum!(CallLikeExpression from AstKind {
 });
 // endregion: 3129
 
+// region: 3270
+// export interface JsxSpreadAttribute extends ObjectLiteralElement {
+impl NamedDeclarationTrait for JSXSpreadAttribute<'_> {
+    // !rb idk how to get a name here
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+// endregion: 3276
+
 // region: 3520
-// export interface ClassLikeDeclarationBase extends NamedDeclaration, JSDocContainer {
+// export interface ClassLikeDeclarationBase extends NamedDeclarationTrait, JSDocContainer {
 //     readonly kind: SyntaxKind.ClassDeclaration | SyntaxKind.ClassExpression;
 //     readonly name?: Identifier;
 //     readonly typeParameters?: NodeArray<TypeParameterDeclaration>;
@@ -915,7 +1124,7 @@ define_subset_enum!(CallLikeExpression from AstKind {
 //     readonly modifiers?: NodeArray<ModifierLike>;
 // }
 
-impl NamedDeclaration for Class<'_> {
+impl NamedDeclarationTrait for Class<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> {
         if let Some(id) = &self.id {
             Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(id))))
@@ -926,9 +1135,28 @@ impl NamedDeclaration for Class<'_> {
 }
 
 pub type ClassLikeDeclaration<'a> = Class<'a>;
-// endregion: 3544
 
-// region: 3555
+define_subset_enum!(TypeElement from AstKind {
+    TSCallSignatureDeclaration,
+    TSConstructSignatureDeclaration,
+    TSPropertySignature,
+    TSMethodSignature,
+    MethodDefinition,
+    TSIndexSignature,
+});
+impl<'a> NamedDeclarationTrait for TypeElement<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            TypeElement::TSCallSignatureDeclaration(expr) => NamedDeclarationTrait::name(*expr),
+            TypeElement::TSConstructSignatureDeclaration(expr) => NamedDeclarationTrait::name(*expr),
+            TypeElement::TSPropertySignature(expr) => NamedDeclarationTrait::name(*expr),
+            TypeElement::TSMethodSignature(expr) => NamedDeclarationTrait::name(*expr),
+            TypeElement::MethodDefinition(expr) => NamedDeclarationTrait::name(*expr),
+            TypeElement::TSIndexSignature(expr) => NamedDeclarationTrait::name(*expr),
+        }
+    }
+}
+
 // export interface InterfaceDeclaration extends DeclarationStatement, JSDocContainer {
 //     readonly kind: SyntaxKind.InterfaceDeclaration;
 //     readonly modifiers?: NodeArray<ModifierLike>;
@@ -937,16 +1165,15 @@ pub type ClassLikeDeclaration<'a> = Class<'a>;
 //     readonly heritageClauses?: NodeArray<HeritageClause>;
 //     readonly members: NodeArray<TypeElement>;
 // }
-impl NamedDeclaration for TSInterfaceDeclaration<'_> {
+impl NamedDeclarationTrait for TSInterfaceDeclaration<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
 }
 
-// export interface HeritageClause extends Node {
-//     readonly kind: SyntaxKind.HeritageClause;
-//     readonly parent: InterfaceDeclaration | ClassLikeDeclaration;
-//     readonly token: SyntaxKind.ExtendsKeyword | SyntaxKind.ImplementsKeyword;
-//     readonly types: NodeArray<ExpressionWithTypeArguments>;
-// }
+define_subset_enum!(HeritageClause from AstKind {
+    TSInterfaceHeritage,
+    TSClassImplements,
+    ClassExtends,
+});
 
 // export interface TypeAliasDeclaration extends DeclarationStatement, JSDocContainer, LocalsContainer {
 //     readonly kind: SyntaxKind.TypeAliasDeclaration;
@@ -955,11 +1182,11 @@ impl NamedDeclaration for TSInterfaceDeclaration<'_> {
 //     readonly typeParameters?: NodeArray<TypeParameterDeclaration>;
 //     readonly type: TypeNode;
 // }
-impl NamedDeclaration for TSTypeAliasDeclaration<'_> {
+impl NamedDeclarationTrait for TSTypeAliasDeclaration<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
 }
 
-// export interface EnumMember extends NamedDeclaration, JSDocContainer {
+// export interface EnumMember extends NamedDeclarationTrait, JSDocContainer {
 //     readonly kind: SyntaxKind.EnumMember;
 //     readonly parent: EnumDeclaration;
 //     // This does include ComputedPropertyName, but the parser will give an error
@@ -967,7 +1194,7 @@ impl NamedDeclaration for TSTypeAliasDeclaration<'_> {
 //     readonly name: PropertyName;
 //     readonly initializer?: Expression;
 // }
-impl NamedDeclaration for TSEnumMember<'_> {
+impl NamedDeclarationTrait for TSEnumMember<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> {
         match &self.id {
             TSEnumMemberName::Identifier(identifier) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::IdentifierName(identifier)))),
@@ -982,7 +1209,7 @@ impl NamedDeclaration for TSEnumMember<'_> {
 //     readonly name: Identifier;
 //     readonly members: NodeArray<EnumMember>;
 // }
-impl NamedDeclaration for TSEnumDeclaration<'_> {
+impl NamedDeclarationTrait for TSEnumDeclaration<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
 }
 
@@ -1006,7 +1233,7 @@ impl NamedDeclaration for TSEnumDeclaration<'_> {
 //     readonly name: ModuleName;
 //     readonly body?: ModuleBody | JSDocNamespaceDeclaration;
 // }
-impl NamedDeclaration for TSModuleDeclaration<'_> {
+impl NamedDeclarationTrait for TSModuleDeclaration<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> {
         match &self.id {
             TSModuleDeclarationName::Identifier(id) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&id)))),
@@ -1042,7 +1269,17 @@ impl NamedDeclaration for TSModuleDeclaration<'_> {
 // export type ModuleReference =
 //     | EntityName
 //     | ExternalModuleReference;
-// endregion: 3644
+
+/**
+ * One of:
+ * - import x = require("mod");
+ * - import x = M.x;
+ */
+// export interface ImportEqualsDeclaration extends DeclarationStatement, JSDocContainer {
+impl NamedDeclarationTrait for TSImportEqualsDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.id)))) }
+}
+// endregion: 3661
 
 // region: 3690
 // In case of:
@@ -1051,12 +1288,12 @@ impl NamedDeclaration for TSModuleDeclaration<'_> {
 // import d, * as ns from "mod" => name = d, namedBinding: NamespaceImport = { name: ns }
 // import { a, b as x } from "mod" => name = undefined, namedBinding: NamedImports = { elements: [{ name: a }, { name: x, propertyName: b}]}
 // import d, { a, b as x } from "mod" => name = d, namedBinding: NamedImports = { elements: [{ name: a }, { name: x, propertyName: b}]}
-define_subset_enum!(ImportClause from NamedDeclaration { // based on ImportDeclarationSpecifier
+define_subset_enum!(ImportClause from NamedDeclarationTrait { // based on ImportDeclarationSpecifier
     ImportSpecifier,
     ImportDefaultSpecifier,
     ImportNamespaceSpecifier,
 });
-impl NamedDeclaration for ImportClause<'_> {
+impl NamedDeclarationTrait for ImportClause<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> {
         match self {
             ImportClause::ImportSpecifier(import_specifier) => Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&import_specifier.local)))),
@@ -1086,40 +1323,37 @@ impl NamedDeclaration for ImportClause<'_> {
 // }
 
 // export interface NamespaceImport extends NamedDeclaration {
-//     readonly kind: SyntaxKind.NamespaceImport;
-//     readonly parent: ImportClause;
-//     readonly name: Identifier;
-// }
-impl NamedDeclaration for ImportNamespaceSpecifier<'_> {
+impl NamedDeclarationTrait for ImportNamespaceSpecifier<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.local)))) }
 }
 
 // export interface NamespaceExport extends NamedDeclaration {
-//     readonly kind: SyntaxKind.NamespaceExport;
-//     readonly parent: ExportDeclaration;
-//     readonly name: ModuleExportName;
-// }
 
 // export interface NamespaceExportDeclaration extends DeclarationStatement, JSDocContainer {
-//     readonly kind: SyntaxKind.NamespaceExportDeclaration;
-//     readonly name: Identifier;
-
-//     // The following properties are used only to report grammar errors (see `isGrammarError` in utilities.ts)
-//     /** @internal */ readonly modifiers?: NodeArray<ModifierLike> | undefined;
-// }
+impl NamedDeclarationTrait for TSNamespaceExportDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::IdentifierName(&self.id)))) }
+}
 
 // export interface ExportDeclaration extends DeclarationStatement, JSDocContainer {
-//     readonly kind: SyntaxKind.ExportDeclaration;
-//     readonly parent: SourceFile | ModuleBlock;
-//     readonly modifiers?: NodeArray<ModifierLike>;
-//     readonly isTypeOnly: boolean;
-//     /** Will not be assigned in the case of `export * from "foo";` */
-//     readonly exportClause?: NamedExportBindings;
-//     /** If this is not a StringLiteral it will be a grammar error. */
-//     readonly moduleSpecifier?: Expression;
-//     /** @deprecated */ readonly assertClause?: AssertClause;
-//     readonly attributes?: ImportAttributes;
-// }
+define_subset_enum!(ExportDeclaration from AstKind {
+    ExportAllDeclaration,
+    ExportNamedDeclaration,
+    // does not include ExportDefaultDeclaration, that's under ExportAssignment
+});
+impl NamedDeclarationTrait for ExportDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            ExportDeclaration::ExportAllDeclaration(n) => NamedDeclarationTrait::name(*n),
+            ExportDeclaration::ExportNamedDeclaration(n) => NamedDeclarationTrait::name(*n),
+        }
+    }
+}
+impl NamedDeclarationTrait for ExportAllDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { self.exported.as_ref().map(|exported| DeclarationName::from_ast_kind(&exported.to_ast_kind()).unwrap()) }
+}
+impl NamedDeclarationTrait for ExportNamedDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
 
 // export interface NamedImports extends Node {
 //     readonly kind: SyntaxKind.NamedImports;
@@ -1136,20 +1370,14 @@ impl NamedDeclaration for ImportNamespaceSpecifier<'_> {
 // export type NamedImportsOrExports = NamedImports | NamedExports;
 
 // export interface ImportSpecifier extends NamedDeclaration {
-//     readonly kind: SyntaxKind.ImportSpecifier;
-//     readonly parent: NamedImports;
-//     readonly propertyName?: ModuleExportName; // Name preceding "as" keyword (or undefined when "as" is absent)
-//     readonly name: Identifier; // Declared name
-//     readonly isTypeOnly: boolean;
-// }
+impl NamedDeclarationTrait for ImportSpecifier<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::EntityNameExpression(EntityNameExpression::Identifier(Identifier::BindingIdentifier(&self.local)))) }
+}
 
 // export interface ExportSpecifier extends NamedDeclaration, JSDocContainer {
-//     readonly kind: SyntaxKind.ExportSpecifier;
-//     readonly parent: NamedExports;
-//     readonly isTypeOnly: boolean;
-//     readonly propertyName?: ModuleExportName; // Name preceding "as" keyword (or undefined when "as" is absent)
-//     readonly name: ModuleExportName; // Declared name
-// }
+impl NamedDeclarationTrait for ExportSpecifier<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.local.to_ast_kind()).expect("ExportSpecifier should have a name")) }
+}
 
 // export type ModuleExportName = Identifier | StringLiteral;
 
@@ -1184,12 +1412,24 @@ impl NamedDeclaration for ImportNamespaceSpecifier<'_> {
 //  * Unless `isExportEquals` is set, this node was parsed as an `export default`.
 //  */
 // export interface ExportAssignment extends DeclarationStatement, JSDocContainer {
-//     readonly kind: SyntaxKind.ExportAssignment;
-//     readonly parent: SourceFile;
-//     readonly modifiers?: NodeArray<ModifierLike>;
-//     readonly isExportEquals?: boolean;
-//     readonly expression: Expression;
-// }
+define_subset_enum!(ExportAssignment from AstKind {
+    TSExportAssignment,
+    ExportDefaultDeclaration,
+});
+impl NamedDeclarationTrait for ExportAssignment<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> {
+        match self {
+            ExportAssignment::TSExportAssignment(n) => NamedDeclarationTrait::name(*n),
+            ExportAssignment::ExportDefaultDeclaration(n) => NamedDeclarationTrait::name(*n),
+        }
+    }
+}
+impl NamedDeclarationTrait for TSExportAssignment<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
+impl NamedDeclarationTrait for ExportDefaultDeclaration<'_> {
+    fn name(&self) -> Option<DeclarationName<'_>> { None }
+}
 // endregion: 3833
 
 // region: 4120
@@ -1520,7 +1760,7 @@ pub trait TypeCheckerTrait<'a>: std::fmt::Debug {
     /** @internal */
     fn getContextualTypeWithFlags(&self, node: Expression<'a>, contextFlags: Option<ContextFlags>) -> Option<&dyn Type<'a>>;
     /** @internal */
-    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type<'a>>;
+    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike<'a>) -> Option<&dyn Type<'a>>;
     /** @internal */
     fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression<'a>, argIndex: usize) -> Option<&dyn Type<'a>>;
     /** @internal */
