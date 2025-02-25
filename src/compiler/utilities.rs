@@ -1,25 +1,22 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use super::factory::nodeTests::isIdentifier;
-use super::factory::nodeTests::isNumericLiteral;
-use super::factory::nodeTests::isPropertyAccessExpression;
+use super::factory::nodeTests::*;
 use super::factory::utilities::skipOuterExpressions;
 use super::rb_extra::SourceFileExt;
 use super::rb_unions::strings_to_string_or_numbers;
 use super::rb_unions::DeclarationNameOrQualifiedName;
 use super::rb_unions::StringOrDiagnosticMessageChain;
 use super::scanner::skipTrivia;
-use super::utilitiesPublic::createTextSpanFromBounds;
-use super::utilitiesPublic::escapeLeadingUnderscores;
-use super::utilitiesPublic::isStringLiteralLike;
+use super::utilitiesPublic::*;
+use crate::compiler::factory::nodeTests::isObjectLiteralExpression;
 use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
 use crate::compiler::rb_extra::AstKindExt;
 use crate::compiler::types::*;
 use crate::compiler::utilitiesPublic::createTextSpan;
-use oxc_ast::ast::ArrowFunctionExpression;
+use oxc_ast::ast::*;
 use oxc_ast::GetChildren;
 use oxc_ast::{ast::SourceFile, AstKind, Visit};
 use oxc_span::GetSpan;
@@ -415,7 +412,24 @@ pub fn isSourceFileJS(file: &SourceFile) -> bool { file.source_type.is_javascrip
 pub fn isInJSFile(node: &AstKind) -> bool { isSourceFileJS(getSourceFileOfNode(Some(node)).unwrap()) }
 // endregion: 3656
 
-// region: 3932
+// region: 3919
+/** @internal */
+pub fn getRightMostAssignedExpression<'a>(node: AstKind<'a>) -> AstKind<'a> {
+    let mut node = node;
+    while isAssignmentExpression(&node, Some(true)) {
+        node = BinaryExpression::from_ast_kind(&node).unwrap().right().to_ast_kind();
+    }
+    node
+}
+
+/** @internal */
+pub fn isExportsIdentifier(node: &AstKind) -> bool {
+    let Some(identifier) = Identifier::from_ast_kind(node) else {
+        return false;
+    };
+    identifier.name() == "exports"
+}
+
 /** @internal */
 pub fn isModuleIdentifier(node: &AstKind) -> bool {
     let Some(identifier) = Identifier::from_ast_kind(node) else {
@@ -436,7 +450,30 @@ pub fn isModuleExportsAccessExpression(node: &AstKind) -> bool {
     }
     getElementOrPropertyAccessName(&AccessExpression::from_ast_kind(node).unwrap()) == Some("exports".to_string())
 }
-// endregion: 3944
+
+/// Given a BinaryExpression, returns SpecialPropertyAssignmentKind for the various kinds of property
+/// assignments we treat as special in the binder
+/** @internal */
+pub fn getAssignmentDeclarationKind(expr: &AstKind) -> AssignmentDeclarationKind {
+    let special = getAssignmentDeclarationKindWorker(expr);
+    if special == AssignmentDeclarationKind::Property || isInJSFile(expr) {
+        special
+    } else {
+        AssignmentDeclarationKind::None
+    }
+}
+
+/** @internal */
+pub fn isBindableObjectDefinePropertyCall(expr: &CallExpression) -> bool {
+    expr.arguments.len() == 3
+        && isPropertyAccessExpression(&expr.callee.to_ast_kind())
+        && isIdentifier(&PropertyAccessExpression::from_ast_kind(&expr.callee.to_ast_kind()).unwrap().object().to_ast_kind())
+        && Identifier::from_ast_kind(&PropertyAccessExpression::from_ast_kind(&expr.callee.to_ast_kind()).unwrap().object().to_ast_kind()).unwrap().name() == "Object"
+        && PropertyAccessExpression::from_ast_kind(&expr.callee.to_ast_kind()).unwrap().property().name() == "defineProperty"
+        && isStringOrNumericLiteralLike(&expr.arguments[1].to_ast_kind())
+        && isBindableStaticNameExpression(&expr.arguments[0].to_ast_kind(), Some(true))
+}
+// endregion: 3963
 
 // region: 3970
 /**
@@ -448,9 +485,84 @@ pub fn isLiteralLikeElementAccess(node: &AstKind) -> bool {
     };
     isStringOrNumericLiteralLike(&element_access.argument_expression.to_ast_kind())
 }
-// endregion: 3977
 
-// region: 4041
+/**
+ * Any series of property and element accesses.
+ *
+ * @internal
+ */
+pub fn isBindableStaticAccessExpression(node: &AstKind, excludeThisKeyword: Option<bool>) -> bool {
+    if let Some(property_access) = PropertyAccessExpression::from_ast_kind(node) {
+        let exclude = excludeThisKeyword.unwrap_or(false);
+        !exclude && matches!(property_access.object().to_ast_kind(), AstKind::ThisExpression(_)) || isIdentifier(&property_access.property().to_ast_kind()) && isBindableStaticNameExpression(&property_access.object().to_ast_kind(), Some(true))
+    } else {
+        isBindableStaticElementAccessExpression(node, excludeThisKeyword)
+    }
+}
+
+/**
+ * Any series of property and element accesses, ending in a literal element access
+ *
+ * @internal
+ */
+pub fn isBindableStaticElementAccessExpression(node: &AstKind, excludeThisKeyword: Option<bool>) -> bool {
+    let AstKind::ElementAccessExpression(element_access) = node else {
+        return false;
+    };
+    isLiteralLikeElementAccess(node)
+        && ((!excludeThisKeyword.unwrap_or(false) && matches!(element_access.object.to_ast_kind(), AstKind::ThisExpression(_))) || isEntityNameExpression(&element_access.object.to_ast_kind()) || isBindableStaticAccessExpression(&element_access.object.to_ast_kind(), Some(true)))
+}
+
+/** @internal */
+pub fn isBindableStaticNameExpression(node: &AstKind, excludeThisKeyword: Option<bool>) -> bool { isEntityNameExpression(node) || isBindableStaticAccessExpression(node, excludeThisKeyword) }
+
+/** @internal */
+pub fn getNameOrArgument<'a>(expr: &'a AccessExpression<'a>) -> AstKind<'a> {
+    match expr {
+        AccessExpression::PropertyAccessExpression(property_access) => property_access.property().to_ast_kind(),
+        AccessExpression::ElementAccessExpression(element_access) => element_access.argument_expression.to_ast_kind(),
+    }
+}
+
+pub fn getAssignmentDeclarationKindWorker<'a>(expr: &'a AstKind<'a>) -> AssignmentDeclarationKind {
+    if let AstKind::CallExpression(call) = expr {
+        if !isBindableObjectDefinePropertyCall(call) {
+            return AssignmentDeclarationKind::None;
+        }
+        let entityName = &call.arguments[0];
+        if isExportsIdentifier(&entityName.to_ast_kind()) || isModuleExportsAccessExpression(&entityName.to_ast_kind()) {
+            return AssignmentDeclarationKind::ObjectDefinePropertyExports;
+        }
+        if isBindableStaticAccessExpression(&entityName.to_ast_kind(), None) && getElementOrPropertyAccessName(&AccessExpression::from_ast_kind(&entityName.to_ast_kind()).unwrap()) == Some("prototype".to_string()) {
+            return AssignmentDeclarationKind::ObjectDefinePrototypeProperty;
+        }
+        return AssignmentDeclarationKind::ObjectDefinePropertyValue;
+    }
+
+    if let Some(bin) = BinaryExpression::from_ast_kind(expr) {
+        if bin.operator() != BinaryOperator::AssignmentOperator(AssignmentOperator::Assign) || !isAccessExpression(&bin.left().to_ast_kind()) || isVoidZero(&getRightMostAssignedExpression(*expr)) {
+            return AssignmentDeclarationKind::None;
+        }
+
+        let left = AccessExpression::from_ast_kind(&bin.left().to_ast_kind()).unwrap();
+        if isBindableStaticNameExpression(&left.object().to_ast_kind(), Some(true)) && getElementOrPropertyAccessName(&left) == Some("prototype".to_string()) && isObjectLiteralExpression(&getInitializerOfBinaryExpression(BinaryExpression::from_ast_kind(expr).unwrap()).to_ast_kind()) {
+            // F.prototype = { ... }
+            return AssignmentDeclarationKind::Prototype;
+        }
+        return getAssignmentDeclarationPropertyAccessKind(left);
+    }
+
+    panic!("Expected CallExpression or BinaryExpression, got {:?}", expr);
+}
+
+pub fn isVoidZero(node: &AstKind) -> bool {
+    if let Some(void_expr) = isVoidExpression(node) {
+        if let Expression::NumericLiteral(numeric_literal) = &void_expr.argument {
+            return numeric_literal.raw.as_ref().unwrap() == "0";
+        }
+    }
+    false
+}
 /**
  * Does not handle signed numeric names like `a[+0]` - handling those would require handling prefix unary expressions
  * throughout late binding handling as well, which is awkward (but ultimately probably doable if there is demand)
@@ -493,7 +605,50 @@ pub fn getElementOrPropertyAccessName<'a>(node: &'a AccessExpression<'a>) -> Opt
     }
     None
 }
-// endregion: 4075
+/** @internal */
+pub fn getAssignmentDeclarationPropertyAccessKind(lhs: AccessExpression) -> AssignmentDeclarationKind {
+    if matches!(lhs.object().to_ast_kind(), AstKind::ThisExpression(_)) {
+        return AssignmentDeclarationKind::ThisProperty;
+    } else if isModuleExportsAccessExpression(&lhs.to_ast_kind()) {
+        // module.exports = expr
+        return AssignmentDeclarationKind::ModuleExports;
+    } else if isBindableStaticNameExpression(&lhs.object().to_ast_kind(), Some(true)) {
+        if isPrototypeAccess(&lhs.object().to_ast_kind()) {
+            // F.G....prototype.x = expr
+            return AssignmentDeclarationKind::PrototypeProperty;
+        }
+
+        let mut next_to_last = lhs;
+        while !isIdentifier(&next_to_last.object().to_ast_kind()) {
+            next_to_last = AccessExpression::from_ast_kind(&next_to_last.object().to_ast_kind()).unwrap();
+        }
+        let id = Identifier::from_ast_kind(&next_to_last.object().to_ast_kind()).unwrap();
+        if (id.name() == "exports" ||
+            (id.name() == "module" && getElementOrPropertyAccessName(&next_to_last) == Some("exports".to_string()))) &&
+            // ExportsProperty does not support binding with computed names
+            isBindableStaticAccessExpression(&lhs.to_ast_kind(), None)
+        {
+            // exports.name = expr OR module.exports.name = expr OR exports["name"] = expr ...
+            return AssignmentDeclarationKind::ExportsProperty;
+        }
+        if isBindableStaticNameExpression(&lhs.to_ast_kind(), Some(true)) || (matches!(lhs, AccessExpression::ElementAccessExpression(_)) && isDynamicName(&DeclarationName::from_ast_kind(&lhs.to_ast_kind()).unwrap())) {
+            // F.G...x = expr
+            return AssignmentDeclarationKind::Property;
+        }
+    }
+
+    AssignmentDeclarationKind::None
+}
+
+/** @internal */
+pub fn getInitializerOfBinaryExpression<'a>(expr: BinaryExpression<'a>) -> BinaryExpression<'a> {
+    let mut expr = expr;
+    while let Some(right) = BinaryExpression::from_ast_kind(&expr.right().to_ast_kind()) {
+        expr = right;
+    }
+    expr
+}
+// endregion: 4121
 
 // region: 4871
 /** @internal */
@@ -506,9 +661,79 @@ pub fn skipParentheses<'a>(node: AstKind<'a>, exclude_jsdoc_type_assertions: Opt
 // region: 5191
 /** @internal */
 pub fn isStringOrNumericLiteralLike(node: &AstKind) -> bool { isStringLiteralLike(node) || isNumericLiteral(node) }
-// endregion: 5196
+/** @internal */
+pub fn isSignedNumericLiteral(node: &AstKind) -> bool {
+    if let AstKind::UnaryExpression(prefix_expr) = node {
+        matches!(prefix_expr.operator, UnaryOperator::UnaryPlus | UnaryOperator::UnaryNegation) && isNumericLiteral(&prefix_expr.argument.to_ast_kind())
+    } else {
+        false
+    }
+}
 
-// region: 7300
+/**
+ * A declaration has a dynamic name if all of the following are true:
+ *   1. The declaration has a computed property name.
+ *   2. The computed name is *not* expressed as a StringLiteral.
+ *   3. The computed name is *not* expressed as a NumericLiteral.
+ *   4. The computed name is *not* expressed as a PlusToken or MinusToken
+ *      immediately followed by a NumericLiteral.
+ *
+ * @internal
+ */
+pub fn hasDynamicName(declaration: &AstKind) -> bool {
+    let name = getNameOfDeclaration(declaration);
+    name.is_some() && isDynamicName(&name.unwrap())
+}
+
+/** @internal */
+pub fn isDynamicName(name: &DeclarationName) -> bool {
+    if !(matches!(name, DeclarationName::PropertyName(PropertyName::ObjectProperty(p)) if p.computed) || matches!(name, DeclarationName::ElementAccessExpression(_))) {
+        return false;
+    }
+    let expr = if let DeclarationName::ElementAccessExpression(expr) = name {
+        skipParentheses(expr.argument_expression.to_ast_kind(), None)
+    } else {
+        let DeclarationName::PropertyName(PropertyName::ObjectProperty(computed)) = name else { panic!("Expected ObjectProperty, got {:?}", name) };
+        computed.value.to_ast_kind()
+    };
+    !isStringOrNumericLiteralLike(&expr) && !isSignedNumericLiteral(&expr)
+}
+// endregion: 5226
+
+// region: 7235
+/** @internal */
+pub fn isAssignmentOperator(op: BinaryOperator) -> bool { matches!(op, BinaryOperator::AssignmentOperator(_)) }
+// endregion: 7240
+
+// region: 7271
+/** @internal */
+pub fn isAssignmentExpression(node: &AstKind, excludeCompoundAssignment: Option<bool>) -> bool {
+    if let Some(binary) = BinaryExpression::from_ast_kind(node) {
+        let operator = binary.operator();
+        let is_valid_operator = if excludeCompoundAssignment.unwrap_or(false) { matches!(operator, BinaryOperator::AssignmentOperator(AssignmentOperator::Assign)) } else { isAssignmentOperator(operator) };
+        is_valid_operator && isLeftHandSideExpressionKind(&binary.left().to_ast_kind())
+    } else {
+        false
+    }
+}
+
+/** @internal */
+pub fn isDestructuringAssignment(node: &AstKind) -> bool {
+    if isAssignmentExpression(node, Some(true)) {
+        if let Some(binary) = BinaryExpression::from_ast_kind(node) {
+            let left = binary.left().to_ast_kind();
+            matches!(left, AstKind::ObjectExpression(_) | AstKind::ArrayExpression(_))
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+/** @internal */
+// pub fn isExpressionWithTypeArgumentsInClassExtendsClause(node: &AstKind) -> bool { tryGetClassExtendingExpressionWithTypeArguments(node).is_some() }
+
 /** @internal */
 pub fn isEntityNameExpression(node: &AstKind) -> bool { isIdentifier(node) || isPropertyAccessEntityNameExpression(node) }
 // endregion: 7305
@@ -522,6 +747,16 @@ pub fn isPropertyAccessEntityNameExpression(node: &AstKind) -> bool {
     isEntityNameExpression(&property_access.object().to_ast_kind())
 }
 // endregion: 7340
+
+// region: 7363
+/** @internal */
+pub fn isPrototypeAccess(node: &AstKind) -> bool { isBindableStaticAccessExpression(node, None) && getElementOrPropertyAccessName(&AccessExpression::from_ast_kind(node).unwrap()) == Some("prototype".to_string()) }
+// endregion: 7368
+
+// region: 8137
+/** @internal */
+pub fn isAccessExpression(node: &AstKind) -> bool { AccessExpression::from_ast_kind(node).is_some() }
+// endregion: 8142
 
 // region: 8366
 /** @internal */

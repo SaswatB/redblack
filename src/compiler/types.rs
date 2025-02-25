@@ -1,11 +1,12 @@
 use oxc_ast::{
     ast::{
-        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause, ChainExpression, Class,
-        ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression,
-        ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, LogicalExpression, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression,
-        PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSConditionalType,
-        TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSNonNullExpression,
-        TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameterDeclaration, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarator, YieldExpression,
+        Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause,
+        ChainExpression, Class, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, Expression, ForInStatement, ForOfStatement, ForStatement, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference,
+        ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern,
+        ObjectProperty, ParenthesizedExpression, PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration,
+        TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSFunctionType, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName,
+        TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameterDeclaration, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarator,
+        YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -748,7 +749,37 @@ impl<'a> AstKindExpression<'a> {
 }
 // endregion: 2394
 
-// region: 2642
+// region: 2513
+// export type ExponentiationOperator
+// export type MultiplicativeOperator
+// export type MultiplicativeOperatorOrHigher
+// export type AdditiveOperator
+// export type AdditiveOperatorOrHigher
+// export type ShiftOperator
+// export type ShiftOperatorOrHigher
+// export type RelationalOperator
+// export type RelationalOperatorOrHigher
+// export type EqualityOperator
+// export type EqualityOperatorOrHigher
+// export type BitwiseOperator
+// export type BitwiseOperatorOrHigher
+// export type LogicalOperator
+// export type LogicalOperatorOrHigher
+// export type CompoundAssignmentOperator
+// export type AssignmentOperator
+// export type AssignmentOperatorOrHigher
+// export type BinaryOperator
+// export type LogicalOrCoalescingAssignmentOperator
+// export type BinaryOperatorToken
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOperator {
+    GeneralBinaryOperator(GeneralBinaryOperator),
+    AssignmentOperator(AssignmentOperator),
+    LogicalOperator(LogicalOperator),
+    CommaOperator,
+}
+
 define_subset_enum!(BinaryExpression from AstKind {
     GeneralBinaryExpression,
     AssignmentExpression,
@@ -756,6 +787,40 @@ define_subset_enum!(BinaryExpression from AstKind {
     PrivateInExpression,
     SequenceExpression,
 });
+impl<'a> BinaryExpression<'a> {
+    pub fn left(&self) -> AstKindExpression<'a> {
+        match self {
+            BinaryExpression::GeneralBinaryExpression(expr) => AstKindExpression::from_expression(&expr.left),
+            // !rb this unwrap is hella sus
+            BinaryExpression::AssignmentExpression(expr) => AstKindExpression::from_ast_kind(&expr.left.to_ast_kind()).unwrap(),
+            BinaryExpression::LogicalExpression(expr) => AstKindExpression::from_expression(&expr.left),
+            // !rb this unwrap is hella sus
+            BinaryExpression::PrivateInExpression(expr) => AstKindExpression::from_ast_kind(&expr.left.to_ast_kind()).unwrap(),
+            BinaryExpression::SequenceExpression(expr) => AstKindExpression::from_expression(&expr.expressions[0]),
+        }
+    }
+
+    pub fn operator(&self) -> BinaryOperator {
+        match self {
+            BinaryExpression::GeneralBinaryExpression(expr) => BinaryOperator::GeneralBinaryOperator(expr.operator),
+            BinaryExpression::AssignmentExpression(expr) => BinaryOperator::AssignmentOperator(expr.operator),
+            BinaryExpression::LogicalExpression(expr) => BinaryOperator::LogicalOperator(expr.operator),
+            BinaryExpression::PrivateInExpression(expr) => BinaryOperator::GeneralBinaryOperator(expr.operator),
+            BinaryExpression::SequenceExpression(_) => BinaryOperator::CommaOperator,
+        }
+    }
+
+    pub fn right(&self) -> AstKindExpression<'a> {
+        match self {
+            BinaryExpression::GeneralBinaryExpression(expr) => AstKindExpression::from_expression(&expr.right),
+            BinaryExpression::AssignmentExpression(expr) => AstKindExpression::from_expression(&expr.right),
+            BinaryExpression::LogicalExpression(expr) => AstKindExpression::from_expression(&expr.right),
+            BinaryExpression::PrivateInExpression(expr) => AstKindExpression::from_expression(&expr.right),
+            // !rb taking the last element here can probably cause issues, like missed members
+            BinaryExpression::SequenceExpression(expr) => AstKindExpression::from_expression(&expr.expressions.last().unwrap()),
+        }
+    }
+}
 // endregion: 2649
 
 // region: 2956
@@ -2312,7 +2377,42 @@ impl<'a> std::fmt::Debug for TypeMapper<'a> {
 }
 // endregion: 7010
 
-// region: 7136
+// region: 7102
+/** @internal */
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssignmentDeclarationKind {
+    None,
+    /// exports.name = expr
+    /// module.exports.name = expr
+    ExportsProperty,
+    /// module.exports = expr
+    ModuleExports,
+    /// className.prototype.name = expr
+    PrototypeProperty,
+    /// this.name = expr
+    ThisProperty,
+    // F.name = expr
+    Property,
+    // F.prototype = { ... }
+    Prototype,
+    // Object.defineProperty(x, 'name', { value: any, writable?: boolean (false by default) });
+    // Object.defineProperty(x, 'name', { get: Function, set: Function });
+    // Object.defineProperty(x, 'name', { get: Function });
+    // Object.defineProperty(x, 'name', { set: Function });
+    ObjectDefinePropertyValue,
+    // Object.defineProperty(exports || module.exports, 'name', ...);
+    ObjectDefinePropertyExports,
+    // Object.defineProperty(Foo.prototype, 'name', ...);
+    ObjectDefinePrototypeProperty,
+}
+
+#[derive(Debug)]
+pub struct FileExtensionInfo {
+    pub extension: String,
+    pub isMixedContent: bool,
+    pub scriptKind: Option<ScriptKind>,
+}
+
 #[derive(Debug)]
 pub struct DiagnosticMessage {
     pub code: i32,
