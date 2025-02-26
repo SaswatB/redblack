@@ -16,6 +16,45 @@ pub fn createTextSpanFromBounds(start: u32, end: u32) -> TextSpan { createTextSp
 
 // endregion: 444
 
+// region: 764
+/**
+ * Iterates through the parent chain of a node and performs the callback on each parent until the callback
+ * returns a truthy value, then returns that value.
+ * If no such value is found, it applies the callback until the parent pointer is undefined or the callback returns "quit"
+ * At that point findAncestor returns undefined.
+ */
+pub fn findAncestor<'a>(mut node: Option<AstKind<'a>>, callback: impl Fn(&AstKind<'a>) -> FindAncestorResult) -> Option<AstKind<'a>> {
+    while let Some(current_node) = node {
+        let result = callback(&current_node);
+        if result == FindAncestorResult::Quit {
+            return None;
+        }
+        else if result == FindAncestorResult::Found {
+            return Some(current_node);
+        }
+        node = current_node.parent();
+    }
+    None
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FindAncestorResult {
+    Found,
+    NotFound,
+    Quit,
+}
+
+impl From<bool> for FindAncestorResult {
+    fn from(value: bool) -> Self {
+        if value {
+            FindAncestorResult::Found
+        } else {
+            FindAncestorResult::NotFound
+        }
+    }
+}
+// endregion: 786
+
 // region: 825
 /** Add an extra underscore to identifiers that start with two underscores to avoid issues with magic names like '__proto__' */
 pub fn escapeLeadingUnderscores(identifier: &str) -> String {
@@ -45,7 +84,12 @@ pub fn idText(identifierOrPrivateName: MemberName) -> String {
 }
 // endregion: 845
 
-// region: 934
+// region: 929
+/** @internal */
+pub fn isNamedDeclaration(node: &AstKind) -> bool {
+    NamedDeclaration::from_ast_kind(node).map(|d| d.name().is_some()).unwrap_or(false)
+}
+
 /** @internal */
 pub fn getNonAssignedNameOfDeclaration<'a>(declaration: AstKind<'a>) -> Option<DeclarationName<'a>> {
     match declaration {
@@ -235,6 +279,10 @@ pub fn isFunctionLike(node: Option<&AstKind>) -> bool {
 /** @internal */
 pub fn isBooleanLiteral(node: &AstKind) -> bool { matches!(node, AstKind::BooleanLiteral(_)) }
 // endregion: 1673
+
+// region: 1723
+pub fn isClassLike(node: &AstKind) -> bool { matches!(node, AstKind::Class(_) ) }
+// endregion: 1727
 
 // region: 1970
 pub fn isLeftHandSideExpression(node: &AstKind) -> bool { isLeftHandSideExpressionKind(skipPartiallyEmittedExpressions(node)) }

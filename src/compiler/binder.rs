@@ -10,9 +10,9 @@ use crate::compiler::rb_extra::SourceFilePassthrough;
 
 use super::{
     diagnostic_information_map_generated::Diagnostics,
-    factory::nodeTests::{isClassStaticBlockDeclaration, isTypeOfExpression},
+    factory::nodeTests::*,
     rb_extra::{AstKindExt, SourceFileExt},
-    rb_unions::{DeclarationNameOrQualifiedName, IsContainerOrEntityNameExpression, StringOrNumber},
+    rb_unions::{DeclarationNameOrQualifiedName, EscapedText, IsContainerOrEntityNameExpression, PropertyNameLiteralOrPrivateIdentifier, StrText, StringOrNumber},
     types::*,
     utilities::*,
     utilitiesPublic::*,
@@ -205,19 +205,144 @@ impl<'a> Binder<'a> {
 
     // endregion: 628
 
-    // region: 750
-         /**
-         * Declares a Symbol for the node and adds it to symbols. Reports errors for conflicting identifier names.
-         * @param symbolTable - The symbol table which node will be added to.
-         * @param parent - node's parent declaration.
-         * @param node - The declaration to be added to the symbol table
-         * @param includes - The SymbolFlags that node has in addition to its declaration type (eg: export, ambient, etc.)
-         * @param excludes - The flags which node cannot be declared alongside in a symbol table. Used to report forbidden declarations.
-         */
-        fn declareSymbol(&mut self, symbolTable: rc_cell!(SymbolTable<'a>), parent: Option<Rc<RefCell<Symbol<'a>>>>, node: AstKind<'a>, includes: SymbolFlags, excludes: SymbolFlags, isReplaceableByMethod: Option<bool>, isComputedName: Option<bool>) -> Rc<RefCell<Symbol<'a>>> {
-            // todo(RB): continue conversion from here
-            todo!();
+    // region: 668
+    // Should not be called on a declaration with a computed property name,
+    // unless it is a well known Symbol.
+    fn getDeclarationName(&self, node: &AstKind<'a>) -> Option<__String> {
+        if matches!(node, AstKind::TSExportAssignment(_)) {
+            return Some(InternalSymbolName::ExportEquals.as_str().to_string());
         }
+        if matches!(node, AstKind::ExportDefaultDeclaration(_)) {
+            return Some(InternalSymbolName::Default.as_str().to_string());
+        }
+
+        let name = getNameOfDeclaration(*node);
+        if let Some(name) = name {
+            if isAmbientModule(node) {
+                let module_name = getTextOfIdentifierOrLiteral(PropertyNameLiteralOrPrivateIdentifier::from_ast_kind(&name.to_ast_kind()).unwrap());
+                let AstKind::TSModuleDeclaration(module) = node else {panic!("Expected TSModuleDeclaration, got {:?}", node);};
+                return Some(if isGlobalScopeAugmentation(module) {
+                    "__global".to_string()
+                } else {
+                    format!("\"{}\"", module_name)
+                });
+            }
+
+            match name.to_ast_kind() {
+                AstKind::ObjectProperty(name) => {
+                    if name.computed {
+                        let name_expr = &name.value;
+                        if isStringOrNumericLiteralLike(&name_expr.to_ast_kind()) {
+                            let name_expr = LiteralLikeNode::from_ast_kind(&name_expr.to_ast_kind()).unwrap();
+                            return Some(escapeLeadingUnderscores(&name_expr.str_text()));
+                        }
+                        if isSignedNumericLiteral(&name_expr.to_ast_kind()) {
+                            let AstKind::UnaryExpression(name_expr) = name_expr.to_ast_kind() else {panic!("Expected UnaryExpression, got {:?}", name_expr);};
+                            let AstKind::NumericLiteral(literal) = name_expr.argument.to_ast_kind() else {panic!("Expected NumericLiteral, got {:?}", name_expr.argument);};
+                            return Some(format!("{}{}", name_expr.operator.as_str(), literal.raw.unwrap()));
+                        } else {
+                            panic!("Only computed properties with literal names have declaration names");
+                        }
+                    }
+                    return None;
+                }
+                AstKind::PrivateIdentifier(name) => {
+                    let containing_class = getContainingClass(*node);
+                    if containing_class.is_none() {
+                        return None;
+                    }
+                    let containing_class_symbol = containing_class.unwrap().to_ast_kind().symbol().unwrap();
+                    return Some(getSymbolNameForPrivateIdentifier(containing_class_symbol, name.escaped_text()));
+                }
+                AstKind::JSXNamespacedName(name) => {
+                    return Some(getEscapedTextOfJsxNamespacedName(name));
+                }
+                _ => {
+                    if isPropertyNameLiteral(&name.to_ast_kind()) {
+                        let name = PropertyNameLiteral::from_ast_kind(&name.to_ast_kind()).unwrap();
+                        return Some(getEscapedTextOfIdentifierOrLiteral(&name));
+                    }
+                    return None;
+                }
+            }
+        }
+
+        if isConstructorDeclaration(&node) {
+            return Some(InternalSymbolName::Constructor.as_str().to_string());
+        }
+
+        match node {
+            AstKind::TSFunctionType(_) | AstKind::TSCallSignatureDeclaration(_)
+            // !rb ignoring jsdoc
+            // | AstKind::JSDocSignature(_) 
+            => {
+                Some(InternalSymbolName::Call.as_str().to_string())
+            }
+            AstKind::TSConstructorType(_) | AstKind::TSConstructSignatureDeclaration(_) => {
+                Some(InternalSymbolName::New.as_str().to_string())
+            }
+            AstKind::TSIndexSignature(_) => Some(InternalSymbolName::Index.as_str().to_string()),
+            // ExportDeclaration
+            AstKind::ExportAllDeclaration(_) |
+            AstKind::ExportNamedDeclaration(_)
+            // end ExportDeclaration
+            => Some(InternalSymbolName::ExportStar.as_str().to_string()),
+            AstKind::SourceFile(_)
+            // json file should behave as
+            // module.exports = ...
+            => Some(InternalSymbolName::ExportEquals.as_str().to_string()),
+            AstKind::AssignmentExpression(expr) => {
+                if getAssignmentDeclarationKind(&expr.to_ast_kind()) == AssignmentDeclarationKind::ModuleExports {
+                    Some(InternalSymbolName::ExportEquals.as_str().to_string())
+                } else {
+                    panic!("Unknown binary declaration kind");
+                }
+            }
+            // !rb ignoring jsdoc
+            // AstKind::JSDocFunctionType(node) => {
+            //     if self.isJSDocConstructSignature(node) {
+            //         Some(InternalSymbolName::New.as_str().to_string())
+            //     } else {
+            //         Some(InternalSymbolName::Call.as_str().to_string())
+            //     }
+            // }
+            // AstKind::FormalParameter(param) => {
+            //     debug_assert!(matches!(param.parent, AstKind::JSDocFunctionType(_)), 
+            //         "Impossible parameter parent kind, parent is: {}, expected JSDocFunctionType", 
+            //         param.parent.to_string());
+
+            //     if let AstKind::JSDocFunctionType(func_type) = &param.parent {
+            //         let index = func_type.parameters.iter().position(|p| p == param).unwrap();
+            //         Some(format!("arg{}", index))
+            //     } else {
+            //         None
+            //     }
+            // }
+            _ => None
+        }
+    }
+
+    fn getDisplayName(&self, node: &AstKind<'a>) -> String {
+        if isNamedDeclaration(node) {
+            let node = NamedDeclaration::from_ast_kind(node).unwrap();
+            declarationNameToString(DeclarationNameOrQualifiedName::from_ast_kind(&node.name().unwrap().to_ast_kind()))
+        } else {
+            unescapeLeadingUnderscores(&self.getDeclarationName(node).expect("Declaration name not found"))
+        }
+    }
+
+    /**
+     * Declares a Symbol for the node and adds it to symbols. Reports errors for conflicting identifier names.
+     * @param symbolTable - The symbol table which node will be added to.
+     * @param parent - node's parent declaration.
+     * @param node - The declaration to be added to the symbol table
+     * @param includes - The SymbolFlags that node has in addition to its declaration type (eg: export, ambient, etc.)
+     * @param excludes - The flags which node cannot be declared alongside in a symbol table. Used to report forbidden declarations.
+     */
+    fn declareSymbol(&mut self, symbolTable: rc_cell!(SymbolTable<'a>), parent: Option<Rc<RefCell<Symbol<'a>>>>, node: AstKind<'a>, includes: SymbolFlags, excludes: SymbolFlags, isReplaceableByMethod: Option<bool>, isComputedName: Option<bool>) -> Rc<RefCell<Symbol<'a>>> {
+        // todo(RB): continue conversion from here
+        todo!();
+    }
     // endregion: 896
 
     // region: 960

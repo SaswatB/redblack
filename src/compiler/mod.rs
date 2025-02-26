@@ -1,5 +1,6 @@
 pub mod binder;
 pub mod checker;
+pub mod core;
 pub mod diagnostic_information_map_generated;
 pub mod factory;
 pub mod moduleNameResolver;

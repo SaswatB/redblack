@@ -2,6 +2,7 @@ use crate::compiler::parser::*;
 use crate::compiler::types::*;
 use crate::flag_names_impl;
 use crate::opt_rc_cell;
+use crate::rc_cell;
 use oxc_ast::ast::Declaration;
 use oxc_ast::ast::ExportSpecifier;
 use oxc_ast::ast::SourceFile;
@@ -12,6 +13,13 @@ use oxc_ast::{
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
+use std::sync::atomic::AtomicU32;
+// region: 1141
+static nextSymbolId: AtomicU32 = AtomicU32::new(1);
+static nextNodeId: AtomicU32 = AtomicU32::new(1);
+static nextMergeId: AtomicU32 = AtomicU32::new(1);
+static nextFlowId: AtomicU32 = AtomicU32::new(1);
+// endregion: 1146
 
 // region: 1311
 /** @internal */
@@ -72,6 +80,18 @@ impl std::ops::BitAnd for CheckMode {
 }
 
 // endregion: 1324
+
+// region: 1440
+/** @internal */
+pub fn getSymbolId(symbol: rc_cell!(Symbol)) -> SymbolId {
+    let mut symbol = symbol.borrow_mut();
+    if symbol.id == 0 {
+        symbol.id = nextSymbolId.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    symbol.id
+}
+// endregion: 1450
 
 #[derive(Debug)]
 pub struct TypeChecker<'a> {

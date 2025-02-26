@@ -17,7 +17,8 @@ use crate::{define_flags, define_string_enum, define_subset_enum, entity_propert
 
 use super::{
     moduleNameResolver::PackageJsonInfoCache,
-    rb_unions::{StrName, StrText, StringOrDiagnosticMessageChain, StringOrNumber},
+    rb_unions::{EscapedText, StrName, StrText, StringOrDiagnosticMessageChain, StringOrNumber},
+    utilitiesPublic::escapeLeadingUnderscores,
 };
 
 #[derive(Debug, Clone)]
@@ -332,27 +333,65 @@ define_subset_enum!(Identifier from AstKind {
 impl<'a> StrName for Identifier<'a> {
     fn str_name(&self) -> &str {
         match self {
-            Identifier::IdentifierName(identifier_name) => identifier_name.name.as_str(),
-            Identifier::BindingIdentifier(binding_identifier) => binding_identifier.name.as_str(),
-            Identifier::IdentifierReference(identifier_reference) => identifier_reference.name.as_str(),
-            Identifier::JSXIdentifier(jsx_identifier) => jsx_identifier.name.as_str(),
+            Identifier::IdentifierName(identifier_name) => identifier_name.str_name(),
+            Identifier::BindingIdentifier(binding_identifier) => binding_identifier.str_name(),
+            Identifier::IdentifierReference(identifier_reference) => identifier_reference.str_name(),
+            Identifier::JSXIdentifier(jsx_identifier) => jsx_identifier.str_name(),
         }
     }
 }
 impl<'a> NamedDeclarationTrait for Identifier<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
+impl<'a> EscapedText for Identifier<'a> {
+    fn escaped_text(&self) -> String {
+        match self {
+            Identifier::IdentifierName(identifier_name) => identifier_name.escaped_text(),
+            Identifier::BindingIdentifier(binding_identifier) => binding_identifier.escaped_text(),
+            Identifier::IdentifierReference(identifier_reference) => identifier_reference.escaped_text(),
+            Identifier::JSXIdentifier(jsx_identifier) => jsx_identifier.escaped_text(),
+        }
+    }
+}
+
 impl<'a> NamedDeclarationTrait for IdentifierName<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
+impl<'a> StrName for IdentifierName<'a> {
+    fn str_name(&self) -> &str { self.name.as_str() }
+}
+impl<'a> EscapedText for IdentifierName<'a> {
+    fn escaped_text(&self) -> String { escapeLeadingUnderscores(self.str_name()) }
+}
+
 impl<'a> NamedDeclarationTrait for BindingIdentifier<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
+impl<'a> StrName for BindingIdentifier<'a> {
+    fn str_name(&self) -> &str { self.name.as_str() }
+}
+impl<'a> EscapedText for BindingIdentifier<'a> {
+    fn escaped_text(&self) -> String { escapeLeadingUnderscores(self.str_name()) }
+}
+
 impl<'a> NamedDeclarationTrait for IdentifierReference<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
+impl<'a> StrName for IdentifierReference<'a> {
+    fn str_name(&self) -> &str { self.name.as_str() }
+}
+impl<'a> EscapedText for IdentifierReference<'a> {
+    fn escaped_text(&self) -> String { escapeLeadingUnderscores(self.str_name()) }
+}
+
 impl<'a> NamedDeclarationTrait for JSXIdentifier<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
+impl<'a> StrName for JSXIdentifier<'a> {
+    fn str_name(&self) -> &str { self.name.as_str() }
+}
+impl<'a> EscapedText for JSXIdentifier<'a> {
+    fn escaped_text(&self) -> String { escapeLeadingUnderscores(self.str_name()) }
 }
 // endregion: 1703
 
@@ -381,6 +420,14 @@ impl<'a> StrName for MemberName<'a> {
         match self {
             MemberName::Identifier(identifier) => identifier.str_name(),
             MemberName::PrivateIdentifier(private_identifier) => private_identifier.str_name(),
+        }
+    }
+}
+impl<'a> EscapedText for MemberName<'a> {
+    fn escaped_text(&self) -> String {
+        match self {
+            MemberName::Identifier(identifier) => identifier.escaped_text(),
+            MemberName::PrivateIdentifier(private_identifier) => private_identifier.escaped_text(),
         }
     }
 }
@@ -496,6 +543,9 @@ impl<'a> NamedDeclarationTrait for DeclarationStatement<'a> {
 // export interface PrivateIdentifier extends PrimaryExpression {
 impl<'a> StrName for PrivateIdentifier<'a> {
     fn str_name(&self) -> &str { self.name.as_str() }
+}
+impl<'a> EscapedText for PrivateIdentifier<'a> {
+    fn escaped_text(&self) -> String { escapeLeadingUnderscores(self.str_name()) }
 }
 // endregion: 1804
 
@@ -2181,7 +2231,7 @@ define_flags!(SymbolFlags {
 });
 
 /** @internal */
-pub type SymbolId = usize;
+pub type SymbolId = u32;
 
 #[derive(Debug, Clone)]
 #[rustfmt::skip]

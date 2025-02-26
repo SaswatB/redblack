@@ -127,14 +127,14 @@ macro_rules! flow_node_enum {
 #[macro_export]
 macro_rules! rc_cell {
     ($type:ty) => {
-        Rc<RefCell<$type>>
+        std::rc::Rc<std::cell::RefCell<$type>>
     };
 }
 
 #[macro_export]
 macro_rules! opt_rc_cell {
     ($type:ty) => {
-        Option<Rc<RefCell<$type>>>
+        Option<std::rc::Rc<std::cell::RefCell<$type>>>
     };
 }
 

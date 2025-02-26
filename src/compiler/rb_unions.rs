@@ -57,3 +57,7 @@ define_subset_enum!(PropertyNameLiteralOrPrivateIdentifier from AstKind {
     Sub(PropertyNameLiteral),
     PrivateIdentifier,
 });
+
+pub trait EscapedText {
+    fn escaped_text(&self) -> String;
+}

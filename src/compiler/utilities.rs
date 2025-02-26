@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use super::core::startsWith;
 use super::factory::nodeTests::*;
 use super::factory::utilities::skipOuterExpressions;
 use super::rb_extra::SourceFileExt;
@@ -12,13 +13,16 @@ use super::rb_unions::StrText;
 use super::rb_unions::StringOrDiagnosticMessageChain;
 use super::scanner::skipTrivia;
 use super::utilitiesPublic::*;
+use crate::compiler::checker::getSymbolId;
 use crate::compiler::factory::nodeTests::isObjectLiteralExpression;
 use crate::compiler::parser::*;
 use crate::compiler::path::*;
 use crate::compiler::program::*;
 use crate::compiler::rb_extra::AstKindExt;
+use crate::compiler::rb_unions::EscapedText;
 use crate::compiler::types::*;
 use crate::compiler::utilitiesPublic::createTextSpan;
+use crate::rc_cell;
 use oxc_ast::ast::*;
 use oxc_ast::GetChildren;
 use oxc_ast::{ast::SourceFile, AstKind, Visit};
@@ -405,6 +409,18 @@ pub fn getErrorSpanForNode<'a>(source_file: &'a SourceFile<'a>, node: &AstKind<'
 pub fn isObjectLiteralOrClassExpressionMethodOrAccessor(node: &AstKind) -> bool { matches!(node, AstKind::MethodDefinition(_)) && if let Some(parent) = node.parent() { matches!(parent, AstKind::ObjectExpression(_) | AstKind::Class(_)) } else { false } }
 // endregion: 2927
 
+// region: 2988
+/** @internal */
+pub fn getContainingClass<'a>(node: AstKind<'a>) -> Option<&ClassLikeDeclaration<'a>> {
+    let a = findAncestor(node.parent(), |n| isClassLike(n).into());
+    if let Some(AstKind::Class(a)) = a {
+        Some(a)
+    } else {
+        None
+    }
+}
+// endregion: 2993
+
 // region: 3608
 /** @internal */
 pub fn isPartOfTypeQuery(node: &AstKind) -> bool {
@@ -716,7 +732,23 @@ pub fn isDynamicName(name: &DeclarationName) -> bool {
 }
 // endregion: 5226
 
-// region: 5269
+// region: 5256
+/** @internal */
+pub fn isPropertyNameLiteral(node: &AstKind) -> bool {
+    match node {
+        // Identifier
+        AstKind::IdentifierName(_) |
+        AstKind::BindingIdentifier(_) |
+        AstKind::IdentifierReference(_) |
+        AstKind::JSXIdentifier(_) |
+        // end Identifier
+        AstKind::StringLiteral(_) |
+        AstKind::NoSubstitutionTemplateLiteral(_) |
+        AstKind::NumericLiteral(_) => true,
+        _ => false,
+    }
+}
+
 /** @internal */
 pub fn getTextOfIdentifierOrLiteral(node: PropertyNameLiteralOrPrivateIdentifier) -> String {
     if isMemberName(&node.to_ast_kind()) {
@@ -727,7 +759,24 @@ pub fn getTextOfIdentifierOrLiteral(node: PropertyNameLiteralOrPrivateIdentifier
         LiteralLikeNode::from_ast_kind(&node.to_ast_kind()).unwrap().str_text().to_string()
     }
 }
-// endregion: 5272
+
+/** @internal */
+pub fn getEscapedTextOfIdentifierOrLiteral(node: &PropertyNameLiteral) -> __String {
+    if isMemberName(&node.to_ast_kind()) {
+        MemberName::from_ast_kind(&node.to_ast_kind()).unwrap().escaped_text()
+    } else if let AstKind::JSXNamespacedName(jsx_namespaced_name) = node.to_ast_kind() {
+        getEscapedTextOfJsxNamespacedName(jsx_namespaced_name)
+    } else {
+        escapeLeadingUnderscores(LiteralLikeNode::from_ast_kind(&node.to_ast_kind()).unwrap().str_text())
+    }
+}
+
+/** @internal */
+pub fn getSymbolNameForPrivateIdentifier(containingClassSymbol: rc_cell!(Symbol), description: __String) -> __String { format!("__#{}@{}", getSymbolId(containingClassSymbol), description) }
+
+/** @internal */
+pub fn isKnownSymbol(symbol: &Symbol) -> bool { startsWith(&symbol.escapedName.to_string(), "__@", None) }
+// endregion: 5288
 
 // region: 7235
 /** @internal */
@@ -1189,8 +1238,10 @@ pub fn positionIsSynthesized(pos: u32) -> bool {
 }
 // endregion: 9979
 
-// region: 10856
+// region: 10851
 /** @internal */
+pub fn getEscapedTextOfJsxNamespacedName(node: &JSXNamespacedName) -> __String { format!("{}:{}", node.namespace.escaped_text(), idText(MemberName::from_ast_kind(&node.property.to_ast_kind()).unwrap())) }
+
 /** @internal */
 pub fn getTextOfJsxNamespacedName(node: &JSXNamespacedName) -> String { format!("{}:{}", idText(MemberName::from_ast_kind(&node.namespace.to_ast_kind()).unwrap()), idText(MemberName::from_ast_kind(&node.property.to_ast_kind()).unwrap())) }
 // endregion: 10861

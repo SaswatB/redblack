@@ -1,5 +1,5 @@
 use oxc_ast::{
-    ast::{AwaitExpression, UnaryExpression, UnaryOperator, UpdateExpression},
+    ast::{AwaitExpression, MethodDefinitionKind, UnaryExpression, UnaryOperator, UpdateExpression},
     AstKind,
 };
 
@@ -19,7 +19,9 @@ pub fn isPrivateIdentifier(node: &AstKind) -> bool { matches!(node, AstKind::Pri
 
 // region: 434
 pub fn isClassStaticBlockDeclaration(node: Option<&AstKind>) -> bool { matches!(node, Some(AstKind::StaticBlock(_))) }
-// endregion: 436
+
+pub fn isConstructorDeclaration(node: &AstKind) -> bool { matches!(node, AstKind::MethodDefinition(method_definition) if method_definition.kind == MethodDefinitionKind::Constructor) }
+// endregion: 441
 
 // region: 569
 pub fn isBindingElement(node: &AstKind) -> bool { BindingElement::from_ast_kind(node).is_some() }
