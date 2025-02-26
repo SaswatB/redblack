@@ -1,13 +1,13 @@
 use oxc_ast::{
     ast::{
         Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause,
-        ChainExpression, Class, ClassExtends, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, DestructureBindingPatternKind, ElementAccessExpression, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, Expression,
-        ExpressionWithTypeArguments, ForInStatement, ForOfStatement, ForStatement, FormalParameter, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier,
-        JSXAttribute, JSXElement, JSXFragment, JSXNamespacedName, JSXSpreadAttribute, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression, PrivateFieldExpression,
-        PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements, TSConditionalType,
-        TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType, TSMethodSignature,
-        TSModuleDeclaration, TSModuleDeclarationName, TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression, TemplateLiteral, ThisExpression,
-        UnaryExpression, UpdateExpression, VariableDeclarator, YieldExpression,
+        ChainExpression, Class, ClassExtends, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, Expression, ExpressionWithTypeArguments, ForInStatement,
+        ForOfStatement, ForStatement, FormalParameter, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment,
+        JSXNamespacedName, JSXSpreadAttribute, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression, PrivateFieldExpression, PrivateIdentifier, PrivateInExpression,
+        PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType,
+        TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName,
+        TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression,
+        VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -327,7 +327,6 @@ define_subset_enum!(Identifier from AstKind {
     IdentifierName,
     BindingIdentifier,
     IdentifierReference,
-    PrivateIdentifier,
 });
 impl<'a> Identifier<'a> {
     pub fn str_name(&self) -> &str {
@@ -335,7 +334,6 @@ impl<'a> Identifier<'a> {
             Identifier::IdentifierName(identifier_name) => identifier_name.name.as_str(),
             Identifier::BindingIdentifier(binding_identifier) => binding_identifier.name.as_str(),
             Identifier::IdentifierReference(identifier_reference) => identifier_reference.name.as_str(),
-            Identifier::PrivateIdentifier(private_identifier) => private_identifier.name.as_str(),
         }
     }
 }
@@ -349,9 +347,6 @@ impl<'a> NamedDeclarationTrait for BindingIdentifier<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
 impl<'a> NamedDeclarationTrait for IdentifierReference<'a> {
-    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
-}
-impl<'a> NamedDeclarationTrait for PrivateIdentifier<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
 // endregion: 1703
@@ -1044,10 +1039,10 @@ impl<'a> PropertyAccessExpression<'a> {
             PropertyAccessExpression::PrivateFieldExpression(expr) => &expr.object,
         }
     }
-    pub fn property(&self) -> Identifier<'a> {
+    pub fn property(&self) -> MemberName<'a> {
         match self {
-            PropertyAccessExpression::StaticMemberExpression(expr) => Identifier::IdentifierName(&expr.property),
-            PropertyAccessExpression::PrivateFieldExpression(expr) => Identifier::PrivateIdentifier(&expr.field),
+            PropertyAccessExpression::StaticMemberExpression(expr) => MemberName::Identifier(Identifier::IdentifierName(&expr.property)),
+            PropertyAccessExpression::PrivateFieldExpression(expr) => MemberName::PrivateIdentifier(&expr.field),
         }
     }
 }
@@ -1062,10 +1057,14 @@ impl NamedDeclarationTrait for PropertyAccessExpression<'_> {
 impl NamedDeclarationTrait for StaticMemberExpression<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { NamedDeclarationTrait::name(&self.property) }
 }
+
+/** @internal */
+// export interface PrivateIdentifierPropertyAccessExpression extends PropertyAccessExpression {
 impl NamedDeclarationTrait for PrivateFieldExpression<'_> {
-    fn name(&self) -> Option<DeclarationName<'_>> { NamedDeclarationTrait::name(&self.field) }
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::PropertyName(PropertyName::PrivateIdentifier(&self.field))) }
 }
-// endregion: 2966
+
+// endregion: 2971
 
 // region: 2986
 // todo(RB): this is supposed to be branded, may need to change

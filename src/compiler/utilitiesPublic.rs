@@ -238,8 +238,8 @@ pub fn isLeftHandSideExpressionKind(kind: &AstKind) -> bool {
         AstKind::IdentifierName(_) |
         AstKind::BindingIdentifier(_) |
         AstKind::IdentifierReference(_) |
-        AstKind::PrivateIdentifier(_) | // technically this is only an Expression if it's in a `#field in expr` BinaryExpression
         // end Identifier
+        AstKind::PrivateIdentifier(_) | // technically this is only an Expression if it's in a `#field in expr` BinaryExpression
         AstKind::RegExpLiteral(_) |
         AstKind::NumericLiteral(_) |
         AstKind::BigIntLiteral(_) |
