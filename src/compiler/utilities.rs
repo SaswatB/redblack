@@ -6,7 +6,9 @@ use super::factory::utilities::skipOuterExpressions;
 use super::rb_extra::SourceFileExt;
 use super::rb_unions::strings_to_string_or_numbers;
 use super::rb_unions::DeclarationNameOrQualifiedName;
+use super::rb_unions::PropertyNameLiteralOrPrivateIdentifier;
 use super::rb_unions::StrName;
+use super::rb_unions::StrText;
 use super::rb_unions::StringOrDiagnosticMessageChain;
 use super::scanner::skipTrivia;
 use super::utilitiesPublic::*;
@@ -95,6 +97,20 @@ pub fn getTextOfNodeFromSourceText(source_text: &str, node: &AstKind, include_tr
 /** @internal */
 pub fn getTextOfNode(node: &AstKind, include_trivia: Option<bool>) -> String { getSourceTextOfNodeFromSourceFile(getSourceFileOfNode(Some(node)).unwrap(), node, include_trivia) }
 // endregion: 1328
+
+// region: 1926
+/** @internal */
+/** @internal */
+pub fn isAmbientModule(node: &AstKind) -> bool {
+    let AstKind::TSModuleDeclaration(n) = node else { return false };
+    matches!(n.id.to_ast_kind(), AstKind::StringLiteral(_)) || isGlobalScopeAugmentation(n)
+}
+// endregion: 1931
+
+// region: 1972
+/** @internal */
+pub fn isGlobalScopeAugmentation(module: &TSModuleDeclaration) -> bool { module.kind.is_global() }
+// endregion: 1977
 
 // region: 2194
 // Return display name of an identifier
@@ -700,6 +716,19 @@ pub fn isDynamicName(name: &DeclarationName) -> bool {
 }
 // endregion: 5226
 
+// region: 5269
+/** @internal */
+pub fn getTextOfIdentifierOrLiteral(node: PropertyNameLiteralOrPrivateIdentifier) -> String {
+    if isMemberName(&node.to_ast_kind()) {
+        idText(MemberName::from_ast_kind(&node.to_ast_kind()).unwrap())
+    } else if let AstKind::JSXNamespacedName(jsx_namespaced_name) = node.to_ast_kind() {
+        getTextOfJsxNamespacedName(jsx_namespaced_name)
+    } else {
+        LiteralLikeNode::from_ast_kind(&node.to_ast_kind()).unwrap().str_text().to_string()
+    }
+}
+// endregion: 5272
+
 // region: 7235
 /** @internal */
 pub fn isAssignmentOperator(op: BinaryOperator) -> bool { matches!(op, BinaryOperator::AssignmentOperator(_)) }
@@ -1159,3 +1188,9 @@ pub fn positionIsSynthesized(pos: u32) -> bool {
     !(pos >= 0)
 }
 // endregion: 9979
+
+// region: 10856
+/** @internal */
+/** @internal */
+pub fn getTextOfJsxNamespacedName(node: &JSXNamespacedName) -> String { format!("{}:{}", idText(MemberName::from_ast_kind(&node.namespace.to_ast_kind()).unwrap()), idText(MemberName::from_ast_kind(&node.property.to_ast_kind()).unwrap())) }
+// endregion: 10861

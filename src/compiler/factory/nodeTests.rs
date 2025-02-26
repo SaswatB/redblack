@@ -92,6 +92,14 @@ pub fn isPostfixUnaryExpression<'a>(node: &AstKind<'a>) -> Option<&'a UpdateExpr
 pub fn isClassExpression(node: &AstKind) -> bool { matches!(node, AstKind::Class(_)) }
 // endregion: 667
 
+// region: 819
+pub fn isModuleDeclaration(node: &AstKind) -> bool { matches!(node, AstKind::TSModuleDeclaration(_)) }
+// endregion: 823
+
+// region: 970
+pub fn isJsxNamespacedName(node: &AstKind) -> bool { matches!(node, AstKind::JSXNamespacedName(_)) }
+// endregion: 974
+
 // region: 992
 // Property assignments
 

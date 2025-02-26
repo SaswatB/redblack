@@ -1,10 +1,13 @@
 use std::fmt::Display;
 
-use oxc_ast::{ast::TSQualifiedName, AstKind};
+use oxc_ast::{
+    ast::{PrivateIdentifier, TSQualifiedName},
+    AstKind,
+};
 
 use crate::define_subset_enum;
 
-use super::types::{DeclarationName, DiagnosticMessageChain, EntityNameExpression, IsContainer};
+use super::types::{DeclarationName, DiagnosticMessageChain, EntityNameExpression, IsContainer, PropertyNameLiteral};
 
 define_subset_enum!(IsContainerOrEntityNameExpression from AstKind {
     Sub(IsContainer),
@@ -46,3 +49,11 @@ define_subset_enum!(DeclarationNameOrQualifiedName from AstKind {
 pub trait StrName {
     fn str_name(&self) -> &str;
 }
+pub trait StrText {
+    fn str_text(&self) -> &str;
+}
+
+define_subset_enum!(PropertyNameLiteralOrPrivateIdentifier from AstKind {
+    Sub(PropertyNameLiteral),
+    PrivateIdentifier,
+});

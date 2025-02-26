@@ -6,10 +6,7 @@ use oxc_ast::{
 use crate::{compiler::types::BinaryExpression, define_subset_enum};
 
 use super::{
-    factory::nodeTests::*,
-    rb_extra::AstKindExt,
-    types::*,
-    utilities::*
+    factory::nodeTests::*, rb_extra::AstKindExt, rb_unions::StrName, types::*, utilities::*
 };
 
 // region: 430
@@ -28,7 +25,25 @@ pub fn escapeLeadingUnderscores(identifier: &str) -> String {
         identifier.to_string()
     }
 }
-// endregion: 830
+
+/**
+ * Remove extra underscore from escaped identifier text content.
+ *
+ * @param identifier The escaped identifier text.
+ * @returns The unescaped identifier text.
+ */
+pub fn unescapeLeadingUnderscores(identifier: &str) -> String {
+    if identifier.len() >= 3 && identifier.as_bytes()[0] == b'_' && identifier.as_bytes()[1] == b'_' && identifier.as_bytes()[2] == b'_' {
+        identifier[1..].to_string()
+    } else {
+        identifier.to_string()
+    }
+}
+
+pub fn idText(identifierOrPrivateName: MemberName) -> String {
+    unescapeLeadingUnderscores(identifierOrPrivateName.str_name())
+}
+// endregion: 845
 
 // region: 934
 /** @internal */
@@ -37,7 +52,8 @@ pub fn getNonAssignedNameOfDeclaration<'a>(declaration: AstKind<'a>) -> Option<D
         // Identifier
         AstKind::IdentifierName(_) |
         AstKind::IdentifierReference(_) |
-        AstKind::BindingIdentifier(_) => Some(DeclarationName::from_ast_kind(&declaration).unwrap()),
+        AstKind::BindingIdentifier(_) |
+        AstKind::JSXIdentifier(_) => Some(DeclarationName::from_ast_kind(&declaration).unwrap()),
         // end Identifier
         // ! rb skipping JSDoc
         // AstKind::JSDocPropertyTag(tag) | AstKind::JSDocParameterTag(tag) => {
@@ -170,6 +186,12 @@ pub fn getJSDocTypeTag<'a>(node: &'a AstKind) -> Option<()> {
 }
 // endregion: 1197
 
+// region: 1343
+pub fn isMemberName(node: &AstKind) -> bool {
+    Identifier::from_ast_kind(node).is_some() || matches!(node, AstKind::PrivateIdentifier(_))
+}
+// endregion: 1347
+
 // region: 1364
 define_subset_enum!(isOptionalChainResult from AstKind {
     Sub(PropertyAccessExpression),
@@ -238,13 +260,15 @@ pub fn isLeftHandSideExpressionKind(kind: &AstKind) -> bool {
         AstKind::IdentifierName(_) |
         AstKind::BindingIdentifier(_) |
         AstKind::IdentifierReference(_) |
+        AstKind::JSXIdentifier(_) |
         // end Identifier
         AstKind::PrivateIdentifier(_) | // technically this is only an Expression if it's in a `#field in expr` BinaryExpression
         AstKind::RegExpLiteral(_) |
         AstKind::NumericLiteral(_) |
         AstKind::BigIntLiteral(_) |
         AstKind::StringLiteral(_) |
-        AstKind::TemplateLiteral(_) |
+        AstKind::NoSubstitutionTemplateLiteral(_) |
+        AstKind::TemplateExpression(_) |
         AstKind::BooleanLiteral(_) |
         AstKind::NullLiteral(_) |
         AstKind::ThisExpression(_) |
@@ -293,7 +317,7 @@ pub fn canHaveSymbol(node: &AstKind) -> bool {
         AstKind::ExportSpecifier(_) |
         AstKind::TSFunctionType(_) | // FunctionType
         AstKind::MethodDefinition(_) | // Constructor, GetAccessor, SetAccessor
-        AstKind::IdentifierName(_) | AstKind::IdentifierReference(_) | AstKind::BindingIdentifier(_) | // Identifier
+        AstKind::IdentifierName(_) | AstKind::IdentifierReference(_) | AstKind::BindingIdentifier(_) | AstKind::JSXIdentifier(_) | // Identifier
         // ImportClause
         AstKind::ImportSpecifier(_) |
         AstKind::ImportDefaultSpecifier(_) |
@@ -319,7 +343,7 @@ pub fn canHaveSymbol(node: &AstKind) -> bool {
         // AstKind::TSNamespaceExport(_) | // NamespaceExport
         AstKind::TSNamespaceExportDeclaration(_) | // NamespaceExportDeclaration
         AstKind::NewExpression(_) |
-        AstKind::TemplateLiteral(_) | // NoSubstitutionTemplateLiteral
+        AstKind::NoSubstitutionTemplateLiteral(_) |
         AstKind::NumericLiteral(_) |
         AstKind::ObjectExpression(_) | // ObjectLiteralExpression
         AstKind::FormalParameter(_) | // Parameter
@@ -350,7 +374,7 @@ pub fn canHaveLocals(node: &AstKind) -> bool { HasLocals::from_ast_kind(node).is
 pub fn isStringLiteralLike(node: &AstKind) -> bool {
     match node {
         AstKind::StringLiteral(_) => true,
-        AstKind::TemplateLiteral(n) => n.is_no_substitution_template(),
+        AstKind::NoSubstitutionTemplateLiteral(_) => true,
         _ => false,
     }
 }

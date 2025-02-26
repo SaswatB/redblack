@@ -3,11 +3,11 @@ use oxc_ast::{
         Argument, ArrayExpression, ArrayPattern, ArrayPatternElement, ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AwaitExpression, BigIntLiteral, BindingIdentifier, BindingProperty, BindingRestElement, BlockStatement, BooleanLiteral, CallExpression, CatchClause,
         ChainExpression, Class, ClassExtends, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, Expression, ExpressionWithTypeArguments, ForInStatement,
         ForOfStatement, ForStatement, FormalParameter, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment,
-        JSXNamespacedName, JSXSpreadAttribute, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression, PrivateFieldExpression, PrivateIdentifier, PrivateInExpression,
-        PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType,
-        TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName,
-        TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression, TemplateLiteral, ThisExpression, UnaryExpression, UpdateExpression,
-        VariableDeclarator, YieldExpression,
+        JSXIdentifier, JSXNamespacedName, JSXSpreadAttribute, JSXText, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NoSubstitutionTemplateLiteral, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression,
+        PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements,
+        TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType,
+        TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression,
+        TemplateElement, TemplateExpression, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -17,7 +17,7 @@ use crate::{define_flags, define_string_enum, define_subset_enum, entity_propert
 
 use super::{
     moduleNameResolver::PackageJsonInfoCache,
-    rb_unions::{StrName, StringOrDiagnosticMessageChain, StringOrNumber},
+    rb_unions::{StrName, StrText, StringOrDiagnosticMessageChain, StringOrNumber},
 };
 
 #[derive(Debug, Clone)]
@@ -327,6 +327,7 @@ define_subset_enum!(Identifier from AstKind {
     IdentifierName,
     BindingIdentifier,
     IdentifierReference,
+    JSXIdentifier,
 });
 impl<'a> StrName for Identifier<'a> {
     fn str_name(&self) -> &str {
@@ -334,6 +335,7 @@ impl<'a> StrName for Identifier<'a> {
             Identifier::IdentifierName(identifier_name) => identifier_name.name.as_str(),
             Identifier::BindingIdentifier(binding_identifier) => binding_identifier.name.as_str(),
             Identifier::IdentifierReference(identifier_reference) => identifier_reference.name.as_str(),
+            Identifier::JSXIdentifier(jsx_identifier) => jsx_identifier.name.as_str(),
         }
     }
 }
@@ -349,6 +351,9 @@ impl<'a> NamedDeclarationTrait for BindingIdentifier<'a> {
 impl<'a> NamedDeclarationTrait for IdentifierReference<'a> {
     fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
 }
+impl<'a> NamedDeclarationTrait for JSXIdentifier<'a> {
+    fn name(&self) -> Option<DeclarationName<'_>> { Some(DeclarationName::from_ast_kind(&self.to_ast_kind()).unwrap()) }
+}
 // endregion: 1703
 
 // region: 1724
@@ -360,7 +365,7 @@ define_subset_enum!(EntityName from AstKind {
 define_subset_enum!(PropertyName from AstKind {
     Sub(Identifier),
     StringLiteral,
-    TemplateLiteral, // no_substitution_template: true
+    NoSubstitutionTemplateLiteral,
     NumericLiteral,
     ObjectProperty, // computed: true
     PrivateIdentifier,
@@ -841,16 +846,13 @@ impl NamedDeclarationTrait for TSConstructorType<'_> {
 // region: 2367
 define_subset_enum!(StringLiteralLike from AstKind {
     StringLiteral,
-    TemplateLiteral, // NoSubstitutionTemplateLiteral
+    NoSubstitutionTemplateLiteral,
 });
 impl<'a> StringLiteralLike<'a> {
     pub fn value(&self) -> String {
         match self {
             StringLiteralLike::StringLiteral(string) => string.value.to_string(),
-            StringLiteralLike::TemplateLiteral(template) => {
-                let first_quasi = template.quasis.first().unwrap();
-                first_quasi.value.cooked.unwrap().to_string()
-            }
+            StringLiteralLike::NoSubstitutionTemplateLiteral(template) => template.value.to_string(),
         }
     }
 }
@@ -878,7 +880,8 @@ define_subset_enum!(AstKindExpression from AstKind {
     BigIntLiteral,
     RegExpLiteral,
     StringLiteral,
-    TemplateLiteral,
+    TemplateExpression,
+    NoSubstitutionTemplateLiteral,
     IdentifierReference,
     MetaProperty,
     NL(Super),
@@ -1003,7 +1006,63 @@ impl<'a> BinaryExpression<'a> {
 impl NamedDeclarationTrait for ArrowFunctionExpression<'_> {
     fn name(&self) -> Option<DeclarationName<'_>> { None }
 }
-// endregion: 2756
+
+// The text property of a LiteralExpression stores the interpreted value of the literal in text form. For a StringLiteral,
+// or any literal of a template, this means quotes have been removed and escapes have been converted to actual characters.
+// For a NumericLiteral, the stored value is the toString() representation of the number. For example 1, 1.00, and 1e0 are all stored as just "1".
+// export interface LiteralLikeNode extends Node {
+define_subset_enum!(LiteralLikeNode from AstKind {
+    Sub(TemplateLiteralLikeNode),
+    Sub(LiteralExpression),
+    JSXText,
+});
+impl<'a> StrText for LiteralLikeNode<'a> {
+    fn str_text(&self) -> &str {
+        match self {
+            LiteralLikeNode::TemplateLiteralLikeNode(string) => string.str_text(),
+            LiteralLikeNode::LiteralExpression(string) => string.str_text(),
+            LiteralLikeNode::JSXText(string) => string.value.as_str(),
+        }
+    }
+}
+
+// export interface TemplateLiteralLikeNode extends LiteralLikeNode {
+define_subset_enum!(TemplateLiteralLikeNode from AstKind {
+    NoSubstitutionTemplateLiteral,
+    TemplateElement
+});
+impl<'a> StrText for TemplateLiteralLikeNode<'a> {
+    fn str_text(&self) -> &str {
+        match self {
+            TemplateLiteralLikeNode::NoSubstitutionTemplateLiteral(string) => &string.value.as_str(),
+            TemplateLiteralLikeNode::TemplateElement(string) => &string.value.raw.as_str(),
+        }
+    }
+}
+
+// The text property of a LiteralExpression stores the interpreted value of the literal in text form. For a StringLiteral,
+// or any literal of a template, this means quotes have been removed and escapes have been converted to actual characters.
+// For a NumericLiteral, the stored value is the toString() representation of the number. For example 1, 1.00, and 1e0 are all stored as just "1".
+// export interface LiteralExpression extends LiteralLikeNode, PrimaryExpression {
+define_subset_enum!(LiteralExpression from AstKind {
+    StringLiteral,
+    RegExpLiteral,
+    NoSubstitutionTemplateLiteral,
+    NumericLiteral,
+    BigIntLiteral,
+});
+impl<'a> StrText for LiteralExpression<'a> {
+    fn str_text(&self) -> &str {
+        match self {
+            LiteralExpression::StringLiteral(string) => string.value.as_str(),
+            LiteralExpression::RegExpLiteral(string) => string.raw.map(|s| s.as_str()).unwrap_or(""),
+            LiteralExpression::NoSubstitutionTemplateLiteral(string) => string.value.as_str(),
+            LiteralExpression::NumericLiteral(string) => string.raw.map(|s| s.as_str()).unwrap_or(""),
+            LiteralExpression::BigIntLiteral(string) => string.raw.as_str(),
+        }
+    }
+}
+// endregion: 2778
 
 // region: 2938
 /**

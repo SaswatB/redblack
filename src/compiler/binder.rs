@@ -13,9 +13,9 @@ use super::{
     factory::nodeTests::{isClassStaticBlockDeclaration, isTypeOfExpression},
     rb_extra::{AstKindExt, SourceFileExt},
     rb_unions::{DeclarationNameOrQualifiedName, IsContainerOrEntityNameExpression, StringOrNumber},
-    types::{AccessExpression, AstKindExpression, BinaryExpression, CompilerOptions, DiagnosticArguments, DiagnosticMessage, DiagnosticWithLocation, FlowFlags, FlowLabel, FlowNode, FlowUnreachable, HasLocals, HasLocalsExt, InternalSymbolName, IsBlockScopedContainer, ScriptTarget, Symbol, SymbolFlags, SymbolTable, __String},
-    utilities::{createDiagnosticForNodeInSourceFile, declarationNameToString, getEmitScriptTarget, getSourceFileOfNode, isEntityNameExpression, isInJSFile, isModuleExportsAccessExpression, isObjectLiteralOrClassExpressionMethodOrAccessor, isPartOfTypeQuery, isStringOrNumericLiteralLike},
-    utilitiesPublic::{canHaveSymbol, isBooleanLiteral, isFunctionLike, isLeftHandSideExpression, isOptionalChain, isOptionalChainResult, isStringLiteralLike},
+    types::*,
+    utilities::*,
+    utilitiesPublic::*,
 };
 
 // region: 332
@@ -707,6 +707,7 @@ impl<'a> Binder<'a> {
             AstKind::IdentifierName(_) |
             AstKind::IdentifierReference(_) |
             AstKind::BindingIdentifier(_) |
+            AstKind::JSXIdentifier(_) |
             // end Identifier
                 // ! rb skipping jsdoc
                 // for typedef type names with namespaces, bind the new jsdoc type symbol here
