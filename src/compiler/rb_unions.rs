@@ -42,3 +42,7 @@ define_subset_enum!(DeclarationNameOrQualifiedName from AstKind {
     Sub(DeclarationName),
     TSQualifiedName,
 });
+
+pub trait StrName {
+    fn str_name(&self) -> &str;
+}

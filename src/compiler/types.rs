@@ -17,7 +17,7 @@ use crate::{define_flags, define_string_enum, define_subset_enum, entity_propert
 
 use super::{
     moduleNameResolver::PackageJsonInfoCache,
-    rb_unions::{StringOrDiagnosticMessageChain, StringOrNumber},
+    rb_unions::{StrName, StringOrDiagnosticMessageChain, StringOrNumber},
 };
 
 #[derive(Debug, Clone)]
@@ -328,8 +328,8 @@ define_subset_enum!(Identifier from AstKind {
     BindingIdentifier,
     IdentifierReference,
 });
-impl<'a> Identifier<'a> {
-    pub fn str_name(&self) -> &str {
+impl<'a> StrName for Identifier<'a> {
+    fn str_name(&self) -> &str {
         match self {
             Identifier::IdentifierName(identifier_name) => identifier_name.name.as_str(),
             Identifier::BindingIdentifier(binding_identifier) => binding_identifier.name.as_str(),
@@ -371,6 +371,14 @@ define_subset_enum!(MemberName from AstKind {
     Sub(Identifier),
     PrivateIdentifier,
 });
+impl<'a> StrName for MemberName<'a> {
+    fn str_name(&self) -> &str {
+        match self {
+            MemberName::Identifier(identifier) => identifier.str_name(),
+            MemberName::PrivateIdentifier(private_identifier) => private_identifier.str_name(),
+        }
+    }
+}
 
 define_subset_enum!(DeclarationName from AstKind {
     Sub(PropertyName),
@@ -477,6 +485,14 @@ impl<'a> NamedDeclarationTrait for DeclarationStatement<'a> {
 }
 
 // endregion: 1790
+
+// region: 1796
+// Typed as a PrimaryExpression due to its presence in BinaryExpressions (#field in expr)
+// export interface PrivateIdentifier extends PrimaryExpression {
+impl<'a> StrName for PrivateIdentifier<'a> {
+    fn str_name(&self) -> &str { self.name.as_str() }
+}
+// endregion: 1804
 
 // region: 1821
 // export interface TypeParameterDeclaration extends NamedDeclaration, JSDocContainer {

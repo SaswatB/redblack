@@ -6,6 +6,7 @@ use super::factory::utilities::skipOuterExpressions;
 use super::rb_extra::SourceFileExt;
 use super::rb_unions::strings_to_string_or_numbers;
 use super::rb_unions::DeclarationNameOrQualifiedName;
+use super::rb_unions::StrName;
 use super::rb_unions::StringOrDiagnosticMessageChain;
 use super::scanner::skipTrivia;
 use super::utilitiesPublic::*;
