@@ -3,6 +3,7 @@ use crate::compiler::types::*;
 use crate::flag_names_impl;
 use crate::opt_rc_cell;
 use oxc_ast::ast::Declaration;
+use oxc_ast::ast::ExportSpecifier;
 use oxc_ast::ast::SourceFile;
 use oxc_ast::{
     ast::{Argument, Expression, JSXAttribute, ObjectExpression},
@@ -512,7 +513,7 @@ impl<'a> TypeCheckerTrait<'a> for TypeChecker<'a> {
     fn getSymbolOfExpando(&self, node: AstKind, allowDeclaration: bool) -> Option<Symbol<'a>> { todo!() }
     fn getContextualType(&self, node: Expression<'a>) -> Option<&dyn Type<'a>> { todo!() }
     fn getContextualTypeWithFlags(&self, node: Expression<'a>, contextFlags: Option<ContextFlags>) -> Option<&dyn Type<'a>> { todo!() }
-    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike) -> Option<&dyn Type<'a>> { todo!() }
+    fn getContextualTypeForObjectLiteralElement(&self, element: ObjectLiteralElementLike<'a>) -> Option<&dyn Type<'a>> { todo!() }
     fn getContextualTypeForArgumentAtIndex(&self, call: CallLikeExpression<'a>, argIndex: usize) -> Option<&dyn Type<'a>> { todo!() }
     fn getContextualTypeForJsxAttribute(&self, attribute: JSXAttribute) -> Option<&dyn Type<'a>> { todo!() }
     fn isContextSensitive(&self, node: Expression<'a>) -> bool { todo!() }

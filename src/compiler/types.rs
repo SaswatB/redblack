@@ -330,7 +330,7 @@ define_subset_enum!(Identifier from AstKind {
     PrivateIdentifier,
 });
 impl<'a> Identifier<'a> {
-    pub fn name(&self) -> &str {
+    pub fn str_name(&self) -> &str {
         match self {
             Identifier::IdentifierName(identifier_name) => identifier_name.name.as_str(),
             Identifier::BindingIdentifier(binding_identifier) => binding_identifier.name.as_str(),
@@ -1288,7 +1288,7 @@ impl NamedDeclarationTrait for TSImportEqualsDeclaration<'_> {
 // import d, * as ns from "mod" => name = d, namedBinding: NamespaceImport = { name: ns }
 // import { a, b as x } from "mod" => name = undefined, namedBinding: NamedImports = { elements: [{ name: a }, { name: x, propertyName: b}]}
 // import d, { a, b as x } from "mod" => name = d, namedBinding: NamedImports = { elements: [{ name: a }, { name: x, propertyName: b}]}
-define_subset_enum!(ImportClause from NamedDeclarationTrait { // based on ImportDeclarationSpecifier
+define_subset_enum!(ImportClause from AstKind { // based on ImportDeclarationSpecifier
     ImportSpecifier,
     ImportDefaultSpecifier,
     ImportNamespaceSpecifier,

@@ -1,15 +1,15 @@
 use oxc_ast::{
     ast::{CallExpression, ElementAccessExpression},
-    AstKind,
+    AstKind, GetChildren,
 };
 
-use crate::define_subset_enum;
+use crate::{compiler::types::BinaryExpression, define_subset_enum};
 
 use super::{
-    factory::nodeTests::isElementAccessExpression,
+    factory::nodeTests::*,
     rb_extra::AstKindExt,
-    types::{AstKindExpression, HasLocals, PropertyAccessExpression, SignatureDeclaration, TextSpan},
-    utilities::{isInJSFile, isLiteralLikeElementAccess},
+    types::*,
+    utilities::*
 };
 
 // region: 430
@@ -29,6 +29,129 @@ pub fn escapeLeadingUnderscores(identifier: &str) -> String {
     }
 }
 // endregion: 830
+
+// region: 934
+/** @internal */
+pub fn getNonAssignedNameOfDeclaration<'a>(declaration: AstKind<'a>) -> Option<DeclarationName<'a>> {
+    match declaration {
+        // Identifier
+        AstKind::IdentifierName(_) |
+        AstKind::IdentifierReference(_) |
+        AstKind::BindingIdentifier(_) => Some(DeclarationName::from_ast_kind(&declaration).unwrap()),
+        // end Identifier
+        // ! rb skipping JSDoc
+        // AstKind::JSDocPropertyTag(tag) | AstKind::JSDocParameterTag(tag) => {
+        //     let name = &tag.name;
+        //     if let AstKind::QualifiedName(qname) = name {
+        //         Some(DeclarationName::Identifier(&qname.right))
+        //     } else {
+        //         None
+        //     }
+        // }
+        AstKind::CallExpression(_) |
+        // BinaryExpression
+        AstKind::GeneralBinaryExpression(_) | 
+        AstKind::AssignmentExpression(_) | 
+        AstKind::LogicalExpression(_) | 
+        AstKind::PrivateInExpression(_) | 
+        AstKind::SequenceExpression(_) 
+        // end BinaryExpression
+        => {
+            match getAssignmentDeclarationKind(&declaration) {
+                AssignmentDeclarationKind::ExportsProperty |
+                AssignmentDeclarationKind::ThisProperty |
+                AssignmentDeclarationKind::Property |
+                AssignmentDeclarationKind::PrototypeProperty => {
+                    let left = BinaryExpression::from_ast_kind(&declaration).unwrap().left().to_ast_kind();
+                    getElementOrPropertyAccessArgumentExpressionOrName(AccessExpression::from_ast_kind(&left).unwrap())
+                }
+                AssignmentDeclarationKind::ObjectDefinePropertyValue |
+                AssignmentDeclarationKind::ObjectDefinePropertyExports |
+                AssignmentDeclarationKind::ObjectDefinePrototypeProperty => {
+                    if let AstKind::CallExpression(call) = declaration {
+                        // ! rb I was kinda lazy here, not sure how this conversion works
+                        DeclarationName::from_ast_kind(&call.arguments[1].to_ast_kind())
+                    } else {
+                        unreachable!()
+                    }
+                }
+                _ => None
+            }
+        }
+        // ! rb skipping JSDoc
+        // AstKind::JSDocTypedefTag(typedef) => getNameOfJSDocTypedef(typedef),
+        // AstKind::JSDocEnumTag(enum_tag) => nameForNamelessJSDocTypedef(enum_tag),
+        // ExportAssignment
+        AstKind::TSExportAssignment(export) => {
+            if isIdentifier(&export.expression.to_ast_kind()) {
+                Some(DeclarationName::from_ast_kind(&export.expression.to_ast_kind()).unwrap())
+            } else {
+                None
+            }
+        }
+        AstKind::ExportDefaultDeclaration(export) => {
+            if isIdentifier(&export.declaration.to_ast_kind()) {
+                Some(DeclarationName::from_ast_kind(&export.declaration.to_ast_kind()).unwrap())
+            } else {
+                None
+            }
+        }
+        // end ExportAssignment
+        AstKind::ElementAccessExpression(expr) => {
+            if isBindableStaticElementAccessExpression(&declaration, None) {
+                Some(DeclarationName::from_ast_kind(&expr.argument_expression.to_ast_kind()).unwrap())
+            } else {
+                None
+            }
+        }
+        _ => {
+            if let Some(d) = NamedDeclaration::from_ast_kind(&declaration) {
+                // this is ok because NamedDeclaration is only used as a convenient lookup for the name
+                unsafe { std::mem::transmute(d.name()) }
+            } else {
+                None
+            }
+        }
+    }
+}
+
+pub fn getNameOfDeclaration<'a>(declaration: AstKind<'a>) -> Option<DeclarationName<'a>> {
+    getNonAssignedNameOfDeclaration(declaration).or_else(|| {
+        if isFunctionExpression(&declaration) || isArrowFunction(&declaration) || isClassExpression(&declaration) {
+            getAssignedName(declaration)
+        } else {
+            None
+        }
+    })
+}
+/** @internal */
+pub fn getAssignedName<'a>(node: AstKind<'a>) -> Option<DeclarationName<'a>> {
+    let parent = node.parent()?;
+    
+    if isPropertyAssignment(&parent) || isBindingElement(&parent) {
+        let d = NamedDeclaration::from_ast_kind(&parent).unwrap();
+        // this is ok because NamedDeclaration is only used as a convenient lookup for the name
+        return Some(unsafe { std::mem::transmute(d.name()) });
+    }
+    else if let Some(binary) = BinaryExpression::from_ast_kind(&parent) {
+        if node.get_node_id() == binary.right().to_ast_kind().get_node_id() {
+            if isIdentifier(&binary.left().to_ast_kind()) {
+                return Some(DeclarationName::from_ast_kind(&binary.left().to_ast_kind()).unwrap());
+            }
+            else if let Some(expr) = AccessExpression::from_ast_kind(&binary.left().to_ast_kind()) {
+                return getElementOrPropertyAccessArgumentExpressionOrName(expr);
+            }
+        }
+    }
+    else if let AstKind::VariableDeclarator(decl) = parent {
+        if isIdentifier(&decl.id.to_ast_kind()) {
+            return Some(DeclarationName::from_ast_kind(&decl.id.to_ast_kind()).unwrap());
+        }
+    }
+    
+    None
+}
+// endregion: 1008
 
 // region: 1187
 /** Gets the JSDoc type tag for the node if present and valid */

@@ -15,7 +15,7 @@ pub fn isOuterExpression(node: &AstKind, kinds: OuterExpressionKinds) -> bool {
             kinds.contains(OuterExpressionKinds::Parentheses)
         }
         AstKind::TSTypeAssertion(_) | AstKind::TSAsExpression(_) | AstKind::TSSatisfiesExpression(_) => kinds.contains(OuterExpressionKinds::TypeAssertions),
-        AstKind::TSTypeParameterDeclaration(_) => kinds.contains(OuterExpressionKinds::ExpressionsWithTypeArguments),
+        AstKind::ExpressionWithTypeArguments(_) => kinds.contains(OuterExpressionKinds::ExpressionsWithTypeArguments),
         AstKind::TSNonNullExpression(_) => kinds.contains(OuterExpressionKinds::NonNullAssertions),
         // !rb skipping PartiallyEmittedExpression case
         // AstKind::PartiallyEmittedExpression(_) => {

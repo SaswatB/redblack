@@ -3,7 +3,7 @@ use oxc_ast::{
     AstKind,
 };
 
-use crate::compiler::types::{Identifier, PropertyAccessExpression};
+use crate::compiler::types::{BindingElement, Identifier, PropertyAccessExpression};
 
 // region: 234
 pub fn isNumericLiteral(node: &AstKind) -> bool { matches!(node, AstKind::NumericLiteral(_)) }
@@ -21,6 +21,10 @@ pub fn isPrivateIdentifier(node: &AstKind) -> bool { matches!(node, AstKind::Pri
 pub fn isClassStaticBlockDeclaration(node: Option<&AstKind>) -> bool { matches!(node, Some(AstKind::StaticBlock(_))) }
 // endregion: 436
 
+// region: 569
+pub fn isBindingElement(node: &AstKind) -> bool { BindingElement::from_ast_kind(node).is_some() }
+// endregion: 573
+
 // region: 579
 pub fn isObjectLiteralExpression(node: &AstKind) -> bool { matches!(node, AstKind::ObjectExpression(_)) }
 
@@ -29,7 +33,11 @@ pub fn isPropertyAccessExpression(node: &AstKind) -> bool { PropertyAccessExpres
 pub fn isElementAccessExpression(node: &AstKind) -> bool { matches!(node, AstKind::ElementAccessExpression(_)) }
 // endregion: 591
 
-// region: 620
+// region: 611
+pub fn isFunctionExpression(node: &AstKind) -> bool { matches!(node, AstKind::Function(_)) }
+
+pub fn isArrowFunction(node: &AstKind) -> bool { matches!(node, AstKind::ArrowFunctionExpression(_)) }
+
 pub fn isDeleteExpression<'a>(node: &AstKind<'a>) -> Option<&'a UnaryExpression<'a>> {
     let AstKind::UnaryExpression(unary) = node else { return None };
     if unary.operator == UnaryOperator::Delete {
@@ -79,3 +87,13 @@ pub fn isPostfixUnaryExpression<'a>(node: &AstKind<'a>) -> Option<&'a UpdateExpr
     }
 }
 // endregion: 643
+
+// region: 663
+pub fn isClassExpression(node: &AstKind) -> bool { matches!(node, AstKind::Class(_)) }
+// endregion: 667
+
+// region: 992
+// Property assignments
+
+pub fn isPropertyAssignment(node: &AstKind) -> bool { matches!(node, AstKind::ObjectProperty(n) if !n.shorthand) }
+// endregion: 998
