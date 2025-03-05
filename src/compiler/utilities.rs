@@ -111,6 +111,16 @@ pub fn isAmbientModule(node: &AstKind) -> bool {
 }
 // endregion: 1931
 
+// region: 1941
+/**
+ * An effective module (namespace) declaration is either
+ * 1. An actual declaration: namespace X { ... }
+ * 2. A Javascript declaration, which is:
+ *    An identifier in a nested property access expression: Y in `X.Y.Z = { ... }`
+ */
+pub fn isEffectiveModuleDeclaration(node: &AstKind) -> bool { isModuleDeclaration(node) || isIdentifier(node) }
+// endregion: 1951
+
 // region: 1972
 /** @internal */
 pub fn isGlobalScopeAugmentation(module: &TSModuleDeclaration) -> bool { module.kind.is_global() }
@@ -444,6 +454,11 @@ pub fn isSourceFileJS(file: &SourceFile) -> bool { file.source_type.is_javascrip
 // ! rb consider making this faster?
 pub fn isInJSFile(node: &AstKind) -> bool { isSourceFileJS(getSourceFileOfNode(Some(node)).unwrap()) }
 // endregion: 3656
+
+// region: 3755
+/** @internal */
+pub fn isAssignmentDeclaration(decl: &AstKind) -> bool { isBinaryExpression(decl) || isAccessExpression(decl) || isIdentifier(decl) || isCallExpression(decl) }
+// endregion: 3760
 
 // region: 3919
 /** @internal */

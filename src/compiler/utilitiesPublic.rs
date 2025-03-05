@@ -16,6 +16,10 @@ pub fn createTextSpanFromBounds(start: u32, end: u32) -> TextSpan { createTextSp
 
 // endregion: 444
 
+// region: 643
+pub fn isBinaryExpression(node: &AstKind) -> bool { BinaryExpression::from_ast_kind(node).is_some() }
+// endregion: 647
+
 // region: 764
 /**
  * Iterates through the parent chain of a node and performs the callback on each parent until the callback

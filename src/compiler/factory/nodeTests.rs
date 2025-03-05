@@ -33,7 +33,9 @@ pub fn isObjectLiteralExpression(node: &AstKind) -> bool { matches!(node, AstKin
 pub fn isPropertyAccessExpression(node: &AstKind) -> bool { PropertyAccessExpression::from_ast_kind(node).is_some() }
 
 pub fn isElementAccessExpression(node: &AstKind) -> bool { matches!(node, AstKind::ElementAccessExpression(_)) }
-// endregion: 591
+
+pub fn isCallExpression(node: &AstKind) -> bool { matches!(node, AstKind::CallExpression(_)) }
+// endregion: 595
 
 // region: 611
 pub fn isFunctionExpression(node: &AstKind) -> bool { matches!(node, AstKind::Function(_)) }

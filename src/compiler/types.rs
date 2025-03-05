@@ -7,7 +7,7 @@ use oxc_ast::{
         PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements,
         TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType,
         TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression,
-        TemplateElement, TemplateExpression, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarator, YieldExpression,
+        TemplateElement, TemplateExpression, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarationList, VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -442,10 +442,21 @@ define_subset_enum!(DeclarationName from AstKind {
 });
 
 // export interface Declaration extends Node {
-//     _declarationBrand: any;
-//     /** @internal */ symbol: Symbol; // Symbol declared by node (initialized by binding)
-//     /** @internal */ localSymbol?: Symbol; // Local symbol declared by node (initialized by binding only for exported nodes)
-// }
+define_subset_enum!(AstKindDeclaration from AstKind {
+    // !rb this doesn't seem to be exhaustive, the typescript version has more members
+    VariableDeclarationList,
+    Function,
+    Class,
+    TSTypeAliasDeclaration,
+    TSInterfaceDeclaration,
+    TSEnumDeclaration,
+    TSModuleDeclaration,
+    TSImportEqualsDeclaration,
+});
+impl<'a> PartialEq for AstKindDeclaration<'a> {
+    fn eq(&self, other: &Self) -> bool { self.to_ast_kind().get_node_id() == other.to_ast_kind().get_node_id() }
+}
+
 define_subset_enum!(NamedDeclaration from AstKind {
     // Sub(DynamicNamedDeclaration),
     Sub(DeclarationStatement),
@@ -2238,8 +2249,8 @@ pub type SymbolId = u32;
 pub struct Symbol<'a> {
     pub flags: SymbolFlags,                     // Symbol flags
     pub escapedName: __String,                  // Name of symbol
-    pub declarations: Option<Vec<&'a Declaration<'a>>>, // Declarations associated with this symbol
-    pub valueDeclaration: Option<&'a Declaration<'a>>,  // First value declaration of the symbol
+    pub declarations: Option<Vec<&'a AstKindDeclaration<'a>>>, // Declarations associated with this symbol
+    pub valueDeclaration: Option<&'a AstKindDeclaration<'a>>,  // First value declaration of the symbol
     pub members: Option<SymbolTable<'a>>,           // Class, interface or object literal instance members
     pub exports: Option<SymbolTable<'a>>,           // Module exports
     pub globalExports: Option<SymbolTable<'a>>,     // Conditional global UMD exports
@@ -2251,7 +2262,7 @@ pub struct Symbol<'a> {
     /** @internal */ pub isReferenced: Option<SymbolFlags>,   // True if the symbol is referenced elsewhere. Keeps track of the meaning of a reference in case a symbol is both a type parameter and parameter.
     /** @internal */ pub lastAssignmentPos: Option<usize>,    // Source position of last node that assigns value to symbol
     /** @internal */ pub isReplaceableByMethod: Option<bool>, // Can this Javascript class property be replaced by a method symbol?
-    /** @internal */ pub assignmentDeclarationMembers: Option<HashMap<usize, &'a Declaration<'a>>>, // detected late-bound assignment declarations associated with the symbol
+    /** @internal */ pub assignmentDeclarationMembers: Option<HashMap<usize, &'a AstKindDeclaration<'a>>>, // detected late-bound assignment declarations associated with the symbol
 }
 // endregion: 5976
 

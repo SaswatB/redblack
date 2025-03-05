@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{cell::RefCell, collections::{HashMap, HashSet}, rc::Rc};
 
 use oxc_ast::{
     ast::{AssignmentOperator, CallExpression, Expression, GeneralBinaryOperator, PrivateIdentifier, SourceFile, UnaryOperator},
@@ -9,13 +9,7 @@ use crate::{define_flags, flag_names_impl, opt_rc_cell, rc_cell};
 use crate::compiler::rb_extra::SourceFilePassthrough;
 
 use super::{
-    diagnostic_information_map_generated::Diagnostics,
-    factory::nodeTests::*,
-    rb_extra::{AstKindExt, SourceFileExt},
-    rb_unions::{DeclarationNameOrQualifiedName, EscapedText, IsContainerOrEntityNameExpression, PropertyNameLiteralOrPrivateIdentifier, StrText, StringOrNumber},
-    types::*,
-    utilities::*,
-    utilitiesPublic::*,
+    core::appendIfUnique, diagnostic_information_map_generated::Diagnostics, factory::nodeTests::*, rb_extra::{AstKindExt, SourceFileExt}, rb_unions::{DeclarationNameOrQualifiedName, EscapedText, IsContainerOrEntityNameExpression, PropertyNameLiteralOrPrivateIdentifier, StrText, StringOrNumber}, types::*, utilities::*, utilitiesPublic::*
 };
 
 // region: 332
@@ -205,7 +199,41 @@ impl<'a> Binder<'a> {
 
     // endregion: 628
 
-    // region: 668
+    // region: 639
+    fn createSymbol(&mut self, flags: SymbolFlags, name: __String) -> Symbol {
+        self.symbolCount += 1;
+        Symbol::new(flags, &name)
+    }
+    
+    fn addDeclarationToSymbol(&mut self, symbol: rc_cell!(Symbol<'a>), node: &'a AstKindDeclaration<'a>, symbolFlags: SymbolFlags) {
+        symbol.borrow_mut().flags |= symbolFlags;
+
+        node.to_ast_kind().set_symbol(Some(symbol.clone()));
+        symbol.borrow_mut().declarations = Some(appendIfUnique::<&'a AstKindDeclaration<'a>>(
+            Some(&mut symbol.borrow().declarations.clone().unwrap_or_default()),
+            node,
+            None::<for<'r, 's> fn(&'r &AstKindDeclaration<'_>, &'s &AstKindDeclaration<'_>) -> bool>
+        ));
+
+        if (symbolFlags & (SymbolFlags::Class | SymbolFlags::Enum | SymbolFlags::Module | SymbolFlags::Variable)).0 != 0 && symbol.borrow().exports.is_none() {
+            symbol.borrow_mut().exports = Some(HashMap::new());
+        }
+
+        if (symbolFlags & (SymbolFlags::Class | SymbolFlags::Interface | SymbolFlags::TypeLiteral | SymbolFlags::ObjectLiteral)).0 != 0 && symbol.borrow().members.is_none() {
+            symbol.borrow_mut().members = Some(HashMap::new());
+        }
+
+        // On merge of const enum module with class or function, reset const enum only flag (namespaces will already recalculate)
+        if symbol.borrow().constEnumOnlyModule.unwrap_or(false) && (symbol.borrow().flags & (SymbolFlags::Function | SymbolFlags::Class | SymbolFlags::RegularEnum)).0 != 0 {
+            symbol.borrow_mut().constEnumOnlyModule = Some(false);
+        }
+
+        if (symbolFlags & SymbolFlags::Value).0 != 0 {
+            setValueDeclaration(symbol, node);
+        }
+    }
+
+
     // Should not be called on a declaration with a computed property name,
     // unless it is a well known Symbol.
     fn getDeclarationName(&self, node: &AstKind<'a>) -> Option<__String> {

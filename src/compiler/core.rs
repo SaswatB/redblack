@@ -1,4 +1,51 @@
-// region: 1939
+// region: 218
+/** @internal */
+pub fn contains<T: PartialEq>(array: Option<&[T]>, value: &T, equalityComparer: Option<impl Fn(&T, &T) -> bool>) -> bool {
+    if let Some(array) = array {
+        for i in 0..array.len() {
+            if equalityComparer.as_ref().map(|f| f(&array[i], value)).unwrap_or(equateValues(&array[i], value)) {
+                return true;
+            }
+        }
+    }
+    false
+}
+// endregion: 230
+
+// region: 996
+/**
+ * @return Whether the value was added.
+ *
+ * @internal
+ */
+pub fn pushIfUnique<T: Clone + PartialEq>(array: &mut Vec<T>, toAdd: T, equalityComparer: Option<impl Fn(&T, &T) -> bool>) -> bool {
+    if contains(Some(array), &toAdd, equalityComparer) {
+        return false;
+    } else {
+        array.push(toAdd);
+        return true;
+    }
+}
+
+/**
+ * Unlike `pushIfUnique`, this can take `undefined` as an input, and returns a new array.
+ *
+ * @internal
+ */
+pub fn appendIfUnique<T: Clone + PartialEq>(array: Option<&mut Vec<T>>, toAdd: T, equalityComparer: Option<impl Fn(&T, &T) -> bool>) -> Vec<T> {
+    if let Some(array) = array {
+        pushIfUnique(array, toAdd, equalityComparer);
+        array.clone()
+    } else {
+        vec![toAdd]
+    }
+}
+// endregion: 1026
+
+// region: 1934
+/** @internal */
+pub fn equateValues<T: PartialEq>(a: &T, b: &T) -> bool { a == b }
+
 /**
  * Compare the equality of two strings using a case-sensitive ordinal comparison.
  *
