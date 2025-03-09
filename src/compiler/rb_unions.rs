@@ -1,13 +1,13 @@
 use std::fmt::Display;
 
 use oxc_ast::{
-    ast::{PrivateIdentifier, TSQualifiedName},
+    ast::{PrivateIdentifier, StringLiteral, TSQualifiedName},
     AstKind,
 };
 
 use crate::define_subset_enum;
 
-use super::types::{DeclarationName, DiagnosticMessageChain, EntityNameExpression, IsContainer, PropertyNameLiteral};
+use super::types::{DeclarationName, DiagnosticMessageChain, EntityNameExpression, Identifier, IsContainer, PropertyNameLiteral};
 
 define_subset_enum!(IsContainerOrEntityNameExpression from AstKind {
     Sub(IsContainer),
@@ -61,3 +61,8 @@ define_subset_enum!(PropertyNameLiteralOrPrivateIdentifier from AstKind {
 pub trait EscapedText {
     fn escaped_text(&self) -> String;
 }
+
+define_subset_enum!(StringLiteralOrIdentifier from AstKind {
+    StringLiteral,
+    Sub(Identifier),
+});

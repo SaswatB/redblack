@@ -1,10 +1,12 @@
 use oxc_ast::ast::SourceFile;
 use oxc_ast::AstKind;
 use oxc_ast::GetChildren;
+use std::cell::UnsafeCell;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::new_rc_cell;
 use crate::opt_rc_cell;
 
 use super::moduleNameResolver::PackageJsonInfo;
@@ -166,5 +168,5 @@ macro_rules! thread_local_store {
 }
 
 thread_local_store!(RB_CTX, {
-    type_checker_host: Rc<RbTypeCheckerHost> = Rc::new(RbTypeCheckerHost::new(String::new(), CompilerOptions::default())),
+    type_checker_host: Rc<UnsafeCell<RbTypeCheckerHost<'static>>> = Rc::new(UnsafeCell::new(RbTypeCheckerHost::new(String::new(), Rc::new(CompilerOptions::default())))),
 });

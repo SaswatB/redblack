@@ -12,6 +12,7 @@ use super::{
     moduleNameResolver::PackageJsonInfo,
     program::getImpliedNodeFormatForFile,
     rb_extra::{SourceFileExt, RB_CTX},
+    rb_parser::rb_fill_parents,
     types::{ResolutionMode, ScriptTarget, TypeCheckerHost},
 };
 
@@ -97,7 +98,7 @@ impl Default for CreateSourceFileOptions {
 pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> SourceFile<'a> {
     // tracing.as_mut().map(|t| t.push(Phase::Parse, "createSourceFile", json!({ "path": file_name }), true));
     // performance::mark("beforeParse");
-    let result: SourceFile;
+    let mut result: SourceFile;
 
     // let (language_version, override_set_external_module_indicator, format, js_doc_parsing_mode) = match language_version_or_options {
     //     ScriptTargetOrCreateSourceFileOptions::Options(opts) => (opts.language_version, opts.setExternalModuleIndicator, opts.impliedNodeFormat, opts.jsDocParsingMode),
@@ -147,8 +148,9 @@ pub fn createSourceFile<'a>(file_name: &'a str, source_text: &'a str) -> SourceF
     result.set_filepath(path.to_path_buf());
     result.set_packageJsonScope(None); // todo
     result.set_externalModuleIndicator(isFileProbablyExternalModule(&result));
-    let tc_host = &*RB_CTX.get_type_checker_host();
-    result.set_impliedNodeFormat(getImpliedNodeFormatForFile(file_name, tc_host, tc_host.getCompilerOptions()));
+    let tc_host = unsafe { &*RB_CTX.get_type_checker_host().as_ref().get() };
+    result.set_impliedNodeFormat(getImpliedNodeFormatForFile(file_name, tc_host, &tc_host.getCompilerOptions()));
+    rb_fill_parents(&mut result);
 
     // performance::mark("afterParse");
     // performance::measure("Parse", "beforeParse", "afterParse");

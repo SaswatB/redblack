@@ -2052,9 +2052,9 @@ pub enum ResolutionMode {
 
 // region: 5010
 /** @internal */
-pub trait TypeCheckerHost: ModuleSpecifierResolutionHost + std::fmt::Debug {
-    fn getCompilerOptions(&self) -> &CompilerOptions;
-    fn getSourceFiles(&self) -> Vec<&SourceFile>;
+pub trait TypeCheckerHost<'a>: ModuleSpecifierResolutionHost + std::fmt::Debug {
+    fn getCompilerOptions(&self) -> Rc<CompilerOptions>;
+    fn getSourceFiles(&self) -> rc_cell!(Vec<rc_cell!(SourceFile<'a>)>);
     fn getSourceFile(&self, file_name: &str) -> Option<&SourceFile>;
     fn getProjectReferenceRedirect(&self, file_name: &str) -> Option<String>;
     fn isSourceOfProjectReferenceRedirect(&self, file_name: &str) -> bool;
@@ -2953,6 +2953,22 @@ pub trait InterfaceType<'a>: ObjectType<'a> {
     fn get_interface_props(&self) -> &InterfaceTypeProps<'a>;
 }
 // endregion: 6537
+
+// region: 6581
+// dprint-ignore
+/** @internal */
+define_flags!(VarianceFlags {
+    Invariant     =      0,  // Neither covariant nor contravariant
+    Covariant     = 1 << 0,  // Covariant
+    Contravariant = 1 << 1,  // Contravariant
+    Bivariant     = Self::Covariant.0 | Self::Contravariant.0,  // Both covariant and contravariant
+    Independent   = 1 << 2,  // Unwitnessed type parameter
+    VarianceMask  = Self::Invariant.0 | Self::Covariant.0 | Self::Contravariant.0 | Self::Independent.0, // Mask containing all measured variances without the unmeasurable flag
+    Unmeasurable  = 1 << 3,  // Variance result is unusable - relationship relies on structural comparisons which are not reflected in generic relationships
+    Unreliable    = 1 << 4,  // Variance result is unreliable - checking may produce false negatives, but not false positives
+    AllowsStructuralFallback = Self::Unmeasurable.0 | Self::Unreliable.0,
+});
+// endregion: 6595
 
 // region: 6908
 #[derive(Debug)]

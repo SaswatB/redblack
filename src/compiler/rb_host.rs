@@ -1,20 +1,44 @@
 use oxc_ast::ast::SourceFile;
-use std::fs;
 use std::path::Path;
+use std::{fs, rc::Rc};
 
+use crate::{new_rc_cell, rc_cell};
+
+use super::parser::createSourceFile;
 use super::types::{CompilerOptions, ModuleResolutionHost, ModuleSpecifierResolutionHost, TypeCheckerHost};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RbTypeCheckerHost {
+#[derive(Debug, Clone)]
+pub struct RbTypeCheckerHost<'a> {
     pub current_directory: String,
-    pub compiler_options: CompilerOptions,
+    pub compiler_options: Rc<CompilerOptions>,
+    pub source_files: rc_cell!(Vec<rc_cell!(SourceFile<'a>)>),
+
+    string_arena: Vec<Box<str>>, // allocator for strings
 }
 
-impl RbTypeCheckerHost {
-    pub fn new(current_directory: String, compiler_options: CompilerOptions) -> Self { Self { current_directory, compiler_options } }
+impl<'a> RbTypeCheckerHost<'a> {
+    pub fn new(current_directory: String, compiler_options: Rc<CompilerOptions>) -> Self { Self { current_directory, compiler_options, source_files: new_rc_cell!(vec![]), string_arena: vec![] } }
+
+    // Add a string to the arena and get a reference with lifetime 'a
+    fn allocate_str(&mut self, s: String) -> &'a str {
+        let boxed = s.into_boxed_str();
+        // Safety: we're storing the string in self.string_arena which has the same lifetime
+        // as self, so this reference will be valid as long as self is valid
+        let str_ref = unsafe { std::mem::transmute::<&str, &'a str>(boxed.as_ref()) };
+        self.string_arena.push(boxed);
+        str_ref
+    }
+
+    pub fn addSourceFile(&mut self, name: String) -> rc_cell!(SourceFile<'a>) {
+        let name = self.allocate_str(name);
+        let source_text = self.allocate_str(fs::read_to_string(Path::new(name)).unwrap());
+        let source_file = new_rc_cell!(createSourceFile(name, source_text));
+        self.source_files.borrow_mut().push(source_file.clone());
+        source_file
+    }
 }
 
-impl ModuleResolutionHost for RbTypeCheckerHost {
+impl<'a> ModuleResolutionHost for RbTypeCheckerHost<'a> {
     fn fileExists(&self, fileName: &str) -> bool { Path::new(fileName).exists() }
 
     fn readFile(&self, fileName: &str) -> Option<String> { fs::read_to_string(fileName).ok() }
@@ -38,7 +62,7 @@ impl ModuleResolutionHost for RbTypeCheckerHost {
 }
 
 #[allow(unused_variables)]
-impl ModuleSpecifierResolutionHost for RbTypeCheckerHost {
+impl<'a> ModuleSpecifierResolutionHost for RbTypeCheckerHost<'a> {
     fn getPackageJsonInfoCache(&self) -> Option<&dyn super::moduleNameResolver::PackageJsonInfoCache> { todo!() }
 
     fn getGlobalTypingsCacheLocation(&self) -> Option<String> { todo!() }
@@ -53,10 +77,10 @@ impl ModuleSpecifierResolutionHost for RbTypeCheckerHost {
 }
 
 #[allow(unused_variables)]
-impl TypeCheckerHost for RbTypeCheckerHost {
-    fn getCompilerOptions(&self) -> &CompilerOptions { &self.compiler_options }
+impl<'a> TypeCheckerHost<'a> for RbTypeCheckerHost<'a> {
+    fn getCompilerOptions(&self) -> Rc<CompilerOptions> { self.compiler_options.clone() }
 
-    fn getSourceFiles(&self) -> Vec<&SourceFile> { todo!() }
+    fn getSourceFiles(&self) -> rc_cell!(Vec<rc_cell!(SourceFile<'a>)>) { self.source_files.clone() }
 
     fn getSourceFile(&self, file_name: &str) -> Option<&SourceFile> { todo!() }
 

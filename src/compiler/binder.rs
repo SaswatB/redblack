@@ -5,7 +5,7 @@ use oxc_ast::{
     AstKind, GetChildren,
 };
 
-use crate::{define_flags, flag_names_impl, opt_rc_cell, rc_cell};
+use crate::{define_flags, flag_names_impl, new_rc_cell, opt_rc_cell, rc_cell};
 use crate::compiler::rb_extra::SourceFilePassthrough;
 
 use super::{
@@ -54,6 +54,16 @@ define_flags!(ContainerFlags {
 // endregion: 502
 
 // region: 509 - disjoint indentation
+// const binder = /* @__PURE__ */ Binder::default();
+
+/** @internal */
+pub fn bindSourceFile<'a>(file: &'a SourceFile<'a>, options: &'a CompilerOptions) {
+    // performance.mark("beforeBind");
+    Binder::default().bindSourceFile(file, options);
+    // performance.mark("afterBind");
+    // performance.measure("Bind", "beforeBind", "afterBind");
+}
+
 pub struct Binder<'a> {
     pub file: Option<&'a SourceFile<'a>>,
     pub options: Option<&'a CompilerOptions>,
@@ -153,7 +163,7 @@ impl<'a> Binder<'a> {
         self.options = Some(opts);
         self.languageVersion = Some(getEmitScriptTarget(opts));
         self.inStrictMode = true; // todo(RB): bindInStrictMode(&self.file.as_ref().unwrap(), &opts);
-        self.classifiableNames = Some(Rc::new(RefCell::new(HashSet::new())));
+        self.classifiableNames = Some(new_rc_cell!(HashSet::new()));
         self.symbolCount = 0;
 
         // Symbol = objectAllocator.getSymbolConstructor();
@@ -202,7 +212,7 @@ impl<'a> Binder<'a> {
     // region: 639
     fn createSymbol(&mut self, flags: SymbolFlags, name: __String) -> rc_cell!(Symbol<'a>) {
         self.symbolCount += 1;
-        Rc::new(RefCell::new(Symbol::new(flags, &name)))
+        new_rc_cell!(Symbol::new(flags, &name))
     }
     
     fn addDeclarationToSymbol(&mut self, symbol: rc_cell!(Symbol<'a>), node: AstKindDeclaration<'a>, symbolFlags: SymbolFlags) {

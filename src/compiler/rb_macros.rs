@@ -152,6 +152,13 @@ macro_rules! rc_cell {
 }
 
 #[macro_export]
+macro_rules! new_rc_cell {
+    ($type:expr) => {
+        std::rc::Rc::new(std::cell::RefCell::new($type))
+    };
+}
+
+#[macro_export]
 macro_rules! opt_rc_cell {
     ($type:ty) => {
         Option<std::rc::Rc<std::cell::RefCell<$type>>>

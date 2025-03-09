@@ -30,6 +30,19 @@ use oxc_ast::{ast::SourceFile, AstKind, Visit};
 use oxc_span::GetSpan;
 use oxc_span::Span;
 
+// region: 620
+/** @internal */
+pub fn createSymbolTable<'a>(symbols: Option<&[rc_cell!(Symbol<'a>)]>) -> SymbolTable<'a> {
+    let mut result = HashMap::new();
+    if let Some(symbols) = symbols {
+        for symbol in symbols {
+            result.insert(symbol.borrow().escapedName.clone(), symbol.clone());
+        }
+    }
+    result
+}
+// endregion: 631
+
 // region: 774
 /** @internal */
 pub fn getFullWidth(node: &AstKind) -> u32 { node.span().end - node.span().start }

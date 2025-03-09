@@ -1,19 +1,29 @@
 use crate::compiler::parser::*;
 use crate::compiler::types::*;
 use crate::flag_names_impl;
+use crate::new_rc_cell;
 use crate::opt_rc_cell;
 use crate::rc_cell;
 use oxc_ast::ast::Declaration;
 use oxc_ast::ast::ExportSpecifier;
 use oxc_ast::ast::SourceFile;
+use oxc_ast::ast::TSTypeParameter;
 use oxc_ast::{
     ast::{Argument, Expression, JSXAttribute, ObjectExpression},
     AstKind,
 };
 use std::cell::RefCell;
+use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
+
+use super::binder::bindSourceFile;
+use super::rb_unions::StringLiteralOrIdentifier;
+use super::utilities::addRelatedInfo;
+use super::utilities::createDiagnosticForNode;
+use super::utilities::createSymbolTable;
 // region: 1141
 static nextSymbolId: AtomicU32 = AtomicU32::new(1);
 static nextNodeId: AtomicU32 = AtomicU32::new(1);
@@ -93,12 +103,44 @@ pub fn getSymbolId(symbol: rc_cell!(Symbol)) -> SymbolId {
 }
 // endregion: 1450
 
+// region: 2196 - non-contiguous lines!!!
+#[derive(Debug)]
+pub struct DuplicateInfoForSymbol<'a> {
+    pub firstFileLocations: Vec<AstKindDeclaration<'a>>,
+    pub secondFileLocations: Vec<AstKindDeclaration<'a>>,
+    pub isBlockScoped: bool,
+}
+#[derive(Debug)]
+pub struct DuplicateInfoForFiles<'a> {
+    pub firstFile: SourceFile<'a>,
+    pub secondFile: SourceFile<'a>,
+    /** Key is symbol name. */
+    pub conflictingSymbols: HashMap<String, DuplicateInfoForSymbol<'a>>,
+}
+// endregion: 2207
+
 #[derive(Debug)]
 pub struct TypeChecker<'a> {
-    host: Rc<dyn TypeCheckerHost>,
+    host: Rc<UnsafeCell<dyn TypeCheckerHost<'a>>>,
 
+    // #region: 1486
     typeCount: usize,
+    symbolCount: usize,
+    totalInstantiationCount: usize,
+    instantiationCount: usize,
+    instantiationDepth: usize,
+    inlineLevel: usize,
+    currentNode: Option<AstKind<'a>>,
+    varianceTypeParameter: Option<&'a TSTypeParameter<'a>>,
+    isInferencePartiallyBlocked: bool,
+
+    emptySymbols: SymbolTable<'a>,
+    arrayVariances: Vec<VarianceFlags>,
+
+    compilerOptions: Rc<CompilerOptions>,
+    // endregion: 1499
     seenIntrinsicNames: HashSet<String>,
+
     anyType: Rc<dyn IntrinsicType<'a> + 'a>,
     autoType: Rc<dyn IntrinsicType<'a> + 'a>,
     wildcardType: Rc<dyn IntrinsicType<'a> + 'a>,
@@ -122,13 +164,32 @@ pub struct TypeChecker<'a> {
     regularFalseType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
     trueType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
     regularTrueType: Rc<dyn FreshableIntrinsicType<'a> + 'a>,
+
+    // #region: 2208
+    /* Key is "/path/to/a.ts|/path/to/b.ts". */
+    amalgamatedDuplicates: Option<HashMap<String, DuplicateInfoForFiles<'a>>>,
+    // endregion: 2209
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(host: Rc<dyn TypeCheckerHost>) -> Rc<RefCell<Self>> {
-        let checker = Rc::new(RefCell::new(Self {
-            host,
+    pub fn new(host: Rc<UnsafeCell<dyn TypeCheckerHost<'a>>>) -> Rc<RefCell<Self>> {
+        let checker = new_rc_cell!(Self {
+            host: host.clone(),
             typeCount: 0,
+            symbolCount: 0,
+            totalInstantiationCount: 0,
+            instantiationCount: 0,
+            instantiationDepth: 0,
+            inlineLevel: 0,
+            currentNode: None,
+            varianceTypeParameter: None,
+            isInferencePartiallyBlocked: false,
+
+            emptySymbols: createSymbolTable(None),
+            arrayVariances: vec![VarianceFlags::Covariant],
+
+            compilerOptions: unsafe { &*host.as_ref().get() }.getCompilerOptions(),
+
             seenIntrinsicNames: HashSet::new(),
 
             // Initialize with empty types that will be properly set in init_intrinsic_types
@@ -155,15 +216,19 @@ impl<'a> TypeChecker<'a> {
             regularFalseType: Rc::new(TypeObject::new(TypeFlags::Any)),
             trueType: Rc::new(TypeObject::new(TypeFlags::Any)),
             regularTrueType: Rc::new(TypeObject::new(TypeFlags::Any)),
-        }));
+
+            amalgamatedDuplicates: None,
+        });
 
         checker.borrow_mut().init_intrinsic_types();
+
+        checker.borrow_mut().initializeTypeChecker();
         checker
     }
 
     fn init_intrinsic_types(&mut self) {
-        let exactOptionalPropertyTypes = self.host.getCompilerOptions().exactOptionalPropertyTypes.unwrap_or(false);
-        let strictNullChecks = self.host.getCompilerOptions().strictNullChecks.unwrap_or(false);
+        let exactOptionalPropertyTypes = self.compilerOptions.exactOptionalPropertyTypes.unwrap_or(false);
+        let strictNullChecks = self.compilerOptions.strictNullChecks.unwrap_or(false);
 
         // region: 2046
         self.anyType = Rc::new(self.createIntrinsicType(TypeFlags::Any, "any", ObjectFlags::None, None));
@@ -252,6 +317,8 @@ impl<'a> TypeChecker<'a> {
         includeOptionality: bool,
         checkMode: CheckMode,
     ) -> Option<&dyn Type<'a>> {
+        // todo(RB): continue conversion from here
+
         // // A variable declared in a for..in statement is of type string, or of type keyof T when the
         // // right hand expression is of a type parameter type.
         // if let AstKind::VariableDeclaration(declaration) = declaration {
@@ -401,6 +468,8 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
+        // todo(RB): continue conversion from here
+
         // if (node.flags & NodeFlags.InWithStatement) {
         //     // We cannot answer semantic questions within a with block, do not proceed any further
         //     return errorType;
@@ -476,6 +545,16 @@ impl<'a> TypeChecker<'a> {
         return self.errorType.as_type();
     }
     // endregion: 49247
+
+    // region: 50349
+    fn initializeTypeChecker(&mut self) {
+        // Bind all source files and propagate errors
+        for file in unsafe { &*self.host.as_ref().get() }.getSourceFiles().borrow().iter() {
+            bindSourceFile(&file.borrow(), &self.compilerOptions);
+        }
+        // todo(RB): continue conversion from here
+    }
+    // endregion: 50479
 }
 
 #[allow(unused_variables)]

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{compiler::types::*, opt_rc_cell};
+use crate::{compiler::types::*, new_rc_cell, opt_rc_cell};
 
 impl<'a> Symbol<'a> {
     pub fn new(flags: SymbolFlags, name: &str) -> Self {
@@ -31,7 +31,7 @@ impl<'a> TypeObject<'a> {
             flags,
             id: 0,
             // checker,
-            symbol: Some(Rc::new(RefCell::new(Symbol::new(SymbolFlags::None, "")))),
+            symbol: Some(new_rc_cell!(Symbol::new(SymbolFlags::None, ""))),
             pattern: None,
             aliasSymbol: None,
             aliasTypeArguments: None,
