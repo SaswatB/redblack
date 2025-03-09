@@ -146,7 +146,7 @@ impl<'a> Binder<'a> {
      * If so, the node _must_ be in the current file (as that's the only way anything could have traversed to it to yield it as the error node)
      * This version of `createDiagnosticForNode` uses the binder's context to account for this, and always yields correct diagnostics even in these situations.
      */
-    fn createDiagnosticForNode(&mut self, node: &AstKind<'a>, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation { createDiagnosticForNodeInSourceFile(getSourceFileOfNode(Some(node)).or(self.file), node, message, args) }
+    fn createDiagnosticForNode(&self, node: &AstKind<'a>, message: DiagnosticMessage, args: DiagnosticArguments) -> DiagnosticWithLocation { createDiagnosticForNodeInSourceFile(getSourceFileOfNode(Some(node)).or(self.file), node, message, args) }
 
     fn bindSourceFile(&mut self, f: &'a SourceFile<'a>, opts: &'a CompilerOptions) {
         self.file = Some(f);
@@ -200,20 +200,20 @@ impl<'a> Binder<'a> {
     // endregion: 628
 
     // region: 639
-    fn createSymbol(&mut self, flags: SymbolFlags, name: __String) -> Symbol {
+    fn createSymbol(&mut self, flags: SymbolFlags, name: __String) -> rc_cell!(Symbol<'a>) {
         self.symbolCount += 1;
-        Symbol::new(flags, &name)
+        Rc::new(RefCell::new(Symbol::new(flags, &name)))
     }
     
-    fn addDeclarationToSymbol(&mut self, symbol: rc_cell!(Symbol<'a>), node: &'a AstKindDeclaration<'a>, symbolFlags: SymbolFlags) {
+    fn addDeclarationToSymbol(&mut self, symbol: rc_cell!(Symbol<'a>), node: AstKindDeclaration<'a>, symbolFlags: SymbolFlags) {
         symbol.borrow_mut().flags |= symbolFlags;
 
         node.to_ast_kind().set_symbol(Some(symbol.clone()));
-        symbol.borrow_mut().declarations = Some(appendIfUnique::<&'a AstKindDeclaration<'a>>(
-            Some(&mut symbol.borrow().declarations.clone().unwrap_or_default()),
-            node,
-            None::<for<'r, 's> fn(&'r &AstKindDeclaration<'_>, &'s &AstKindDeclaration<'_>) -> bool>
-        ));
+        if !symbol.borrow().declarations.as_ref().unwrap_or(&vec![]).iter().any(|d| d == &node) {
+            let mut declarations = symbol.borrow().declarations.clone().unwrap_or_default();
+            declarations.push(node);
+            symbol.borrow_mut().declarations = Some(declarations);
+        }
 
         if (symbolFlags & (SymbolFlags::Class | SymbolFlags::Enum | SymbolFlags::Module | SymbolFlags::Variable)).0 != 0 && symbol.borrow().exports.is_none() {
             symbol.borrow_mut().exports = Some(HashMap::new());
@@ -368,8 +368,192 @@ impl<'a> Binder<'a> {
      * @param excludes - The flags which node cannot be declared alongside in a symbol table. Used to report forbidden declarations.
      */
     fn declareSymbol(&mut self, symbolTable: rc_cell!(SymbolTable<'a>), parent: Option<Rc<RefCell<Symbol<'a>>>>, node: AstKind<'a>, includes: SymbolFlags, excludes: SymbolFlags, isReplaceableByMethod: Option<bool>, isComputedName: Option<bool>) -> Rc<RefCell<Symbol<'a>>> {
-        // todo(RB): continue conversion from here
-        todo!();
+        let isComputedName = isComputedName.unwrap_or(false);
+        debug_assert!(isComputedName || !hasDynamicName(&node));
+
+        let mut isDefaultExport = hasSyntacticModifier(&node, ModifierFlags::Default);
+        if let AstKind::ExportSpecifier(export_specifier) = &node {
+            if moduleExportNameIsDefault(&export_specifier.local) {
+                isDefaultExport = true;
+            }
+        }
+
+        // The exported symbol for an export default function/class node is always named "default"
+        let name: Option<String> = if isComputedName {
+            Some(InternalSymbolName::Computed.as_str().to_string())
+        } else if isDefaultExport && parent.is_some() {
+            Some(InternalSymbolName::Default.as_str().to_string())
+        } else {
+            self.getDeclarationName(&node)
+        };
+
+        let symbol = if name.is_none() {
+            self.createSymbol(SymbolFlags::None, InternalSymbolName::Missing.as_str().to_string())
+        } else {
+            // Check and see if the symbol table already has a symbol with this name.  If not,
+            // create a new symbol with this name and add it to the table.  Note that we don't
+            // give the new symbol any flags *yet*.  This ensures that it will not conflict
+            // with the 'excludes' flags we pass in.
+            //
+            // If we do get an existing symbol, see if it conflicts with the new symbol we're
+            // creating.  For example, a 'var' symbol and a 'class' symbol will conflict within
+            // the same symbol table.  If we have a conflict, report the issue on each
+            // declaration we have for this symbol, and then create a new symbol for this
+            // declaration.
+            //
+            // Note that when properties declared in Javascript constructors
+            // (marked by isReplaceableByMethod) conflict with another symbol, the property loses.
+            // Always. This allows the common Javascript pattern of overwriting a prototype method
+            // with an bound instance method of the same type: `this.method = this.method.bind(this)`
+            //
+            // If we created a new symbol, either because we didn't have a symbol with this name
+            // in the symbol table, or we conflicted with an existing symbol, then just add this
+            // node as the sole declaration of the new symbol.
+            //
+            // Otherwise, we'll be merging into a compatible existing symbol (for example when
+            // you have multiple 'vars' with the same name in the same container).  In this case
+            // just add this node into the declarations list of the symbol.
+            let name = name.unwrap();
+            
+            if includes.contains(SymbolFlags::Classifiable) {
+                self.classifiableNames.as_ref().unwrap().borrow_mut().insert(name.to_string());
+            }
+
+            if let Some(existing_symbol) = symbolTable.borrow().get(&name.to_string()) {
+                if isReplaceableByMethod.unwrap_or(false) && !existing_symbol.borrow().isReplaceableByMethod.unwrap_or(false) {
+                    // A symbol already exists, so don't add this as a declaration
+                    return existing_symbol.clone();
+                } else if existing_symbol.borrow().flags.contains(excludes) {
+                    if existing_symbol.borrow().isReplaceableByMethod.unwrap_or(false) {
+                        // Javascript constructor-declared symbols can be discarded in favor of
+                        // prototype symbols like methods
+                        let new_symbol = self.createSymbol(SymbolFlags::None, name.clone().to_string());
+                        symbolTable.borrow_mut().insert(name.to_string(), new_symbol.clone());
+                        new_symbol
+                    } else if !(includes.contains(SymbolFlags::Variable) && existing_symbol.borrow().flags.contains(SymbolFlags::Assignment)) {
+                        // Assignment declarations are allowed to merge with variables, no matter what other flags they have
+                        if isNamedDeclaration(&node) {
+                            node.set_parent(Some(NamedDeclaration::from_ast_kind(&node).unwrap().name().unwrap().to_ast_kind()));
+                        }
+
+                        // Report errors every position with duplicate declaration
+                        // Report errors on previous encountered declarations
+                        let mut message = if existing_symbol.borrow().flags.contains(SymbolFlags::BlockScopedVariable) {
+                            Diagnostics::Cannot_redeclare_block_scoped_variable_0()
+                        } else {
+                            Diagnostics::Duplicate_identifier_0()
+                        };
+                        let mut messageNeedsName = true;
+
+                        if existing_symbol.borrow().flags.contains(SymbolFlags::Enum) || includes.contains(SymbolFlags::Enum) {
+                            message = Diagnostics::Enum_declarations_can_only_merge_with_namespace_or_other_enum_declarations();
+                            messageNeedsName = false;
+                        }
+
+                        let mut multipleDefaultExports = false;
+                        if existing_symbol.borrow().declarations.is_some() && !existing_symbol.borrow().declarations.as_ref().unwrap().is_empty() {
+                            // If the current node is a default export of some sort, then check if
+                            // there are any other default exports that we need to error on.
+                            // We'll know whether we have other default exports depending on if `symbol` already has a declaration list set.
+                            if isDefaultExport {
+                                message = Diagnostics::A_module_cannot_have_multiple_default_exports();
+                                messageNeedsName = false;
+                                multipleDefaultExports = true;
+                            } else {
+                                // This is to properly report an error in the case "export default { }" is after export default of class declaration or function declaration.
+                                // Error on multiple export default in the following case:
+                                // 1. multiple export default of class declaration or function declaration by checking NodeFlags.Default
+                                // 2. multiple export default of export assignment. This one doesn't have NodeFlags.Default on (as export default doesn't considered as modifiers)
+                                if matches!(node, AstKind::TSExportAssignment(_)) {
+                                    message = Diagnostics::A_module_cannot_have_multiple_default_exports();
+                                    messageNeedsName = false;
+                                    multipleDefaultExports = true;
+                                }
+                            }
+                        }
+
+                        let mut relatedInformation = Vec::new();
+                        if let AstKind::TSTypeAliasDeclaration(type_alias) = &node {
+                            if nodeIsMissing(Some(&type_alias.type_annotation.to_ast_kind())) && 
+                                hasSyntacticModifier(&node, ModifierFlags::Export) && 
+                                existing_symbol.borrow().flags.intersects(SymbolFlags::Alias | SymbolFlags::Type | SymbolFlags::Namespace) {
+                                // export type T; - may have meant export type { T }?
+                                relatedInformation.push(self.createDiagnosticForNode(
+                                    &node,
+                                    Diagnostics::Did_you_mean_0(),
+                                    vec![StringOrNumber::String(format!("export type {{ {} }}", unescapeLeadingUnderscores(&name)))]
+                                ));
+                            }
+                        }
+
+                        let declarationName = getNameOfDeclaration(node).map(|name| name.to_ast_kind()).unwrap_or(node);
+
+                        for (index, declaration) in existing_symbol.borrow().declarations.as_ref().unwrap().iter().enumerate() {
+                            let decl = getNameOfDeclaration(declaration.to_ast_kind()).map(|name| name.to_ast_kind()).unwrap_or(declaration.to_ast_kind());
+                            let mut diag = if messageNeedsName {
+                                self.createDiagnosticForNode(&decl, message.clone(), vec![StringOrNumber::String(self.getDisplayName(&declaration.to_ast_kind()))])
+                            } else {
+                                self.createDiagnosticForNode(&decl, message.clone(), vec![])
+                            };
+
+                            if multipleDefaultExports {
+                                let related = self.createDiagnosticForNode(
+                                    &declarationName,
+                                    if index == 0 { 
+                                        Diagnostics::Another_export_default_is_here()
+                                    } else {
+                                        Diagnostics::and_here()
+                                    },
+                                    vec![]
+                                );
+                                addRelatedInfo(&mut diag, vec![related]);
+                                self.file.as_ref().unwrap().bindDiagnostics().borrow_mut().push(diag);
+                            } else {
+                                self.file.as_ref().unwrap().bindDiagnostics().borrow_mut().push(diag);
+                            }
+
+                            if multipleDefaultExports {
+                                relatedInformation.push(self.createDiagnosticForNode(
+                                    &decl,
+                                    Diagnostics::The_first_export_default_is_here(),
+                                    vec![]
+                                ));
+                            }
+                        }
+
+                        let mut diag = if messageNeedsName {
+                            self.createDiagnosticForNode(&declarationName, message, vec![StringOrNumber::String(self.getDisplayName(&node))])
+                        } else {
+                            self.createDiagnosticForNode(&declarationName, message, vec![])
+                        };
+                        addRelatedInfo(&mut diag, relatedInformation);
+                        self.file.as_ref().unwrap().bindDiagnostics().borrow_mut().push(diag);
+
+                        self.createSymbol(SymbolFlags::None, name.clone().to_string())
+                    } else {
+                        existing_symbol.clone()
+                    }
+                } else {
+                    existing_symbol.clone()
+                }
+            } else {
+                let new_symbol = self.createSymbol(SymbolFlags::None, name.clone().to_string());
+                symbolTable.borrow_mut().insert(name.to_string(), new_symbol.clone());
+                if isReplaceableByMethod.unwrap_or(false) {
+                    new_symbol.borrow_mut().isReplaceableByMethod = Some(true);
+                }
+                new_symbol
+            }
+        };
+
+        self.addDeclarationToSymbol(symbol.clone(), AstKindDeclaration::from_ast_kind(&node).unwrap(), includes);
+        if symbol.borrow().parent.is_some() {
+            debug_assert!(symbol.borrow().parent.as_ref().map(|p| p.borrow().id) == parent.map(|p| p.borrow().id), "Existing symbol parent should match new one");
+        } else {
+            symbol.borrow_mut().parent = parent;
+        }
+
+        symbol
     }
     // endregion: 896
 

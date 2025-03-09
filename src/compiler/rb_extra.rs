@@ -14,6 +14,8 @@ use super::types::Diagnostic;
 use super::types::FlowNode;
 use super::types::HasLocals;
 use super::types::HasLocalsExt;
+use super::types::ModifierFlags;
+use super::types::NodeFlags;
 use super::types::ResolutionMode;
 use super::types::Symbol;
 use super::types::SymbolTable;
@@ -111,6 +113,8 @@ entity_properties!(AstKind, {
     parent: Option<AstKind<'static>> = None,
     flowNode: Option<Rc<RefCell<FlowNode<'static>>>> = None,
     symbol: Option<Rc<RefCell<Symbol<'static>>>> = None,
+    flags: NodeFlags = NodeFlags::None,
+    modifierFlagsCache: ModifierFlags = ModifierFlags::None,
 });
 
 /**

@@ -18,6 +18,7 @@ use oxc_ast::ast::{SourceFile, Statement};
 use oxc_ast::{AstKind, GetChildren};
 
 fn fill_parents(source_file: &mut Box<SourceFile>) {
+    // todo(RB): fill in NodeFlags
     fn dfs(node: AstKind) {
         let children = node.get_children();
         for child in children {

@@ -96,9 +96,17 @@ pub fn isPostfixUnaryExpression<'a>(node: &AstKind<'a>) -> Option<&'a UpdateExpr
 pub fn isClassExpression(node: &AstKind) -> bool { matches!(node, AstKind::Class(_)) }
 // endregion: 667
 
+// region: 811
+pub fn isTypeAliasDeclaration(node: &AstKind) -> bool { matches!(node, AstKind::TSTypeAliasDeclaration(_)) }
+// endregion: 815
+
 // region: 819
 pub fn isModuleDeclaration(node: &AstKind) -> bool { matches!(node, AstKind::TSModuleDeclaration(_)) }
 // endregion: 823
+
+// region: 897
+pub fn isExportSpecifier(node: &AstKind) -> bool { matches!(node, AstKind::ExportSpecifier(_)) }
+// endregion: 901
 
 // region: 970
 pub fn isJsxNamespacedName(node: &AstKind) -> bool { matches!(node, AstKind::JSXNamespacedName(_)) }

@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use super::core::startsWith;
 use super::factory::nodeTests::*;
 use super::factory::utilities::skipOuterExpressions;
+use super::factory::utilitiesPublic::canHaveModifiers;
 use super::rb_extra::SourceFileExt;
 use super::rb_unions::strings_to_string_or_numbers;
 use super::rb_unions::DeclarationNameOrQualifiedName;
@@ -78,7 +79,23 @@ pub fn nodeIsPresent(node: Option<&AstKind>) -> bool { !nodeIsMissing(node) }
 pub fn getSourceTextOfNodeFromSourceFile(source_file: &SourceFile, node: &AstKind, include_trivia: Option<bool>) -> String { getTextOfNodeFromSourceText(source_file.source_text, node, include_trivia) }
 // endregion: 1277
 
-// region: 1307
+// region: 1296
+/**
+ * Equality checks against a keyword without underscores don't need to bother
+ * to turn "__" into "___" or vice versa, since they will never be equal in
+ * either case. So we can ignore those cases to improve performance.
+ *
+ * @internal
+ */
+pub fn moduleExportNameIsDefault(node: &ModuleExportName) -> bool {
+    let name = match node {
+        ModuleExportName::StringLiteral(n) => n.raw.map(|s| s.as_str()).unwrap_or(""),
+        ModuleExportName::IdentifierName(n) => n.name.as_str(),
+        ModuleExportName::IdentifierReference(n) => n.name.as_str(),
+    };
+    name == InternalSymbolName::Default.as_str()
+}
+
 /** @internal */
 pub fn getTextOfNodeFromSourceText(source_text: &str, node: &AstKind, include_trivia: Option<bool>) -> String {
     if node.span().start == node.span().end {
@@ -697,6 +714,21 @@ pub fn getInitializerOfBinaryExpression<'a>(expr: BinaryExpression<'a>) -> Binar
 }
 // endregion: 4121
 
+// region: 4140
+/** @internal */
+pub fn setValueDeclaration<'a>(symbol: rc_cell!(Symbol<'a>), node: AstKindDeclaration<'a>) {
+    let valueDeclaration = symbol.borrow().valueDeclaration.clone();
+    if valueDeclaration.is_none()
+        || !((node.to_ast_kind().flags() & NodeFlags::Ambient).0 != 0 && !isInJSFile(&node.to_ast_kind()) && !(valueDeclaration.as_ref().unwrap().to_ast_kind().flags() & NodeFlags::Ambient).0 != 0)
+            && (isAssignmentDeclaration(&valueDeclaration.as_ref().unwrap().to_ast_kind()) && !isAssignmentDeclaration(&node.to_ast_kind()))
+        || (valueDeclaration.as_ref().unwrap().to_ast_kind().ty() != node.to_ast_kind().ty() && isEffectiveModuleDeclaration(&valueDeclaration.as_ref().unwrap().to_ast_kind()))
+    {
+        // other kinds of value declarations take precedence over modules and assignment declarations
+        symbol.borrow_mut().valueDeclaration = Some(node);
+    }
+}
+// endregion: 4154
+
 // region: 4871
 /** @internal */
 pub fn skipParentheses<'a>(node: AstKind<'a>, exclude_jsdoc_type_assertions: Option<bool>) -> AstKind<'a> {
@@ -792,6 +824,103 @@ pub fn getSymbolNameForPrivateIdentifier(containingClassSymbol: rc_cell!(Symbol)
 /** @internal */
 pub fn isKnownSymbol(symbol: &Symbol) -> bool { startsWith(&symbol.escapedName.to_string(), "__@", None) }
 // endregion: 5288
+
+// region: 6995
+/** @internal */
+pub fn hasSyntacticModifier(node: &AstKind, flags: ModifierFlags) -> bool { getSelectedSyntacticModifierFlags(node, flags).0 != 0 }
+// endregion: 7000
+
+// region: 7046
+/** @internal @knipignore */
+pub fn getSelectedSyntacticModifierFlags(node: &AstKind, flags: ModifierFlags) -> ModifierFlags { getSyntacticModifierFlags(node) & flags }
+pub fn getModifierFlagsWorker(node: &AstKind, includeJSDoc: bool, alwaysIncludeJSDoc: Option<bool>) -> ModifierFlags {
+    // if node.kind() >= SyntaxKind::FirstToken && node.kind() <= SyntaxKind::LastToken {
+    //     return ModifierFlags::None;
+    // }
+
+    if (node.modifierFlagsCache() & ModifierFlags::HasComputedFlags).0 == 0 {
+        node.set_modifierFlagsCache(getSyntacticModifierFlagsNoCache(node) | ModifierFlags::HasComputedFlags);
+    }
+
+    // !rb ignoring jsdoc
+    // if alwaysIncludeJSDoc.unwrap_or(false) || includeJSDoc && isInJSFile(node) {
+    //     if (node.modifierFlagsCache() & ModifierFlags::HasComputedJSDocModifiers).0 == 0 && node.parent().is_some() {
+    //         node.set_modifierFlagsCache(node.modifierFlagsCache() | getRawJSDocModifierFlagsNoCache(node) | ModifierFlags::HasComputedJSDocModifiers);
+    //     }
+    //     return selectEffectiveModifierFlags(node.modifierFlagsCache());
+    // }
+
+    return selectSyntacticModifierFlags(node.modifierFlagsCache());
+}
+// endregion: 7070
+
+// region: 7086
+/**
+ * Gets the ModifierFlags for syntactic modifiers on the provided node. The modifiers will be cached on the node to improve performance.
+ *
+ * NOTE: This function does not use `parent` pointers and will not include modifiers from JSDoc.
+ *
+ * @internal
+ */
+pub fn getSyntacticModifierFlags(node: &AstKind) -> ModifierFlags { getModifierFlagsWorker(node, false, None) }
+// endregion: 7097
+
+// region: 7113
+pub fn selectSyntacticModifierFlags(flags: ModifierFlags) -> ModifierFlags { flags & ModifierFlags::SyntacticModifiers }
+// endregion: 7117
+
+// region: 7137
+/**
+ * Gets the ModifierFlags for syntactic modifiers on the provided node. The modifier flags cache on the node is ignored.
+ *
+ * NOTE: This function does not use `parent` pointers and will not include modifiers from JSDoc.
+ *
+ * @internal
+ * @knipignore
+ */
+pub fn getSyntacticModifierFlagsNoCache(node: &AstKind) -> ModifierFlags {
+    let flags = if canHaveModifiers(node) { modifiersToFlags(&node.modifiers()) } else { ModifierFlags::None };
+    if (node.flags() & NodeFlags::NestedNamespace).0 != 0
+    // !rb ignoring jsdoc
+    //  || (Identifier::from_ast_kind(node).is_some() && (node.flags() & NodeFlags::IdentifierIsInJSDocNamespace).0 != 0)
+    {
+        flags | ModifierFlags::Export
+    } else {
+        flags
+    }
+}
+
+/** @internal */
+pub fn modifiersToFlags(modifiers: &[ModifierLike]) -> ModifierFlags {
+    let mut flags = ModifierFlags::None;
+    for modifier in modifiers {
+        flags |= modifierToFlag(modifier);
+    }
+    return flags;
+}
+
+/** @internal */
+pub fn modifierToFlag(token: &ModifierLike) -> ModifierFlags {
+    match token {
+        ModifierLike::Modifier(Modifier::StaticKeyword) => ModifierFlags::Static,
+        ModifierLike::Modifier(Modifier::PublicKeyword) => ModifierFlags::Public,
+        ModifierLike::Modifier(Modifier::ProtectedKeyword) => ModifierFlags::Protected,
+        ModifierLike::Modifier(Modifier::PrivateKeyword) => ModifierFlags::Private,
+        ModifierLike::Modifier(Modifier::AbstractKeyword) => ModifierFlags::Abstract,
+        ModifierLike::Modifier(Modifier::AccessorKeyword) => ModifierFlags::Accessor,
+        ModifierLike::Modifier(Modifier::ExportKeyword) => ModifierFlags::Export,
+        ModifierLike::Modifier(Modifier::DeclareKeyword) => ModifierFlags::Ambient,
+        ModifierLike::Modifier(Modifier::ConstKeyword) => ModifierFlags::Const,
+        ModifierLike::Modifier(Modifier::DefaultKeyword) => ModifierFlags::Default,
+        ModifierLike::Modifier(Modifier::AsyncKeyword) => ModifierFlags::Async,
+        ModifierLike::Modifier(Modifier::ReadonlyKeyword) => ModifierFlags::Readonly,
+        ModifierLike::Modifier(Modifier::OverrideKeyword) => ModifierFlags::Override,
+        ModifierLike::Modifier(Modifier::InKeyword) => ModifierFlags::In,
+        ModifierLike::Modifier(Modifier::OutKeyword) => ModifierFlags::Out,
+        ModifierLike::Decorator(_) => ModifierFlags::Decorator,
+    }
+}
+// endregion: 7203
 
 // region: 7235
 /** @internal */
@@ -1252,6 +1381,26 @@ pub fn positionIsSynthesized(pos: u32) -> bool {
     !(pos >= 0)
 }
 // endregion: 9979
+
+// region: 10058
+/** @internal */
+pub fn addRelatedInfo<'a, 'b>(diagnostic: &'a mut Diagnostic<'b>, relatedInformation: Vec<DiagnosticRelatedInformation<'b>>) {
+    if relatedInformation.is_empty() {
+        return;
+    }
+
+    let diag = diagnostic;
+    if diag.relatedInformation.is_none() {
+        diag.relatedInformation = Some(Vec::new());
+    }
+
+    debug_assert!(!matches!(diag.relatedInformation, Some(ref arr) if arr.is_empty()), "Diagnostic had empty array singleton for related info, but is still being constructed!");
+
+    if let Some(ref mut related) = diag.relatedInformation {
+        related.extend(relatedInformation);
+    }
+}
+// endregion: 10071
 
 // region: 10851
 /** @internal */

@@ -4,10 +4,10 @@ use oxc_ast::{
         ChainExpression, Class, ClassExtends, ConditionalExpression, Declaration, Decorator, DestructureBindingPattern, ElementAccessExpression, ExportAllDeclaration, ExportDefaultDeclaration, ExportNamedDeclaration, ExportSpecifier, Expression, ExpressionWithTypeArguments, ForInStatement,
         ForOfStatement, ForStatement, FormalParameter, Function, FunctionBody, GeneralBinaryExpression, GeneralBinaryOperator, IdentifierName, IdentifierReference, ImportDefaultSpecifier, ImportExpression, ImportNamespaceSpecifier, ImportSpecifier, JSXAttribute, JSXElement, JSXFragment,
         JSXIdentifier, JSXNamespacedName, JSXSpreadAttribute, JSXText, LogicalExpression, LogicalOperator, MetaProperty, MethodDefinition, NewExpression, NoSubstitutionTemplateLiteral, NullLiteral, NumericLiteral, ObjectExpression, ObjectPattern, ObjectProperty, ParenthesizedExpression,
-        PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAsExpression, TSCallSignatureDeclaration, TSClassImplements,
-        TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration, TSInterfaceHeritage, TSMappedType,
-        TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter, TaggedTemplateExpression,
-        TemplateElement, TemplateExpression, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarationList, VariableDeclarator, YieldExpression,
+        PrivateFieldExpression, PrivateIdentifier, PrivateInExpression, PropertyDefinition, RegExpLiteral, SequenceExpression, SourceFile, SpreadElement, StaticBlock, StaticMemberExpression, StringLiteral, Super, SwitchStatement, TSAccessibility, TSAsExpression, TSCallSignatureDeclaration,
+        TSClassImplements, TSConditionalType, TSConstructSignatureDeclaration, TSConstructorType, TSEnumDeclaration, TSEnumMember, TSEnumMemberName, TSExportAssignment, TSFunctionType, TSImportEqualsDeclaration, TSIndexSignature, TSInstantiationExpression, TSInterfaceDeclaration,
+        TSInterfaceHeritage, TSMappedType, TSMethodSignature, TSModuleDeclaration, TSModuleDeclarationName, TSNamespaceExportDeclaration, TSNonNullExpression, TSPropertySignature, TSQualifiedName, TSSatisfiesExpression, TSTypeAliasDeclaration, TSTypeAssertion, TSTypeLiteral, TSTypeParameter,
+        TaggedTemplateExpression, TemplateElement, TemplateExpression, ThisExpression, UnaryExpression, UpdateExpression, VariableDeclarationList, VariableDeclarator, YieldExpression,
     },
     AstKind, GetChildren,
 };
@@ -140,6 +140,130 @@ pub struct SymbolTracker;
 
 #[derive(Debug)]
 pub struct JSDocSignature;
+
+// region: 776
+// dprint-ignore
+define_flags!(NodeFlags {
+    None               = 0,
+    Let                = 1 << 0,  // Variable declaration
+    Const              = 1 << 1,  // Variable declaration
+    Using              = 1 << 2,  // Variable declaration
+    AwaitUsing         = Self::Const.0 | Self::Using.0, // Variable declaration (NOTE: on a single node these flags would otherwise be mutually exclusive)
+    NestedNamespace    = 1 << 3,  // Namespace declaration
+    Synthesized        = 1 << 4,  // Node was synthesized during transformation
+    Namespace          = 1 << 5,  // Namespace declaration
+    OptionalChain      = 1 << 6,  // Chained MemberExpression rooted to a pseudo-OptionalExpression
+    ExportContext      = 1 << 7,  // Export context (initialized by binding)
+    ContainsThis       = 1 << 8,  // Interface contains references to "this"
+    HasImplicitReturn  = 1 << 9,  // If function implicitly returns on one of codepaths (initialized by binding)
+    HasExplicitReturn  = 1 << 10,  // If function has explicit reachable return on one of codepaths (initialized by binding)
+    GlobalAugmentation = 1 << 11,  // Set if module declaration is an augmentation for the global scope
+    HasAsyncFunctions  = 1 << 12, // If the file has async functions (initialized by binding)
+    DisallowInContext  = 1 << 13, // If node was parsed in a context where 'in-expressions' are not allowed
+    YieldContext       = 1 << 14, // If node was parsed in the 'yield' context created when parsing a generator
+    DecoratorContext   = 1 << 15, // If node was parsed as part of a decorator
+    AwaitContext       = 1 << 16, // If node was parsed in the 'await' context created when parsing an async function
+    DisallowConditionalTypesContext = 1 << 17, // If node was parsed in a context where conditional types are not allowed
+    ThisNodeHasError   = 1 << 18, // If the parser encountered an error when parsing the code that created this node
+    JavaScriptFile     = 1 << 19, // If node was parsed in a JavaScript
+    ThisNodeOrAnySubNodesHasError = 1 << 20, // If this node or any of its children had an error
+    HasAggregatedChildData = 1 << 21, // If we've computed data from children and cached it in this node
+
+    // These flags will be set when the parser encounters a dynamic import expression or 'import.meta' to avoid
+    // walking the tree if the flags are not set. However, these flags are just a approximation
+    // (hence why it's named "PossiblyContainsDynamicImport") because once set, the flags never get cleared.
+    // During editing, if a dynamic import is removed, incremental parsing will *NOT* clear this flag.
+    // This means that the tree will always be traversed during module resolution, or when looking for external module indicators.
+    // However, the removal operation should not occur often and in the case of the
+    // removal, it is likely that users will add the import anyway.
+    // The advantage of this approach is its simplicity. For the case of batch compilation,
+    // we guarantee that users won't have to pay the price of walking the tree if a dynamic import isn't used.
+    /* @internal */ PossiblyContainsDynamicImport = 1 << 22,
+    /* @internal */ PossiblyContainsImportMeta    = 1 << 23,
+
+    JSDoc                                          = 1 << 24, // If node was parsed inside jsdoc
+    /* @internal */ Ambient                       = 1 << 25, // If node was inside an ambient context -- a declaration file, or inside something with the `declare` modifier.
+    /* @internal */ InWithStatement               = 1 << 26, // If any ancestor of node was the `statement` of a WithStatement (not the `expression`)
+    JsonFile                                       = 1 << 27, // If node was parsed in a Json
+    /* @internal */ TypeCached                    = 1 << 28, // If a type was cached for node at any point
+    /* @internal */ Deprecated                    = 1 << 29, // If has '@deprecated' JSDoc tag
+
+    BlockScoped = Self::Let.0 | Self::Const.0 | Self::Using.0,
+    Constant = Self::Const.0 | Self::Using.0,
+
+    ReachabilityCheckFlags = Self::HasImplicitReturn.0 | Self::HasExplicitReturn.0,
+    ReachabilityAndEmitFlags = Self::ReachabilityCheckFlags.0 | Self::HasAsyncFunctions.0,
+
+    // Parsing context flags
+    ContextFlags = Self::DisallowInContext.0 | Self::DisallowConditionalTypesContext.0 | Self::YieldContext.0 | Self::DecoratorContext.0 | Self::AwaitContext.0 | Self::JavaScriptFile.0 | Self::InWithStatement.0 | Self::Ambient.0,
+
+    // Exclude these flags when parsing a Type
+    TypeExcludesFlags = Self::YieldContext.0 | Self::AwaitContext.0,
+
+    // Represents all flags that are potentially set once and
+    // never cleared on SourceFiles which get re-used in between incremental parses.
+    // See the comment above on `PossiblyContainsDynamicImport` and `PossiblyContainsImportMeta`.
+    /* @internal */ PermanentlySetIncrementalFlags = Self::PossiblyContainsDynamicImport.0 | Self::PossiblyContainsImportMeta.0,
+
+    // The following flags repurpose other NodeFlags as different meanings for Identifier nodes
+    /* @internal */ IdentifierHasExtendedUnicodeEscape = Self::ContainsThis.0, // Indicates whether the identifier contains an extended unicode escape sequence
+    /* @internal */ IdentifierIsInJSDocNamespace = Self::HasAsyncFunctions.0, // Indicates whether the identifier is part of a JSDoc namespace
+});
+
+define_flags!(ModifierFlags {
+    None =               0,
+
+    // Syntactic/JSDoc modifiers
+    Public =             1 << 0,  // Property/Method
+    Private =            1 << 1,  // Property/Method
+    Protected =          1 << 2,  // Property/Method
+    Readonly =           1 << 3,  // Property/Method
+    Override =           1 << 4,  // Override method.
+
+    // Syntactic-only modifiers
+    Export =             1 << 5,  // Declarations
+    Abstract =           1 << 6,  // Class/Method/ConstructSignature
+    Ambient =            1 << 7,  // Declarations
+    Static =             1 << 8,  // Property/Method
+    Accessor =           1 << 9,  // Property
+    Async =              1 << 10, // Property/Method/Function
+    Default =            1 << 11, // Function/Class (export default declaration)
+    Const =              1 << 12, // Const enum
+    In =                 1 << 13, // Contravariance modifier
+    Out =                1 << 14, // Covariance modifier
+    Decorator =          1 << 15, // Contains a decorator.
+
+    // JSDoc-only modifiers
+    Deprecated =         1 << 16, // Deprecated tag.
+
+    // Cache-only JSDoc-modifiers. Should match order of Syntactic/JSDoc modifiers, above.
+    /* @internal */ JSDocPublic = 1 << 23, // if this value changes, `selectEffectiveModifierFlags` must change accordingly
+    /* @internal */ JSDocPrivate = 1 << 24,
+    /* @internal */ JSDocProtected = 1 << 25,
+    /* @internal */ JSDocReadonly = 1 << 26,
+    /* @internal */ JSDocOverride = 1 << 27,
+
+    /* @internal */ SyntacticOrJSDocModifiers = Self::Public.0 | Self::Private.0 | Self::Protected.0 | Self::Readonly.0 | Self::Override.0,
+    /* @internal */ SyntacticOnlyModifiers = Self::Export.0 | Self::Ambient.0 | Self::Abstract.0 | Self::Static.0 | Self::Accessor.0 | Self::Async.0 | Self::Default.0 | Self::Const.0 | Self::In.0 | Self::Out.0 | Self::Decorator.0,
+    /* @internal */ SyntacticModifiers = Self::SyntacticOrJSDocModifiers.0 | Self::SyntacticOnlyModifiers.0,
+    /* @internal */ JSDocCacheOnlyModifiers = Self::JSDocPublic.0 | Self::JSDocPrivate.0 | Self::JSDocProtected.0 | Self::JSDocReadonly.0 | Self::JSDocOverride.0,
+    /* @internal */ JSDocOnlyModifiers = Self::Deprecated.0,
+    /* @internal */ NonCacheOnlyModifiers = Self::SyntacticOrJSDocModifiers.0 | Self::SyntacticOnlyModifiers.0 | Self::JSDocOnlyModifiers.0,
+
+    HasComputedJSDocModifiers = 1 << 28, // Indicates the computed modifier flags include modifiers from JSDoc.
+    HasComputedFlags =   1 << 29, // Modifier flags have been computed
+
+    AccessibilityModifier = Self::Public.0 | Self::Private.0 | Self::Protected.0,
+    // Accessibility modifiers and 'readonly' can be attached to a parameter in a constructor to make it a property.
+    ParameterPropertyModifier = Self::AccessibilityModifier.0 | Self::Readonly.0 | Self::Override.0,
+    NonPublicAccessibilityModifier = Self::Private.0 | Self::Protected.0,
+
+    TypeScriptModifier = Self::Ambient.0 | Self::Public.0 | Self::Private.0 | Self::Protected.0 | Self::Readonly.0 | Self::Abstract.0 | Self::Const.0 | Self::Override.0 | Self::In.0 | Self::Out.0,
+    ExportDefault = Self::Export.0 | Self::Default.0,
+    All = Self::Export.0 | Self::Ambient.0 | Self::Public.0 | Self::Private.0 | Self::Protected.0 | Self::Static.0 | Self::Readonly.0 | Self::Abstract.0 | Self::Accessor.0 | Self::Async.0 | Self::Default.0 | Self::Const.0 | Self::Deprecated.0 | Self::Override.0 | Self::In.0 | Self::Out.0 | Self::Decorator.0,
+    Modifier = Self::All.0 & !Self::Decorator.0,
+});
+// endregion: 899
 
 // region: 961
 type LocalsContainer<'a> = HasLocals<'a>;
@@ -322,6 +446,192 @@ pub struct NodeArray<'a> {
     // pub transformFlags: TransformFlags, // todo(RB): add this if needed
 }
 // endregion: 1587
+
+// region: 1623
+// export interface ModifierToken<TKind extends ModifierSyntaxKind> extends KeywordToken<TKind> {
+
+// export type AbstractKeyword = ModifierToken<SyntaxKind.AbstractKeyword>;
+// export type AccessorKeyword = ModifierToken<SyntaxKind.AccessorKeyword>;
+// export type AsyncKeyword = ModifierToken<SyntaxKind.AsyncKeyword>;
+// export type ConstKeyword = ModifierToken<SyntaxKind.ConstKeyword>;
+// export type DeclareKeyword = ModifierToken<SyntaxKind.DeclareKeyword>;
+// export type DefaultKeyword = ModifierToken<SyntaxKind.DefaultKeyword>;
+// export type ExportKeyword = ModifierToken<SyntaxKind.ExportKeyword>;
+// export type InKeyword = ModifierToken<SyntaxKind.InKeyword>;
+// export type PrivateKeyword = ModifierToken<SyntaxKind.PrivateKeyword>;
+// export type ProtectedKeyword = ModifierToken<SyntaxKind.ProtectedKeyword>;
+// export type PublicKeyword = ModifierToken<SyntaxKind.PublicKeyword>;
+// export type ReadonlyKeyword = ModifierToken<SyntaxKind.ReadonlyKeyword>;
+// export type OutKeyword = ModifierToken<SyntaxKind.OutKeyword>;
+// export type OverrideKeyword = ModifierToken<SyntaxKind.OverrideKeyword>;
+// export type StaticKeyword = ModifierToken<SyntaxKind.StaticKeyword>;
+
+#[derive(Debug, Clone)]
+pub enum Modifier {
+    AbstractKeyword,
+    AccessorKeyword,
+    AsyncKeyword,
+    ConstKeyword,
+    DeclareKeyword,
+    DefaultKeyword,
+    ExportKeyword,
+    InKeyword,
+    PrivateKeyword,
+    ProtectedKeyword,
+    PublicKeyword,
+    OutKeyword,
+    OverrideKeyword,
+    ReadonlyKeyword,
+    StaticKeyword,
+}
+
+pub enum ModifierLike<'a> {
+    Modifier(Modifier),
+    Decorator(&'a Decorator<'a>),
+}
+
+pub trait ModifierLikeTrait {
+    fn modifiers(&self) -> Vec<ModifierLike>;
+}
+
+impl ModifierLikeTrait for AstKind<'_> {
+    fn modifiers(&self) -> Vec<ModifierLike> {
+        let mut modifiers = vec![];
+        macro_rules! if_add_modifier {
+            ($condition:expr, $modifier:expr) => {
+                if $condition {
+                    modifiers.push(ModifierLike::Modifier($modifier));
+                }
+            };
+        }
+        fn add_accessibility_modifier(modifiers: &mut Vec<ModifierLike>, access: Option<TSAccessibility>) {
+            match access {
+                Some(TSAccessibility::Private) => modifiers.push(ModifierLike::Modifier(Modifier::PrivateKeyword)),
+                Some(TSAccessibility::Protected) => modifiers.push(ModifierLike::Modifier(Modifier::ProtectedKeyword)),
+                Some(TSAccessibility::Public) => modifiers.push(ModifierLike::Modifier(Modifier::PublicKeyword)),
+                None => {}
+            }
+        }
+        match self {
+            AstKind::Decorator(n) => modifiers.push(ModifierLike::Decorator(n)),
+            // from canHaveModifiers
+            AstKind::TSTypeParameter(n) => {
+                if_add_modifier!(n.out, Modifier::OutKeyword);
+                if_add_modifier!(n.r#const, Modifier::ConstKeyword);
+                if_add_modifier!(n.r#in, Modifier::InKeyword);
+            }
+            AstKind::FormalParameter(n) => {
+                n.decorators.iter().for_each(|d| modifiers.push(ModifierLike::Decorator(d)));
+                add_accessibility_modifier(&mut modifiers, n.accessibility);
+                if_add_modifier!(n.readonly, Modifier::ReadonlyKeyword);
+                if_add_modifier!(n.r#override, Modifier::OverrideKeyword);
+            }
+            AstKind::TSPropertySignature(n) => {
+                if_add_modifier!(n.readonly, Modifier::ReadonlyKeyword);
+            }
+            AstKind::PropertyDefinition(n) => {
+                n.decorators.iter().for_each(|d| modifiers.push(ModifierLike::Decorator(d)));
+                if_add_modifier!(n.r#static, Modifier::StaticKeyword);
+                if_add_modifier!(n.readonly, Modifier::ReadonlyKeyword);
+                if_add_modifier!(n.r#override, Modifier::OverrideKeyword);
+                add_accessibility_modifier(&mut modifiers, n.accessibility);
+            }
+            // AstKind::TSMethodSignature(n) => {
+            // !rb this doesn't have any modifiers?
+            // }
+            AstKind::MethodDefinition(n) => {
+                n.decorators.iter().for_each(|d| modifiers.push(ModifierLike::Decorator(d)));
+                if_add_modifier!(n.r#static, Modifier::StaticKeyword);
+                if_add_modifier!(n.r#override, Modifier::OverrideKeyword);
+                add_accessibility_modifier(&mut modifiers, n.accessibility);
+            }
+            AstKind::TSIndexSignature(n) => {
+                if_add_modifier!(n.readonly, Modifier::ReadonlyKeyword);
+                if_add_modifier!(n.r#static, Modifier::StaticKeyword);
+            }
+            AstKind::TSConstructorType(n) => {
+                if_add_modifier!(n.r#abstract, Modifier::AbstractKeyword);
+            }
+            AstKind::Function(n) => {
+                if_add_modifier!(n.r#async, Modifier::AsyncKeyword);
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::ArrowFunctionExpression(n) => {
+                if_add_modifier!(n.r#async, Modifier::AsyncKeyword);
+            }
+            AstKind::Class(n) => {
+                n.decorators.iter().for_each(|d| modifiers.push(ModifierLike::Decorator(d)));
+                if_add_modifier!(n.r#abstract, Modifier::AbstractKeyword);
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::VariableDeclarationList(n) => {
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::TSInterfaceDeclaration(n) => {
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::TSTypeAliasDeclaration(n) => {
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::TSEnumDeclaration(n) => {
+                if_add_modifier!(n.r#const, Modifier::ConstKeyword);
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::TSModuleDeclaration(n) => {
+                if_add_modifier!(n.declare, Modifier::DeclareKeyword);
+            }
+            AstKind::TSExportAssignment(_) => {
+                modifiers.push(ModifierLike::Modifier(Modifier::ExportKeyword));
+            }
+            AstKind::ExportDefaultDeclaration(_) => {
+                modifiers.push(ModifierLike::Modifier(Modifier::ExportKeyword));
+                modifiers.push(ModifierLike::Modifier(Modifier::DefaultKeyword));
+            }
+            AstKind::ExportAllDeclaration(_) | AstKind::ExportNamedDeclaration(_) => {
+                modifiers.push(ModifierLike::Modifier(Modifier::ExportKeyword));
+            }
+            AstKind::AccessorProperty(n) => {
+                n.decorators.iter().for_each(|d| modifiers.push(ModifierLike::Decorator(d)));
+                if_add_modifier!(n.r#static, Modifier::StaticKeyword);
+                modifiers.push(ModifierLike::Modifier(Modifier::AccessorKeyword));
+                add_accessibility_modifier(&mut modifiers, n.accessibility);
+            }
+            _ => {}
+        }
+        modifiers
+    }
+}
+
+pub enum AccessibilityModifier {
+    PublicKeyword,
+    PrivateKeyword,
+    ProtectedKeyword,
+}
+
+pub enum ParameterPropertyModifier {
+    AccessibilityModifier,
+    ReadonlyKeyword,
+}
+
+pub enum ClassMemberModifier {
+    AccessibilityModifier,
+    ReadonlyKeyword,
+    StaticKeyword,
+    AccessorKeyword,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModifiersArray {
+    // TextRange
+    pub pos: u32,
+    pub end: u32,
+    // Array
+    pub items: Vec<Modifier>,
+    // NodeArray
+    pub hasTrailingComma: bool,
+    // pub transformFlags: TransformFlags, // todo(RB): add this if needed
+}
+// endregion: 1678
 
 // region: 1696
 define_subset_enum!(Identifier from AstKind {
@@ -2249,8 +2559,8 @@ pub type SymbolId = u32;
 pub struct Symbol<'a> {
     pub flags: SymbolFlags,                     // Symbol flags
     pub escapedName: __String,                  // Name of symbol
-    pub declarations: Option<Vec<&'a AstKindDeclaration<'a>>>, // Declarations associated with this symbol
-    pub valueDeclaration: Option<&'a AstKindDeclaration<'a>>,  // First value declaration of the symbol
+    pub declarations: Option<Vec<AstKindDeclaration<'a>>>, // Declarations associated with this symbol
+    pub valueDeclaration: Option<AstKindDeclaration<'a>>,  // First value declaration of the symbol
     pub members: Option<SymbolTable<'a>>,           // Class, interface or object literal instance members
     pub exports: Option<SymbolTable<'a>>,           // Module exports
     pub globalExports: Option<SymbolTable<'a>>,     // Conditional global UMD exports
@@ -2788,7 +3098,7 @@ pub struct FileExtensionInfo {
     pub scriptKind: Option<ScriptKind>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DiagnosticMessage {
     pub code: i32,
     pub category: DiagnosticCategory,
